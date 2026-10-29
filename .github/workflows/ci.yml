@@ -1,0 +1,30 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        python: ["3.10", "3.12", "3.13"]
+        include:
+          - os: windows-latest
+            python: "3.12"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: pip install ".[dev]"
+      - run: pytest -q
+      - name: README quick start
+        shell: bash
+        run: |
+          set +e
+          servediff diff examples/issue-excerpts/vllm-47047-v0.23-default.log examples/issue-excerpts/vllm-47047-v0.23-marlin.log | tee out.txt
+          test "${PIPESTATUS[0]}" -eq 1 && grep -q "MARLIN (NvFp4)" out.txt

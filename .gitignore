@@ -1,0 +1,10 @@
+# Local research data: real logs and snapshots contain paths and host details.
+local/
+docs/
+
+__pycache__/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.venv/
