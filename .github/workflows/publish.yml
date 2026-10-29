@@ -1,0 +1,46 @@
+name: publish
+
+# Runs only when a GitHub Release is published. Uploads to PyPI through Trusted
+# Publishing (OIDC): no API token is stored anywhere. One-time setup on pypi.org:
+# add a pending publisher for owner apex-mochen, repository servediff,
+# workflow publish.yml, environment pypi.
+on:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Tag must match the package version
+        run: |
+          version=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          test "${GITHUB_REF_NAME}" = "v${version}" || { echo "tag ${GITHUB_REF_NAME} != v${version}"; exit 1; }
+      - run: pip install build twine
+      - run: python -m build
+      - run: twine check --strict dist/*
+      - name: Tests from the built sdist
+        run: |
+          mkdir /tmp/sd && tar -C /tmp/sd -xzf dist/*.tar.gz && cd /tmp/sd/servediff-*
+          pip install ".[dev]" && pytest -q
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1

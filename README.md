@@ -34,7 +34,7 @@ backend.moe                      VLLM_CUTLASS (NvFp4)                     MARLIN
 That is the difference the reporter of
 [vllm#47047](https://github.com/vllm-project/vllm/issues/47047) found by hand after a
 v0.21 → v0.23 throughput drop. The example files are the log lines posted in that
-issue (see [tests/fixtures/README.md](tests/fixtures/README.md)).
+issue (see [tests/fixtures/README.md](https://github.com/apex-mochen/servediff/blob/main/tests/fixtures/README.md)).
 
 ## Real example: same flags, vLLM 0.28.0 vs 0.30.0
 

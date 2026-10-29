@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=69"]
+requires = ["setuptools>=77"]  # SPDX string `license` (PEP 639)
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -18,6 +18,11 @@ classifiers = [
     "Topic :: Software Development :: Debuggers",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
+
+[project.urls]
+Homepage = "https://github.com/apex-mochen/servediff"
+Issues = "https://github.com/apex-mochen/servediff/issues"
+Changelog = "https://github.com/apex-mochen/servediff/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]

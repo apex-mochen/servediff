@@ -1,0 +1,3 @@
+include CHANGELOG.md CONTRIBUTING.md README.zh-CN.md
+recursive-include tests/fixtures *.log *.md
+recursive-include examples *.log
