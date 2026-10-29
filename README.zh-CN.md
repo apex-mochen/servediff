@@ -11,7 +11,7 @@ benchmark 结果文件只记录客户端。升级之后，server 可能会悄悄
 ## 一分钟试用（不需要 GPU）
 
 ```bash
-git clone <本仓库> && cd servediff
+git clone https://github.com/apex-mochen/servediff && cd servediff
 pip install .
 servediff diff examples/issue-excerpts/vllm-47047-v0.23-default.log examples/issue-excerpts/vllm-47047-v0.23-marlin.log
 ```
