@@ -1,6 +1,0 @@
-line1
-Traceback (most recent call last):
-  File "<string>", line 1, in <module>
-    print('line1'); print('line2', file=sys.stderr)
-                                        ^^^
-NameError: name 'sys' is not defined. Did you forget to import 'sys'?
