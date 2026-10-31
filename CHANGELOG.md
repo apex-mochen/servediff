@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.1 — 2026-10-31
+
+- `--markdown` now also works on `servediff env` snapshots, so a `capture`-based
+  environment diff can be rendered as a paste-ready report.
+
 ## 0.3.0 — 2026-10-31
 
 - `servediff capture -o run.log -- <server command>`: run a server, tee its

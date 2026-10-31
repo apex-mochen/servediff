@@ -58,3 +58,15 @@ def test_env_command_writes_file(tmp_path):
 
 def test_env_command_reports_bad_interpreter(tmp_path):
     assert cli.main(["env", "--python", str(tmp_path / "no-such-python")]) == 2
+
+
+def test_env_diff_markdown_output(tmp_path, capsys):
+    a = tmp_path / "a.json"; b = tmp_path / "b.json"
+    a.write_text(json.dumps(snap({"torch": "2.11.0", "vllm": "0.28.0"})))
+    b.write_text(json.dumps(snap({"torch": "2.11.0", "vllm": "0.30.0"})))
+    assert cli.main(["diff", str(a), str(b), "--markdown"]) == 1
+    out = capsys.readouterr().out
+    assert out.startswith("# servediff report")
+    assert "| `pkg.vllm` | 0.28.0 | 0.30.0 | changed |" in out
+    # unchanged torch row is hidden by default
+    assert "pkg.torch" not in out

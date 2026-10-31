@@ -349,10 +349,18 @@ def main(argv=None) -> int:
             print("diff: give two server logs or two `servediff env` snapshots, not one of each", file=sys.stderr)
             return 2
         rows = envsnap.ranked(envsnap.diff(json.loads(text_a), json.loads(text_b)))
+        key = [r for r in rows if envsnap.is_key(r)]
         if args.json:
             print(json.dumps({"differences": len(rows), "rows": rows}, indent=2, ensure_ascii=False))
+        elif args.markdown:
+            shown = rows if args.all else key
+            print(_render_markdown(
+                path_a=str(args.baseline), path_b=str(args.candidate),
+                engine_a=None, engine_b=None,
+                rows=shown, warnings=[],
+                differing=len(key), identical=len(rows) - len(key),
+                all_rows=bool(args.all)))
         else:
-            key = [r for r in rows if envsnap.is_key(r)]
             shown = rows if args.all else key
             print(f"{'fact':32s} {'baseline':40s} {'candidate':40s} status")
             for r in shown:
