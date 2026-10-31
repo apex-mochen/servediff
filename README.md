@@ -1,5 +1,9 @@
 # servediff
 
+[![PyPI version](https://img.shields.io/pypi/v/servediff)](https://pypi.org/project/servediff/)
+[![Python versions](https://img.shields.io/pypi/pyversions/servediff)](https://pypi.org/project/servediff/)
+[![License](https://img.shields.io/github/license/apex-mochen/servediff)](https://github.com/apex-mochen/servediff/blob/main/LICENSE)
+
 **Same flags, different server.** `servediff` shows what your vLLM or SGLang server
 *actually* ran with — and what changed between two runs.
 
@@ -131,6 +135,15 @@ A fact the log did not print is `<absent>`: servediff never fills in defaults.
 Options shared by both engines (dtype, context length, memory fraction, prefix cache,
 CUDA graph, TP size) are mapped to common names, so a vLLM log and an SGLang log can be
 compared, though the result is noisier than a same-engine diff.
+
+### Pasting a report into a GitHub issue
+
+```bash
+servediff diff old.log new.log --markdown
+```
+
+Renders a GitHub-flavored table with a collapsible **Evidence** section quoting the
+exact log line behind each fact — ready to paste into a regression report.
 
 Exit codes: `0` no differences, `1` differences, `2` nothing recognised.
 

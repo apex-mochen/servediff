@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0 — 2026-10-31
+
+- `servediff diff --markdown`: GitHub-flavored report with a table and a collapsible
+  **Evidence** section quoting the log line behind each fact. Ready to paste into a
+  regression issue.
+- PyPI badges in the README.
+
 ## 0.1.0 — 2026-10-29
 
 First version.

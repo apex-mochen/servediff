@@ -160,3 +160,17 @@ def test_diff_exit_codes(tmp_path):
     assert servediff.main(["diff", str(a), str(b)]) == 0
     b.write_text(VLLM.replace("FLASH_ATTN attention", "FLASHINFER attention"))
     assert servediff.main(["diff", str(a), str(b)]) == 1
+
+
+def test_markdown_report_contains_table_evidence_and_failure_warning(tmp_path, capsys):
+    a, b = tmp_path / "a.log", tmp_path / "b.log"
+    a.write_text(FAILED_STARTUP)
+    b.write_text(FALLBACK_STARTUP)
+    assert servediff.main(["diff", str(a), str(b), "--markdown"]) == 1
+    out = capsys.readouterr().out
+    assert out.startswith("# servediff report")
+    assert "| Fact | Baseline | Candidate | Status |" in out
+    assert "| `startup` |" in out
+    assert "⚠️ baseline server failed to start" in out
+    assert "<details>" in out and "<summary>Evidence</summary>" in out
+    assert "UVA is not available" in out  # quoted evidence line
