@@ -1,3 +1,5 @@
+import json
+import sys
 from pathlib import Path
 
 from servediff import cli as servediff
@@ -174,3 +176,24 @@ def test_markdown_report_contains_table_evidence_and_failure_warning(tmp_path, c
     assert "⚠️ baseline server failed to start" in out
     assert "<details>" in out and "<summary>Evidence</summary>" in out
     assert "UVA is not available" in out  # quoted evidence line
+
+
+def test_capture_tees_output_and_writes_env_snapshot(tmp_path):
+    log = tmp_path / "run.log"
+    code = "import sys; print('hello-from-server'); print('err-line', file=sys.stderr)"
+    rc = servediff.main(["capture", "-o", str(log), "--", sys.executable, "-c", code])
+    assert rc == 0
+    written = log.read_text(encoding="utf-8")
+    assert "hello-from-server" in written
+    assert "err-line" in written  # stderr merged into the log
+    env_file = log.with_suffix(log.suffix + ".env.json")
+    assert env_file.exists()
+    data = json.loads(env_file.read_text(encoding="utf-8"))
+    assert data["schema"] == "servediff-env/1"
+    assert "pytest" in data["packages"]
+
+
+def test_capture_reports_missing_command(tmp_path, capsys):
+    log = tmp_path / "x.log"
+    assert servediff.main(["capture", "-o", str(log), "--", "no-such-binary-xyz"]) == 2
+    assert "cannot start" in capsys.readouterr().err

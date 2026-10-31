@@ -13,6 +13,7 @@ Usage:
     servediff diff <baseline.log> <candidate.log> [--raw-args] [--json] [--markdown] [--all]
     servediff env [--python /path/to/server/venv/bin/python] [-o env.json]
     servediff diff <baseline-env.json> <candidate-env.json>
+    servediff capture [-o run.log] [--python /path/to/python] -- <server command>
 Exit codes: 0 no differences, 1 differences found, 2 nothing recognised in an input.
 """
 
@@ -22,6 +23,8 @@ import argparse
 import ast
 import json
 import re
+import shlex
+import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -267,7 +270,48 @@ def main(argv=None) -> int:
     e = sub.add_parser("env", help="snapshot package versions, GPU and engine env vars of a server environment")
     e.add_argument("--python", help="interpreter of the server's environment (default: this one)")
     e.add_argument("-o", "--output", type=Path, help="write JSON here instead of stdout")
+    c = sub.add_parser("capture", help="run a server command, tee its log, and snapshot its environment")
+    c.add_argument("-o", "--output", type=Path, default=Path("servediff-capture.log"),
+                   help="log file (default: servediff-capture.log)")
+    c.add_argument("--python", help="interpreter for the env snapshot (default: this one)")
+    c.add_argument("run_cmd", nargs=argparse.REMAINDER, metavar="-- command",
+                   help="server command, after --")
     args = parser.parse_args(argv)
+
+    if args.command == "capture":
+        cmd = args.run_cmd
+        if cmd[:1] == ["--"]:
+            cmd = cmd[1:]
+        if not cmd:
+            print("capture: provide a command after --, e.g. servediff capture -- vllm serve <model>",
+                  file=sys.stderr)
+            return 2
+        # Snapshot the environment before the server starts, so we capture what it launched with.
+        try:
+            snap = envsnap.snapshot(args.python)
+        except (RuntimeError, OSError) as exc:
+            print(f"servediff capture: env snapshot failed: {exc}", file=sys.stderr)
+            return 2
+        snap_path = args.output.with_suffix(args.output.suffix + ".env.json")
+        snap_path.write_text(json.dumps(snap, indent=2, ensure_ascii=False, sort_keys=True) + "\n",
+                             encoding="utf-8")
+        print(f"env snapshot -> {snap_path}", file=sys.stderr)
+        print(f"log -> {args.output}  (running: {' '.join(shlex.quote(p) for p in cmd)})", file=sys.stderr)
+        try:
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                                    bufsize=1)
+        except (FileNotFoundError, OSError) as exc:
+            print(f"capture: cannot start {cmd[0]}: {exc}", file=sys.stderr)
+            return 2
+        with open(args.output, "w", encoding="utf-8", errors="replace") as logf:
+            for line in proc.stdout:
+                logf.write(line)
+                logf.flush()
+                sys.stdout.write(line)
+                sys.stdout.flush()
+        proc.wait()
+        print(f"\nserver exited with code {proc.returncode}; log: {args.output}", file=sys.stderr)
+        return proc.returncode
 
     if args.command == "env":
         try:

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0 — 2026-10-31
+
+- `servediff capture -o run.log -- <server command>`: run a server, tee its
+  stdout+stderr to a log file, and snapshot the environment to `run.log.env.json`
+  before the server starts. Two captures become a one-command `servediff diff`.
+
 ## 0.2.0 — 2026-10-31
 
 - `servediff diff --markdown`: GitHub-flavored report with a table and a collapsible

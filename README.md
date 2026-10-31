@@ -145,6 +145,20 @@ servediff diff old.log new.log --markdown
 Renders a GitHub-flavored table with a collapsible **Evidence** section quoting the
 exact log line behind each fact — ready to paste into a regression report.
 
+### Capturing a run in one step
+
+```bash
+servediff capture -o run1.log --python /path/to/server/bin/python -- vllm serve <model>
+```
+
+Runs the server command, tees stdout+stderr to `run1.log`, and snapshots the
+environment to `run1.log.env.json` before the server starts. After two runs:
+
+```bash
+servediff diff run1.log run2.log
+servediff diff run1.log.env.json run2.log.env.json
+```
+
 Exit codes: `0` no differences, `1` differences, `2` nothing recognised.
 
 ## Limits
