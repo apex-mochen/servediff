@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.5 — 2026-11-02
+
+- README: document the real TP>1 validation (vLLM 0.23.1 TP=8, issue #48591) and
+  the #63705 decode-only regression analysis as usage examples.
+
 ## 0.3.4 — 2026-11-02
 
 - Verified the parallel-config rules against a real TP=8 startup log (vLLM 0.23.1,
