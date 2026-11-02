@@ -76,6 +76,10 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
     (re.compile(r"FlashInfer top-p/top-k sampling (disabled|enabled)"),
      lambda m: [("backend.sampling_flashinfer", m[1])]),
     (re.compile(r"Using (V\d) Model Runner"), lambda m: [("model_runner", m[1])]),
+    # V1 runner predates the "Using VN Model Runner" line; its identity is the
+    # gpu_model_runner.py module (V2 uses model_runner.py).
+    (re.compile(r"\[gpu_model_runner\.py:\d+\]"),
+     lambda m: [("model_runner", "V1")]),
     # Parallel configuration: what TP/EP/PP the process actually runs with. This is
     # the only place TP>1 (and expert parallel) shows up in the startup log.
     (re.compile(r"world_size=(\d+) rank=(\d+) local_rank=(\d+)"),
@@ -83,6 +87,16 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
     (re.compile(r"rank \d+ in world size \d+ is assigned as (DP rank \d+, PP rank \d+, PCP rank \d+, TP rank \d+(?:, ETP rank \S+)?, EP rank \S+, EPLB rank \S+)"),
      lambda m: [("parallel.roles", m[1])]),
     (re.compile(r"Using (\S+) KV cache layout"), lambda m: [("kv_cache.layout", m[1])]),
+    # Model loading cost: memory footprint and wall time. Both V1 (gpu_model_runner)
+    # and V2 (model_runner) print the same message.
+    (re.compile(r"Model loading took ([\d.]+) GiB memory and ([\d.]+) seconds"),
+     lambda m: [("model_loading.gib", float(m[1])), ("model_loading.seconds", float(m[2]))]),
+    # torch.compile outcome: artifact count/size reflects compile behaviour; total
+    # wall time is comparable between versions on the same machine.
+    (re.compile(r"collected artifacts: (.+?) total"),
+     lambda m: [("compile.artifacts", m[1].strip())]),
+    (re.compile(r"torch.compile took ([\d.]+) s in total"),
+     lambda m: [("compile.total_s", float(m[1]))]),
     (re.compile(r"Pinned memory is not available.*falling back to (.+?) for UVA buffers"),
      lambda m: [("uva_buffers", f"fallback: {m[1]}")]),
     # Startup outcome. Without it, facts missing after a crash look like "not printed".

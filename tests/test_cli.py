@@ -214,6 +214,25 @@ def test_tp4_ep_parallel_roles_are_parsed():
     assert f["kv_cache.layout"].value == "LBNHC"
 
 
+def test_model_loading_and_compile_facts():
+    text = (
+        "(EngineCore pid=100) INFO 10-28 11:28:34 [model_runner.py:428] Model loading took 0.93 GiB memory and 19.122619 seconds\n"
+        "(EngineCore pid=100) INFO 10-28 11:29:11 [backends.py:920] collected artifacts: 25 entries, 3 artifacts, 4996920 bytes total\n"
+        "(EngineCore pid=100) INFO 10-28 11:29:11 [monitor.py:53] torch.compile took 31.08 s in total\n")
+    f = servediff.parse(text)["facts"]
+    assert f["model_loading.gib"].value == 0.93
+    assert abs(f["model_loading.seconds"].value - 19.122619) < 1e-6
+    assert f["compile.artifacts"].value == "25 entries, 3 artifacts, 4996920 bytes"
+    assert abs(f["compile.total_s"].value - 31.08) < 1e-9
+
+
+def test_v1_runner_detected_from_gpu_model_runner_module():
+    text = ("(EngineCore pid=100) INFO 10-28 11:35:38 "
+            "[gpu_model_runner.py:5419] Starting to load model /models/Qwen\n")
+    f = servediff.parse(text)["facts"]
+    assert f["model_runner"].value == "V1"
+
+
 def test_roles_without_etp_field_and_kv_layout_absent():
     text = ("(EngineCore pid=3811) INFO 10-28 11:26:32 [parallel_state.py:1638] "
             "world_size=1 rank=0 local_rank=0 distributed_init_method=file:///tmp/vllm_dist_x backend=nccl\n"

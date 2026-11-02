@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.3 — 2026-11-02
+
+- Extract `model_loading.gib` / `model_loading.seconds` and the torch.compile
+  outcome (`compile.artifacts`, `compile.total_s`); detect the V1 runner via the
+  `gpu_model_runner.py` module when the "Using VN Model Runner" line is absent
+  (it is V2-only). All found by continuing to dogfood the full 0.28-V1 / 0.30-V2
+  startup logs: a V1-vs-V2 diff now shows the runner change, model-loading time,
+  compile artifacts and CUDA-graph capture differences.
+
 ## 0.3.2 — 2026-11-02
 
 - Extract the actual parallel configuration (`parallel.world_size` and the

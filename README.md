@@ -127,9 +127,11 @@ contains `TOKEN`, `KEY`, `SECRET`, `PASSWORD`, `CREDENTIAL` or `AUTH` are replac
 | attention backend | `Using X attention backend` | `attention_backend` arg |
 | MoE backend | three log formats seen in 0.23–0.30 | `moe_runner_backend` arg |
 | CUDA graph | eager mode, `cudagraph_mode`, capture sets, pool size | prefill CUDA graph disabled |
-| model runner, UVA fallback | `Using V2 Model Runner`, pinned-memory fallback | — |
+| model runner, UVA fallback | `Using V2 Model Runner`; V1 runner detected via `gpu_model_runner.py` module; pinned-memory fallback | — |
 | parallel config | `world_size`, DP/PP/PCP/TP/ETP/EP/EPLB role assignment | — |
 | KV cache layout | `Using LBNHC KV cache layout` (0.30+) | — |
+| model loading | `Model loading took … GiB memory and … seconds` | — |
+| torch.compile | `collected artifacts: …`, `torch.compile took … s in total` | — |
 | startup outcome | ready / failed + root-cause error | ready |
 
 Every fact keeps the log line it came from (`servediff show <log>` or `--json`).
