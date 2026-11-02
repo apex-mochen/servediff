@@ -83,6 +83,29 @@ uva_buffers                      <absent>                                 fallba
 5 difference(s); 11 fact(s) identical. Absent means the log did not print it, not that it was off.
 ```
 
+## Validated against real TP>1 logs
+
+The parallel-config rules were written and checked against a real TP=8 startup log
+posted in [vllm#48591](https://github.com/vllm-project/vllm/issues/48591) (v0.23.1,
+8 workers, one `world_size=N` line per rank, role assignment without an ETP field):
+
+```text
+parallel.world_size              8
+parallel.roles                   DP rank 0, PP rank 0, PCP rank 0, TP rank 0, EP rank N/A, EPLB rank N/A
+compile.fusions                  allreduce_rms
+startup                          failed
+```
+
+So a TP4+EP comparison (like the one in the
+[#63705 analysis](https://github.com/apex-mochen/servediff/blob/main/ISSUE-63705-analysis.md)
+— a decode-only regression across vLLM 0.29–0.32) can be scripted as:
+
+```bash
+servediff capture -o v026.log -- docker run ... vllm/vllm-openai:v0.26.0 ...
+servediff capture -o v029.log -- docker run ... vllm/vllm-openai:v0.29.0 ...
+servediff diff v026.log v029.log --markdown
+```
+
 ## Dependency versions: `servediff env`
 
 Logs do not print torch / triton / flashinfer versions, and upgrades of those change
