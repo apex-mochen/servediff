@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.4 — 2026-11-02
+
+- Verified the parallel-config rules against a real TP=8 startup log (vLLM 0.23.1,
+  issue #48591): every rank prints its own `world_size=N` line and the role
+  assignment has no ETP field. `parallel.world_size`, `parallel.roles`,
+  `compile.fusions` and `model_runner` all parse correctly; added a regression test
+  distilled from that log.
+
 ## 0.3.3 — 2026-11-02
 
 - Extract `model_loading.gib` / `model_loading.seconds` and the torch.compile

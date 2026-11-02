@@ -168,10 +168,10 @@ Exit codes: `0` no differences, `1` differences, `2` nothing recognised.
 ## Limits
 
 - Tested on: log excerpts posted in vllm#47047 (v0.23) and vllm#53472 (v0.23, v0.26);
-  full startup logs of vLLM 0.28.0 and 0.30.0 and one SGLang log, all single-GPU with a
-  dense model. The parallel-config rules were written against the v0.28/v0.30 format
-  (incl. TP>1 role assignment) and TP4+EP synthetic logs; TP > 1 real logs, MoE models
-  in full logs, and other versions are not yet verified.
+  full startup logs of vLLM 0.28.0 and 0.30.0 and one SGLang log (single-GPU dense);
+  a real TP=8 startup log from vllm#48591 (v0.23.1, one line per worker + role
+  assignment). The parallel-config rules cover TP>1 real logs; MoE models in full
+  logs and other versions are not yet verified.
 - Parsing is regex-based on log text, which changes between versions. A missed line
   shows up as `<absent>`, never as a wrong value — please report it.
 

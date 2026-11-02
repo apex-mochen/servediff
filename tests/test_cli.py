@@ -233,6 +233,31 @@ def test_v1_runner_detected_from_gpu_model_runner_module():
     assert f["model_runner"].value == "V1"
 
 
+# Real TP>1 log excerpt, distilled from vLLM issue #48591 (0.23.1, TP=8,
+# dspark spec decode crash): every rank prints its own world_size line, the
+# assigned-as line has no ETP field, and the run fails at CUDA graph time.
+TP8 = """\
+(Worker pid=100) INFO 07-14 16:40:12 [parallel_state.py:1607] world_size=8 rank=0 local_rank=0 distributed_init_method=tcp://127.0.0.1:53729 backend=nccl
+(Worker pid=101) INFO 07-14 16:40:13 [parallel_state.py:1607] world_size=8 rank=1 local_rank=1 distributed_init_method=tcp://127.0.0.1:53729 backend=nccl
+(Worker pid=102) INFO 07-14 16:40:13 [parallel_state.py:1607] world_size=8 rank=7 local_rank=7 distributed_init_method=tcp://127.0.0.1:53729 backend=nccl
+(Worker pid=103) INFO 07-14 16:40:23 [parallel_state.py:1942] rank 0 in world size 8 is assigned as DP rank 0, PP rank 0, PCP rank 0, TP rank 0, EP rank N/A, EPLB rank N/A
+(Worker pid=104) INFO 07-14 16:40:23 [gpu_worker.py:378] Using V2 Model Runner
+INFO 07-14 16:38:11 [compilation.py:312] Enabled custom fusions: allreduce_rms
+(Worker_TP7 pid=105) INFO 07-14 16:40:24 [model_runner.py:281] Loading model from scratch...
+(Worker_TP7 pid=106) ERROR 07-14 16:40:44 [model_runner.py:999] RuntimeError: Engine core initialization failed. See root cause above.
+"""
+
+
+def test_tp8_multiple_worker_lines_parse_parallel_config():
+    f = servediff.parse(TP8)["facts"]
+    assert f["parallel.world_size"].value == 8
+    assert f["parallel.roles"].value == ("DP rank 0, PP rank 0, PCP rank 0, TP rank 0, "
+                                         "EP rank N/A, EPLB rank N/A")
+    assert f["compile.fusions"].value == "allreduce_rms"
+    assert f["model_runner"].value == "V2"
+    assert f["startup"].value == "failed"
+
+
 def test_roles_without_etp_field_and_kv_layout_absent():
     text = ("(EngineCore pid=3811) INFO 10-28 11:26:32 [parallel_state.py:1638] "
             "world_size=1 rank=0 local_rank=0 distributed_init_method=file:///tmp/vllm_dist_x backend=nccl\n"
