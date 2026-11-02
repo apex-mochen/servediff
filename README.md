@@ -128,6 +128,8 @@ contains `TOKEN`, `KEY`, `SECRET`, `PASSWORD`, `CREDENTIAL` or `AUTH` are replac
 | MoE backend | three log formats seen in 0.23–0.30 | `moe_runner_backend` arg |
 | CUDA graph | eager mode, `cudagraph_mode`, capture sets, pool size | prefill CUDA graph disabled |
 | model runner, UVA fallback | `Using V2 Model Runner`, pinned-memory fallback | — |
+| parallel config | `world_size`, DP/PP/PCP/TP/ETP/EP/EPLB role assignment | — |
+| KV cache layout | `Using LBNHC KV cache layout` (0.30+) | — |
 | startup outcome | ready / failed + root-cause error | ready |
 
 Every fact keeps the log line it came from (`servediff show <log>` or `--json`).
@@ -165,7 +167,9 @@ Exit codes: `0` no differences, `1` differences, `2` nothing recognised.
 
 - Tested on: log excerpts posted in vllm#47047 (v0.23) and vllm#53472 (v0.23, v0.26);
   full startup logs of vLLM 0.28.0 and 0.30.0 and one SGLang log, all single-GPU with a
-  dense model. TP > 1, MoE models in full logs, and other versions are not yet verified.
+  dense model. The parallel-config rules were written against the v0.28/v0.30 format
+  (incl. TP>1 role assignment) and TP4+EP synthetic logs; TP > 1 real logs, MoE models
+  in full logs, and other versions are not yet verified.
 - Parsing is regex-based on log text, which changes between versions. A missed line
   shows up as `<absent>`, never as a wrong value — please report it.
 

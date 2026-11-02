@@ -197,3 +197,30 @@ def test_capture_reports_missing_command(tmp_path, capsys):
     log = tmp_path / "x.log"
     assert servediff.main(["capture", "-o", str(log), "--", "no-such-binary-xyz"]) == 2
     assert "cannot start" in capsys.readouterr().err
+
+
+TP4_EP = """\
+(EngineCore pid=100) INFO 10-28 11:28:12 [parallel_state.py:1827] world_size=4 rank=2 local_rank=2 distributed_init_method=file:///tmp/vllm_dist_x backend=nccl
+(EngineCore pid=100) INFO 10-28 11:28:12 [parallel_state.py:2267] rank 2 in world size 4 is assigned as DP rank 0, PP rank 0, PCP rank 0, TP rank 2, ETP rank 2, EP rank 1, EPLB rank 0
+(EngineCore pid=100) INFO 10-28 11:28:34 [utils.py:320] Using LBNHC KV cache layout.
+"""
+
+
+def test_tp4_ep_parallel_roles_are_parsed():
+    f = servediff.parse(TP4_EP)["facts"]
+    assert f["parallel.world_size"].value == 4
+    assert f["parallel.roles"].value == ("DP rank 0, PP rank 0, PCP rank 0, TP rank 2, "
+                                         "ETP rank 2, EP rank 1, EPLB rank 0")
+    assert f["kv_cache.layout"].value == "LBNHC"
+
+
+def test_roles_without_etp_field_and_kv_layout_absent():
+    text = ("(EngineCore pid=3811) INFO 10-28 11:26:32 [parallel_state.py:1638] "
+            "world_size=1 rank=0 local_rank=0 distributed_init_method=file:///tmp/vllm_dist_x backend=nccl\n"
+            "(EngineCore pid=3811) INFO 10-28 11:26:32 [parallel_state.py:1982] "
+            "rank 0 in world size 1 is assigned as DP rank 0, PP rank 0, PCP rank 0, "
+            "TP rank 0, EP rank N/A, EPLB rank N/A\n")
+    f = servediff.parse(text)["facts"]
+    assert f["parallel.world_size"].value == 1
+    assert "ETP" not in f["parallel.roles"].value  # 0.28 format lacks the field
+    assert "kv_cache.layout" not in f

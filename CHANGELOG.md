@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.2 — 2026-11-02
+
+- Extract the actual parallel configuration (`parallel.world_size` and the
+  DP/PP/PCP/TP/ETP/EP/EPLB role assignment) and the KV cache layout
+  (`Using LBNHC KV cache layout`, 0.30+). Found by dogfooding the parser against
+  full vLLM 0.28/0.30 startup logs; the role-assignment line is the only place
+  TP>1 and expert parallel appear in the log, so it makes TP4+EP configs visible
+  to `servediff diff`.
+
 ## 0.3.1 — 2026-10-31
 
 - `--markdown` now also works on `servediff env` snapshots, so a `capture`-based

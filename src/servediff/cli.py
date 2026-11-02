@@ -76,6 +76,13 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
     (re.compile(r"FlashInfer top-p/top-k sampling (disabled|enabled)"),
      lambda m: [("backend.sampling_flashinfer", m[1])]),
     (re.compile(r"Using (V\d) Model Runner"), lambda m: [("model_runner", m[1])]),
+    # Parallel configuration: what TP/EP/PP the process actually runs with. This is
+    # the only place TP>1 (and expert parallel) shows up in the startup log.
+    (re.compile(r"world_size=(\d+) rank=(\d+) local_rank=(\d+)"),
+     lambda m: [("parallel.world_size", int(m[1]))]),
+    (re.compile(r"rank \d+ in world size \d+ is assigned as (DP rank \d+, PP rank \d+, PCP rank \d+, TP rank \d+(?:, ETP rank \S+)?, EP rank \S+, EPLB rank \S+)"),
+     lambda m: [("parallel.roles", m[1])]),
+    (re.compile(r"Using (\S+) KV cache layout"), lambda m: [("kv_cache.layout", m[1])]),
     (re.compile(r"Pinned memory is not available.*falling back to (.+?) for UVA buffers"),
      lambda m: [("uva_buffers", f"fallback: {m[1]}")]),
     # Startup outcome. Without it, facts missing after a crash look like "not printed".
