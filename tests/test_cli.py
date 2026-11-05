@@ -1,4 +1,5 @@
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -268,3 +269,31 @@ def test_roles_without_etp_field_and_kv_layout_absent():
     assert f["parallel.world_size"].value == 1
     assert "ETP" not in f["parallel.roles"].value  # 0.28 format lacks the field
     assert "kv_cache.layout" not in f
+
+
+# --- Real SGLang startup log, distilled from sgl-project/sglang#4862 ---------------
+# SGLang 0.4.4, TP=4, Qwen2.5-Omni-7B. It prints `server_args=ServerArgs(...)`
+# (keyword-call form, not a dict literal); the parser must handle both forms.
+
+def test_sglang_server_args_call_form_is_parsed():
+    f = servediff.parse((FIX / "sglang-0.4.4-tp4.log").read_text(encoding="utf-8"))["facts"]
+    assert f["engine"].value == "sglang"
+    assert f["arg.tensor_parallel_size"].value == 4
+    assert f["arg.model"].value == "/home/model/Qwen/Qwen2.5-Omni-7B"
+    assert f["arg.gpu_memory_fraction"].value == 0.85
+    assert f["arg.port"].value == 30000
+    assert f["arg.backend.attention_arg"].value == "flashinfer"
+    assert f["args.source"].value == "sglang server_args (all args)"
+
+
+def test_sglang_startup_failure_is_recorded():
+    f = servediff.parse((FIX / "sglang-0.4.4-tp4.log").read_text(encoding="utf-8"))["facts"]
+    assert f["startup"].value == "failed"
+    assert f["startup.error"].value.startswith("AttributeError:")
+
+
+def test_cli_version_flag():
+    out = subprocess.run([sys.executable, "-m", "servediff", "--version"],
+                         capture_output=True, text=True)
+    assert out.returncode == 0
+    assert out.stdout.strip().startswith("servediff 0.3")

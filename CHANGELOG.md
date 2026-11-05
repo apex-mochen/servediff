@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.6 — 2026-11-03
+
+- Parse SGLang's `server_args=ServerArgs(...)` keyword-call form (not just the
+  `{...}` dict literal): verified against a real SGLang startup log (sgl-project/sglang#4862,
+  v0.4.4, TP=4) — model, TP size, memory fraction, port, attention/sampling backends
+  and startup failure with root cause are now extracted instead of nothing.
+- Record `startup=failed` for AttributeError/KeyError/TypeError as well as
+  RuntimeError/ValueError/OOM/AssertionError; expose the SGLang `port` arg.
+- Add `servediff --version` (prints the installed package version).
+
 ## 0.3.5 — 2026-11-02
 
 - README: document the real TP>1 validation (vLLM 0.23.1 TP=8, issue #48591) and

@@ -155,7 +155,7 @@ contains `TOKEN`, `KEY`, `SECRET`, `PASSWORD`, `CREDENTIAL` or `AUTH` are replac
 | KV cache layout | `Using LBNHC KV cache layout` (0.30+) | — |
 | model loading | `Model loading took … GiB memory and … seconds` | — |
 | torch.compile | `collected artifacts: …`, `torch.compile took … s in total` | — |
-| startup outcome | ready / failed + root-cause error | ready |
+| startup outcome | ready / failed + root-cause error | ready / failed + root-cause error |
 
 Every fact keeps the log line it came from (`servediff show <log>` or `--json`).
 A fact the log did not print is `<absent>`: servediff never fills in defaults.
@@ -193,8 +193,11 @@ Exit codes: `0` no differences, `1` differences, `2` nothing recognised.
 - Tested on: log excerpts posted in vllm#47047 (v0.23) and vllm#53472 (v0.23, v0.26);
   full startup logs of vLLM 0.28.0 and 0.30.0 and one SGLang log (single-GPU dense);
   a real TP=8 startup log from vllm#48591 (v0.23.1, one line per worker + role
-  assignment). The parallel-config rules cover TP>1 real logs; MoE models in full
-  logs and other versions are not yet verified.
+  assignment); a real SGLang startup log from sgl-project/sglang#4862 (v0.4.4, TP=4,
+  Qwen2.5-Omni-7B — `server_args=ServerArgs(...)` keyword-call form parsed, startup
+  failure + root-cause error recorded). The parallel-config rules cover TP>1 real
+  logs; MoE models in full logs, recent SGLang versions and other engines are not
+  yet verified.
 - Parsing is regex-based on log text, which changes between versions. A missed line
   shows up as `<absent>`, never as a wrong value — please report it.
 

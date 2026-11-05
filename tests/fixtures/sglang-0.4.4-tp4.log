@@ -1,0 +1,23 @@
+sgl start command: python3.12 -m sglang.launch_server   --model Qwen/Qwen2.5-Omni-7B --model-path /home/model/Qwen/Qwen2.5-Omni-7B   --host 0.0.0.0 --port 30000 --tensor-parallel-size 4   --log-level info   --enable-metrics --trust-remote-code --enable-p2p-check
+[2025-03-28 10:20:10] server_args=ServerArgs(model_path='/home/model/Qwen/Qwen2.5-Omni-7B', tokenizer_path='/home/model/Qwen/Qwen2.5-Omni-7B', tokenizer_mode='auto', skip_tokenizer_init=False, load_format='auto', trust_remote_code=True, dtype='auto', kv_cache_dtype='auto', quantization=None, quantization_param_path=None, context_length=None, device='cuda', served_model_name='/home/model/Qwen/Qwen2.5-Omni-7B', chat_template=None, completion_template=None, is_embedding=False, revision=None, host='0.0.0.0', port=30000, mem_fraction_static=0.85, max_running_requests=None, max_total_tokens=None, chunked_prefill_size=2048, max_prefill_tokens=16384, schedule_policy='fcfs', schedule_conservativeness=1.0, cpu_offload_gb=0, page_size=1, tp_size=4, stream_interval=1, stream_output=False, random_seed=94444126, constrained_json_whitespace_pattern=None, watchdog_timeout=300, dist_timeout=None, download_dir=None, base_gpu_id=0, gpu_id_step=1, log_level='info', log_level_http=None, log_requests=False, log_requests_level=0, show_time_cost=False, enable_metrics=True, decode_log_interval=40, api_key=None, file_storage_path='sglang_storage', enable_cache_report=False, reasoning_parser=None, dp_size=1, load_balance_method='round_robin', ep_size=1, dist_init_addr=None, nnodes=1, node_rank=0, json_model_override_args='{}', lora_paths=None, max_loras_per_batch=8, lora_backend='triton', attention_backend='flashinfer', sampling_backend='flashinfer', grammar_backend='xgrammar', speculative_algorithm=None, speculative_draft_model_path=None, speculative_num_steps=5, speculative_eagle_topk=4, speculative_num_draft_tokens=8, speculative_accept_threshold_single=1.0, speculative_accept_threshold_acc=1.0, speculative_token_map=None, enable_double_sparsity=False, ds_channel_config_path=None, ds_heavy_channel_num=32, ds_heavy_token_num=256, ds_heavy_channel_type='qk', ds_sparse_decode_threshold=4096, disable_radix_cache=False, disable_cuda_graph=False, disable_cuda_graph_padding=False, enable_nccl_nvls=False, disable_outlines_disk_cache=False, disable_custom_all_reduce=False, disable_mla=False, disable_overlap_schedule=False, enable_mixed_chunk=False, enable_dp_attention=False, enable_ep_moe=False, enable_deepep_moe=False, enable_torch_compile=False, torch_compile_max_bs=32, cuda_graph_max_bs=80, cuda_graph_bs=None, torchao_config='', enable_nan_detection=False, enable_p2p_check=True, triton_attention_reduce_in_fp32=False, triton_attention_num_kv_splits=8, num_continuous_decode_steps=1, delete_ckpt_after_loading=False, enable_memory_saver=False, allow_auto_truncate=False, enable_custom_logit_processor=False, tool_call_parser=None, enable_hierarchical_cache=False, hicache_ratio=2.0, enable_flashinfer_mla=False, enable_flashmla=False, flashinfer_mla_disable_ragged=False, warmups=None, debug_tensor_dump_output_folder=None, debug_tensor_dump_input_file=None, debug_tensor_dump_inject=False, disaggregation_mode='null', disaggregation_bootstrap_port=8998)
+Traceback (most recent call last):
+File "<frozen runpy>", line 198, in _run_module_as_main
+File "<frozen runpy>", line 88, in _run_code
+File "/usr/local/lib/python3.12/site-packages/sglang/launch_server.py", line 14, in <module>
+launch_server(server_args)
+File "/usr/local/lib/python3.12/site-packages/sglang/srt/entrypoints/http_server.py", line 673, in launch_server
+tokenizer_manager, scheduler_info = _launch_subprocesses(server_args=server_args)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+File "/usr/local/lib/python3.12/site-packages/sglang/srt/entrypoints/engine.py", line 546, in _launch_subprocesses
+tokenizer_manager = TokenizerManager(server_args, port_args)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+File "/usr/local/lib/python3.12/site-packages/sglang/srt/managers/tokenizer_manager.py", line 159, in __init__
+self.model_config = ModelConfig(
+^^^^^^^^^^^^
+File "/usr/local/lib/python3.12/site-packages/sglang/srt/configs/model_config.py", line 111, in __init__
+self.hf_text_config.hidden_size // self.hf_text_config.num_attention_heads,
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+File "/usr/local/lib/python3.12/site-packages/transformers/configuration_utils.py", line 214, in __getattribute__
+return super().__getattribute__(key)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'Qwen2_5OmniConfig' object has no attribute 'hidden_size'

@@ -103,7 +103,7 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
     (re.compile(r"Application startup complete"), lambda m: [("startup", "ready")]),
     (re.compile(r"EngineCore failed to start|Engine core initialization failed"),
      lambda m: [("startup", "failed")]),
-    (re.compile(r"^(?:\(\w+ pid=\d+\) )?(?:ERROR .*?\] )?((?:RuntimeError|ValueError|torch\.OutOfMemoryError|AssertionError): .+)$"),
+    (re.compile(r"^(?:\(\w+ pid=\d+\) )?(?:ERROR .*?\] )?((?:RuntimeError|ValueError|torch\.OutOfMemoryError|AssertionError|AttributeError|KeyError|TypeError): .+)$"),
      lambda m: [("startup.error", m[1].strip())]),
     # SGLang.
     (re.compile(r"Disable prefill CUDA graph because"), lambda m: [("cuda_graph.prefill", "disabled")]),
@@ -125,6 +125,7 @@ SHARED_ARGS = {
     "backend.attention_arg": ("attention_backend", "attention_backend", None),
     "backend.moe_arg": ("moe_backend", "moe_runner_backend", None),
     "backend.sampling_arg": (None, "sampling_backend", None),
+    "port": (None, "port", None),
 }
 
 
@@ -150,6 +151,72 @@ def _literal_dict(text: str) -> dict | None:
     return None
 
 
+def _call_kwargs(text: str) -> dict | None:
+    """Parse SGLang's `ServerArgs(kw=v, ...)` call form into a dict.
+
+    Newer SGLang prints `server_args=ServerArgs(model_path=..., tp_size=4, ...)`
+    (a keyword-argument call, not a dict literal), so `ast.literal_eval` on the
+    whole line fails and every shared arg is lost. Tolerate trailing log text.
+    """
+    match = re.match(r"([A-Za-z_]\w*)\(", text)
+    if not match:
+        return None
+    depth, quote, end = 0, None, None
+    for i in range(match.end(), len(text)):
+        ch = text[i]
+        if quote:
+            if ch == quote and text[i - 1] != "\\":
+                quote = None
+        elif ch in "'\"":
+            quote = ch
+        elif ch == "(":
+            depth += 1
+        elif ch == ")":
+            if depth == 0:
+                end = i
+                break
+            depth -= 1
+    if end is None:
+        return None
+    inner = text[match.end():end]
+    # Split the keyword arguments at top level, then rebuild as a dict literal so
+    # ast.literal_eval accepts it (the `dict(...)` call form is not supported).
+    items = []
+    parts, depth, quote, cur = [], 0, None, []
+    for ch in inner:
+        if quote:
+            cur.append(ch)
+            if ch == quote and (len(cur) < 2 or cur[-2] != "\\"):
+                quote = None
+        elif ch in "'\"":
+            quote = ch
+            cur.append(ch)
+        elif ch in "([{":
+            depth += 1
+            cur.append(ch)
+        elif ch in ")]}":
+            depth -= 1
+            cur.append(ch)
+        elif ch == "," and depth == 0:
+            parts.append("".join(cur).strip())
+            cur = []
+        else:
+            cur.append(ch)
+    parts.append("".join(cur).strip())
+    for part in parts:
+        if not part:
+            continue
+        eq = part.find("=")
+        if eq < 1 or not part[:eq].strip().isidentifier():
+            return None
+        items.append('"%s": %s' % (part[:eq].strip(), part[eq + 1:].strip()))
+    try:
+        value = ast.literal_eval("{" + ", ".join(items) + "}")
+    except (ValueError, SyntaxError):
+        return None
+    return value if isinstance(value, dict) else None
+
+
 def parse(text: str) -> dict:
     facts: dict[str, Fact] = {}
     args: dict = {}
@@ -168,7 +235,8 @@ def parse(text: str) -> dict:
                 put("args.source", "vllm non-default args", lineno, line)
         elif "server_args=" in line:
             engine = engine or "sglang"
-            parsed = _literal_dict(line.split("server_args=", 1)[1].strip())
+            tail = line.split("server_args=", 1)[1].strip()
+            parsed = _literal_dict(tail) or _call_kwargs(tail)
             if parsed is not None:
                 args.update(parsed)
                 put("args.source", "sglang server_args (all args)", lineno, line)
@@ -180,8 +248,11 @@ def parse(text: str) -> dict:
                 for key, value in emit(match):
                     # Errors after the server reported ready (e.g. during shutdown) say
                     # nothing about how it started.
-                    if key == "startup.error" and "ready" in (facts.get("startup") or Fact()).values:
-                        key = "after_ready.error"
+                    if key == "startup.error":
+                        if "ready" in (facts.get("startup") or Fact()).values:
+                            key = "after_ready.error"
+                        else:
+                            put("startup", "failed", lineno, line)
                     put(key, value, lineno, line)
 
     if engine:
@@ -275,8 +346,17 @@ def _render_markdown(*, path_a: str, path_b: str, engine_a, engine_b,
     return "\n".join(lines)
 
 
+def _version() -> str:
+    try:
+        from importlib.metadata import version as _pkg_version
+        return _pkg_version("servediff")
+    except Exception:
+        return "unknown"
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    parser.add_argument("--version", action="version", version=f"servediff {_version()}")
     sub = parser.add_subparsers(dest="command", required=True)
     show = sub.add_parser("show", help="effective config facts in one log")
     show.add_argument("log", type=Path)
