@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.7 — 2026-11-05
+
+- Extract the all-reduce backend selection from TP startup logs: the chosen
+  dispatch list per TP group (`backend.allreduce_dispatch` /
+  `backend.allreduce_potential`), FlashInfer's auto-selected allreduce backend
+  (`backend.allreduce_flashinfer`) and its norm-fusion workspaces
+  (`backend.allreduce_fusion`). Verified against a real vLLM 0.23.1 TP=8 log
+  (vllm#48591). These lines are the only place the fused communication path shows
+  up, so a silent switch from custom all-reduce to FlashInfer's path becomes
+  visible in a diff instead of staying invisible.
+
 ## 0.3.6 — 2026-11-03
 
 - Parse SGLang's `server_args=ServerArgs(...)` keyword-call form (not just the

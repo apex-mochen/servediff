@@ -1,0 +1,5 @@
+(Worker pid=2717792) INFO 07-14 16:40:23 [gpu_worker.py:378] Using V2 Model Runner
+(Worker pid=2717792) INFO 07-14 16:40:23 [cuda_communicator.py:264] Using ['CUSTOM', 'SYMM_MEM', 'PYNCCL'] all-reduce backends (in dispatch order) for group 'tp:0' out of potential backends: ['NCCL_SYMM_MEM', 'QUICK_REDUCE', 'FLASHINFER', 'AITER_CUSTOM', 'CUSTOM', 'SYMM_MEM', 'PYNCCL'].
+(Worker_TP0 pid=2717792) INFO 07-14 16:41:18 [flashinfer_all_reduce.py:119] Auto-selected flashinfer allreduce backend: mnnvl
+(Worker_TP0 pid=2717792) INFO 07-14 16:41:19 [flashinfer_all_reduce.py:168] Initialized FlashInfer Allreduce norm fusion workspace with backend=mnnvl
+(Worker_TP0 pid=2717792) INFO 07-14 16:41:20 [flashinfer_all_reduce.py:216] Initialized FlashInfer Allreduce norm quantization fusion workspace with backend=trtllm

@@ -297,3 +297,15 @@ def test_cli_version_flag():
                          capture_output=True, text=True)
     assert out.returncode == 0
     assert out.stdout.strip().startswith("servediff 0.3")
+
+
+def test_allreduce_backend_selection_is_recorded():
+    # Real lines from a vLLM 0.23.1 TP=8 startup log (vllm#48591). The chosen
+    # all-reduce list and the FlashInfer path are the only positive evidence that
+    # a fused all-reduce backend actually ran, so they must not be dropped.
+    f = servediff.parse((FIX / "vllm-0.23.1-tp8-allreduce.log").read_text(encoding="utf-8"))["facts"]
+    assert f["model_runner"].value == "V2"
+    assert f["backend.allreduce_dispatch"].value == "tp:0: ['CUSTOM', 'SYMM_MEM', 'PYNCCL']"
+    assert "FLASHINFER" in f["backend.allreduce_potential"].value
+    assert f["backend.allreduce_flashinfer"].value == "mnnvl"
+    assert f["backend.allreduce_fusion"].values == ["norm: mnnvl", "norm quantization: trtllm"]

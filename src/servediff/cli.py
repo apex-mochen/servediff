@@ -80,6 +80,18 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
     # gpu_model_runner.py module (V2 uses model_runner.py).
     (re.compile(r"\[gpu_model_runner\.py:\d+\]"),
      lambda m: [("model_runner", "V1")]),
+    # All-reduce is chosen from a candidate list and the chosen list is printed
+    # per TP group; this is the only place the communication path (custom / NCCL /
+    # FlashInfer) shows up in a startup log.
+    (re.compile(r"Using (\[[^\]]*\]) all-reduce backends (?:\(in dispatch order\) )?for group '([^']+)' out of potential backends: (\[[^\]]*\])"),
+     lambda m: [("backend.allreduce_dispatch", f"{m[2]}: {m[1]}"),
+                ("backend.allreduce_potential", m[3])]),
+    (re.compile(r"Auto-selected flashinfer allreduce backend: (\w+)"),
+     lambda m: [("backend.allreduce_flashinfer", m[1])]),
+    # FlashInfer builds these only when its all-reduce/norm fusion path is active,
+    # so their presence is the positive evidence that the fused path ran.
+    (re.compile(r"Initialized FlashInfer Allreduce (norm quantization|norm) fusion workspace with backend=(\w+)"),
+     lambda m: [("backend.allreduce_fusion", f"{m[1]}: {m[2]}")]),
     # Parallel configuration: what TP/EP/PP the process actually runs with. This is
     # the only place TP>1 (and expert parallel) shows up in the startup log.
     (re.compile(r"world_size=(\d+) rank=(\d+) local_rank=(\d+)"),
