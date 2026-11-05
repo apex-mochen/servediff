@@ -96,6 +96,38 @@ compile.fusions                  allreduce_rms
 startup                          failed
 ```
 
+### When the all-reduce path changes silently
+
+vLLM chooses an all-reduce implementation per TP group out of a candidate list, and
+FlashInfer can pick its own backend on top of that. These lines are printed once at
+startup and never mentioned again — which is how a version bump can move decode
+through a different communication path without any flag changing. Since 0.3.7 they
+are facts (this is `servediff show` on the same v0.23.1 TP=8 log):
+
+```text
+backend.allreduce_dispatch       tp:0: ['CUSTOM', 'SYMM_MEM', 'PYNCCL']                       line 37
+backend.allreduce_flashinfer     mnnvl                                                        line 102
+backend.allreduce_fusion         ["norm: mnnvl", "norm quantization: trtllm"]                 line 106
+backend.allreduce_potential      ['NCCL_SYMM_MEM', 'QUICK_REDUCE', 'FLASHINFER', 'AITER_CU... line 37
+model_runner                     V2                                                           line 39
+```
+
+The first two separate *chosen* from *possible*: FlashInfer sitting in `potential`
+but not in `dispatch` means it was not used for that group. The last two record
+whether FlashInfer's fused workspaces were actually built — absence there is a
+result, not a gap. `model_runner` covers V1 vs V2 (so `VLLM_USE_V2_MODEL_RUNNER=0`
+runs are identifiable), and `compile.fusions` carries `allreduce_rms` when
+`fuse_allreduce_rms` is on.
+
+That makes the question raised in
+[vllm#63705](https://github.com/vllm-project/vllm/issues/63705) — *did 0.29 turn
+FlashInfer all-reduce on by default (#52998)?* — answerable from logs you already
+keep, one per version, same TP:
+
+```bash
+servediff diff v0.28.log v0.29.log
+```
+
 So a TP4+EP comparison (like the one in the
 [#63705 analysis](https://github.com/apex-mochen/servediff/blob/main/ISSUE-63705-analysis.md)
 — a decode-only regression across vLLM 0.29–0.32) can be scripted as:
@@ -151,6 +183,7 @@ contains `TOKEN`, `KEY`, `SECRET`, `PASSWORD`, `CREDENTIAL` or `AUTH` are replac
 | MoE backend | three log formats seen in 0.23–0.30 | `moe_runner_backend` arg |
 | CUDA graph | eager mode, `cudagraph_mode`, capture sets, pool size | prefill CUDA graph disabled |
 | model runner, UVA fallback | `Using V2 Model Runner`; V1 runner detected via `gpu_model_runner.py` module; pinned-memory fallback | — |
+| all-reduce path | chosen chain per TP group + candidate pool (`all-reduce backends (in dispatch order) … out of potential backends`), FlashInfer's auto-selected backend and its norm / norm-quantization fusion workspaces (0.3.7+) | — |
 | parallel config | `world_size`, DP/PP/PCP/TP/ETP/EP/EPLB role assignment | — |
 | KV cache layout | `Using LBNHC KV cache layout` (0.30+) | — |
 | model loading | `Model loading took … GiB memory and … seconds` | — |
@@ -195,9 +228,9 @@ Exit codes: `0` no differences, `1` differences, `2` nothing recognised.
   a real TP=8 startup log from vllm#48591 (v0.23.1, one line per worker + role
   assignment); a real SGLang startup log from sgl-project/sglang#4862 (v0.4.4, TP=4,
   Qwen2.5-Omni-7B — `server_args=ServerArgs(...)` keyword-call form parsed, startup
-  failure + root-cause error recorded). The parallel-config rules cover TP>1 real
-  logs; MoE models in full logs, recent SGLang versions and other engines are not
-  yet verified.
+  failure + root-cause error recorded). The parallel-config and all-reduce rules are
+  checked against real TP>1 logs; MoE models in full logs, recent SGLang versions and
+  other engines are not yet verified.
 - Parsing is regex-based on log text, which changes between versions. A missed line
   shows up as `<absent>`, never as a wrong value — please report it.
 
