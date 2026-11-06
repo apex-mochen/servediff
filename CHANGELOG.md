@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.0 — 2026-11-06
+
+- `servediff series a.log b.log c.log` compares three or more runs in one table with
+  one column per log, so a middle version is not lost between two pairwise diffs —
+  the shape regression threads like vllm#53472 actually have. Supports `--markdown`,
+  `--json`, `--all`, `--raw-args`, and `-` for stdin on at most one entry. Exit codes
+  match `diff`.
+
 ## 0.3.10 — 2026-11-06
 
 - `show` and `diff` accept `-` for stdin, so a log can be read straight off the

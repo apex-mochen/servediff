@@ -311,6 +311,32 @@ def diff(a: dict, b: dict, raw_args: bool = False) -> list[dict]:
     return rows
 
 
+def series(parsed_list: list[dict], raw_args: bool = False) -> list[dict]:
+    """Compare N logs at once: one row per fact, one value per log.
+
+    Regression threads usually carry three or more runs (0.29 / 0.31 / 0.32), and
+    two pairwise diffs lose the middle column. Rows that hold the same value across
+    every log are marked `same`.
+    """
+    keys = set()
+    for parsed in parsed_list:
+        keys |= set(parsed["facts"])
+    rows = []
+    for key in sorted(keys):
+        values = [_shown(parsed["facts"].get(key)) for parsed in parsed_list]
+        rows.append({"key": key, "values": values,
+                     "status": "same" if all(v == values[0] for v in values) else "changed"})
+    if raw_args and len({parsed["engine"] for parsed in parsed_list}) == 1:
+        keys = set()
+        for parsed in parsed_list:
+            keys |= set(parsed["args"])
+        for key in sorted(keys):
+            values = [parsed["args"].get(key, "<absent>") for parsed in parsed_list]
+            if any(v != values[0] for v in values):
+                rows.append({"key": f"raw_arg.{key}", "values": values, "status": "changed"})
+    return rows
+
+
 def _version_tuple(facts) -> tuple | None:
     fact = facts.get("engine.version")
     if not fact:
@@ -410,6 +436,29 @@ def _render_markdown(*, path_a: str, path_b: str, engine_a, engine_b,
     return "\n".join(lines)
 
 
+def _short(text: str, width: int) -> str:
+    return text if len(text) <= width else text[: width - 3] + "..."
+
+
+def _render_text_series(labels: list[str], rows: list[dict], width: int = 30) -> str:
+    lines = [f"{'fact':32s} " + " ".join(f"{_short(label, width):{width}s}" for label in labels)]
+    for row in rows:
+        cells = " ".join(f"{_short(_fmt(value), width):{width}s}" for value in row["values"])
+        lines.append(f"{row['key']:32s} {cells}".rstrip())
+    return "\n".join(lines)
+
+
+def _render_markdown_series(*, labels: list[str], rows: list[dict], differing: int, identical: int) -> str:
+    head = "| fact | " + " | ".join(_md_cell(label) for label in labels) + " |"
+    rule = "|---|" + "---|" * len(labels)
+    body = ["| `" + row["key"] + "` | "
+            + " | ".join("`" + _md_cell(_fmt(value)) + "`" for value in row["values"]) + " |"
+            for row in rows]
+    return "\n".join([head, rule, *body, "",
+                      f"{differing} fact(s) differ across {len(labels)} logs; {identical} identical. "
+                      "`<absent>` means the log did not print it, not that it was off."])
+
+
 def _version() -> str:
     try:
         from importlib.metadata import version as _pkg_version
@@ -447,6 +496,12 @@ def main(argv=None) -> int:
     d.add_argument("--json", action="store_true")
     d.add_argument("--markdown", action="store_true", help="render a GitHub-flavored report (paste into issues)")
     d.add_argument("--all", action="store_true", help="also print unchanged facts")
+    s = sub.add_parser("series", help="compare three or more server logs in one table")
+    s.add_argument("logs", type=Path, nargs="+", help="server logs, in the column order you want; - reads stdin")
+    s.add_argument("--raw-args", action="store_true", help="also compare every raw argument (same engine only)")
+    s.add_argument("--json", action="store_true")
+    s.add_argument("--markdown", action="store_true", help="render a GitHub-flavored report (paste into issues)")
+    s.add_argument("--all", action="store_true", help="also print facts identical across every log")
     e = sub.add_parser("env", help="snapshot package versions, GPU and engine env vars of a server environment")
     e.add_argument("--python", help="interpreter of the server's environment (default: this one)")
     e.add_argument("-o", "--output", type=Path, help="write JSON here instead of stdout")
@@ -506,6 +561,35 @@ def main(argv=None) -> int:
         else:
             print(text)
         return 0
+
+    if args.command == "series":
+        if len(args.logs) < 3:
+            print("series: give at least three logs; for two use `servediff diff`", file=sys.stderr)
+            return 2
+        if sum(1 for path in args.logs if str(path) == "-") > 1:
+            print("series: stdin can be read once, so at most one entry may be '-'", file=sys.stderr)
+            return 2
+        parsed_list = [parse(_read_log(path)) for path in args.logs]
+        for path, parsed in zip(args.logs, parsed_list):
+            if not parsed["facts"]:
+                print(f"{_label(path)}: no vLLM or SGLang configuration lines recognised", file=sys.stderr)
+                return 2
+        labels = ["stdin" if str(name) == "-" else Path(name).name for name in args.logs]
+        rows = series(parsed_list, raw_args=args.raw_args)
+        differing = [row for row in rows if row["status"] == "changed"]
+        shown = rows if args.all else differing
+        if args.json:
+            print(json.dumps({"logs": labels, "differences": len(differing), "rows": shown},
+                             indent=2, ensure_ascii=False))
+        elif args.markdown:
+            print(_render_markdown_series(labels=labels, rows=shown, differing=len(differing),
+                                          identical=len(rows) - len(differing)))
+        else:
+            print(_render_text_series(labels, shown))
+            print(f"\n{len(differing)} fact(s) differ across {len(labels)} logs;"
+                  f" {len(rows) - len(differing)} identical. <absent> means the log did not print it,"
+                  " not that it was off.")
+        return 1 if differing else 0
 
     if args.command == "show":
         parsed = parse(_read_log(args.log))

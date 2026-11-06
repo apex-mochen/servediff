@@ -1,5 +1,6 @@
 import io
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -297,7 +298,8 @@ def test_cli_version_flag():
     out = subprocess.run([sys.executable, "-m", "servediff", "--version"],
                          capture_output=True, text=True)
     assert out.returncode == 0
-    assert out.stdout.strip().startswith("servediff 0.3")
+    # The version moves with every release, so pin the shape, not the number.
+    assert re.fullmatch(r"servediff \d+\.\d+\.\d+\n", out.stdout)
 
 
 def test_allreduce_backend_selection_is_recorded():
@@ -348,6 +350,27 @@ def test_diff_reads_one_side_from_stdin(monkeypatch, capsys, tmp_path):
     assert "ep:0" in out
     # stdin can only be consumed once, so both sides cannot be '-'
     assert servediff.main(["diff", "-", "-"]) == 2
+
+
+def test_series_keeps_the_middle_column(capsys):
+    # vllm#53472 carried three runs of the same config. Two pairwise diffs lose the
+    # middle column; one series table keeps every version side by side.
+    logs = [FIX / "vllm-53472-v0.23.log", FIX / "vllm-53472-v0.26.log",
+            FIX / "vllm-53472-v0.26-flag.log"]
+    parsed = [servediff.parse(path.read_text(encoding="utf-8")) for path in logs]
+    rows = {row["key"]: row for row in servediff.series(parsed)}
+    assert len(next(iter(rows.values()))["values"]) == 3
+    assert any(row["status"] == "changed" for row in rows.values())
+    assert servediff.main(["series", *map(str, logs)]) == 1
+    out = capsys.readouterr().out
+    assert "differ across 3 logs" in out
+    # two logs belong to `diff`
+    assert servediff.main(["series", str(logs[0]), str(logs[1])]) == 2
+    # --all adds the identical rows back, and the markdown keeps one column per log
+    assert servediff.main(["series", *map(str, logs), "--all", "--markdown"]) == 1
+    out = capsys.readouterr().out
+    assert "identical" in out
+    assert out.splitlines()[0].count("|") == 5
 
 
 def test_truncated_dispatch_line_still_yields_the_chain(tmp_path):

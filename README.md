@@ -242,6 +242,24 @@ ssh gpu-node 'cat /path/to/serve.log' | servediff diff v0.31.log -
 Only one side can be `-` (stdin is read once), and `--markdown` labels it `stdin`
 in the report header.
 
+### Three versions at once
+
+Regression threads rarely have two runs. `series` puts every run in its own column,
+so the middle version is not lost between two pairwise diffs:
+
+```bash
+servediff series v0.23.log v0.26.log v0.26-flag.log --markdown
+```
+
+```text
+| fact         | v0.23.log                          | v0.26.log                     | v0.26-flag.log    |
+|---|---|---|---|
+| `backend.moe` | `FlashInfer CUTLASS (Unquantized)` | `TrtLlmBf16ExpertsMonolithic` | `FlashInferExperts` |
+```
+
+`--all` adds the rows that hold the same value across every log; exit codes match
+`diff` (`0` identical, `1` differences, `2` nothing recognised).
+
 ### Capturing a run in one step
 
 ```bash
