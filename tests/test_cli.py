@@ -311,6 +311,34 @@ def test_allreduce_backend_selection_is_recorded():
     assert f["backend.allreduce_fusion"].values == ["norm: mnnvl", "norm quantization: trtllm"]
 
 
+def test_multi_group_allreduce_is_kept_per_group():
+    # Verbatim lines from a real vLLM 0.29-era 4xH200 TP4+EP startup log pasted in
+    # vllm#45604. Two groups mean the fact carries one value per group; a parser
+    # that kept only the last line would silently drop the EP side, which is the
+    # half that stayed unchanged in vllm#63705.
+    f = servediff.parse((FIX / "vllm-0.29-tp4-ep-h200-allreduce.log").read_text(encoding="utf-8"))["facts"]
+    assert f["backend.allreduce_dispatch"].values == ["tp:0: ['CUSTOM', 'PYNCCL']", "ep:0: ['PYNCCL']"]
+    assert "FLASHINFER" in f["backend.allreduce_potential"].value
+    assert f["backend.allreduce_flashinfer"].value == "trtllm"
+    assert f["backend.allreduce_fusion"].value == "norm: trtllm"
+
+
+def test_truncated_dispatch_line_still_yields_the_chain(tmp_path):
+    # Log sinks cut long lines, and this one carries a seven-item potential list.
+    # The truncated form must still yield the chain, while the same sentence quoted
+    # as prose in an issue body must not.
+    log = tmp_path / "trunc.log"
+    log.write_text(
+        "INFO [cuda_communicator.py:269] Using ['FLASHINFER', 'CUSTOM', 'PYNCCL'] all-reduce "
+        "backends (in dispatch order) for group 'tp:0' ...\n"
+        "Startup line `Using ['FLASHINFER'] all-reduce backends (in dispatch order) for group "
+        "'tp:0'` on 2x H100 SXM, TP=2\n",
+        encoding="utf-8")
+    f = servediff.parse(log.read_text(encoding="utf-8"))["facts"]
+    assert f["backend.allreduce_dispatch"].values == ["tp:0: ['FLASHINFER', 'CUSTOM', 'PYNCCL']"]
+    assert "backend.allreduce_potential" not in f
+
+
 def test_single_rank_log_explains_the_missing_allreduce_path(tmp_path):
     # A TP=1 log has no all-reduce group at all, so nothing is printed. Saying so
     # is what keeps "absent" from being read as "unchanged".

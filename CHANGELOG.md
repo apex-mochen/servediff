@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.9 — 2026-11-06
+
+- Keep the all-reduce dispatch chain when the log line was truncated. The statement
+  carries a seven-item candidate list, and log sinks cut long lines; the previous
+  rule required the trailing `out of potential backends: [...]` and produced nothing
+  silently when it was missing. The fallback is anchored to a real log prefix
+  (`[module.py:NN]`), so the same sentence quoted as prose in a pasted issue body
+  does not turn into a fact.
+- Pin multi-group parsing with a verbatim 4×H200 TP4+EP fixture from vllm#45604: the
+  fact now carries one value per group (`tp:0` and `ep:0`) instead of collapsing to
+  the last line.
+
 ## 0.3.8 — 2026-11-06
 
 - `diff` now names why a fact could not be observed, for the two cases the tool can

@@ -86,6 +86,11 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
     (re.compile(r"Using (\[[^\]]*\]) all-reduce backends (?:\(in dispatch order\) )?for group '([^']+)' out of potential backends: (\[[^\]]*\])"),
      lambda m: [("backend.allreduce_dispatch", f"{m[2]}: {m[1]}"),
                 ("backend.allreduce_potential", m[3])]),
+    # Same statement when the line was truncated before the potential list, which
+    # log sinks do on long lines. Anchored to a real log prefix (`[module.py:NN]`)
+    # so a sentence quoted in a pasted issue body does not become a fact.
+    (re.compile(r"\[(?:\w+\.py):\d+\][^\n]*?Using (\[[^\]]*\]) all-reduce backends (?:\(in dispatch order\) )?for group '([^']+)'"),
+     lambda m: [("backend.allreduce_dispatch", f"{m[2]}: {m[1]}")]),
     (re.compile(r"Auto-selected flashinfer allreduce backend: (\w+)"),
      lambda m: [("backend.allreduce_flashinfer", m[1])]),
     # FlashInfer builds these only when its all-reduce/norm fusion path is active,
