@@ -128,6 +128,13 @@ keep, one per version, same TP:
 servediff diff v0.28.log v0.29.log
 ```
 
+On a real 4×H100 TP4+EP node (MiniMax-M2.7, one run per version) that is exactly what
+the diff showed between v0.26.0 and v0.29.0: the TP group chain went from `['PYNCCL']`
+to `['FLASHINFER', 'PYNCCL']` while the EP group stayed `['PYNCCL']`, V2 Model Runner
+appeared, and `allreduce_rms` was off in both runs — so the two changed defaults are
+the TP-side FlashInfer path and the model runner ([reported
+here](https://github.com/vllm-project/vllm/issues/63705#issuecomment-6656162111)).
+
 So a TP4+EP comparison (like the one in the
 [#63705 analysis](https://github.com/apex-mochen/servediff/blob/main/ISSUE-63705-analysis.md)
 — a decode-only regression across vLLM 0.29–0.32) can be scripted as:

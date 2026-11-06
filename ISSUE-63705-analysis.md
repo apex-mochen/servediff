@@ -64,6 +64,36 @@ a hypothesis: the decisive test is running the same 0.29.0 benchmark with
 tpot. If tpot returns to ~14.7 ms, the fuse path is the regression point. If not,
 the startup-log diff narrows the next suspect.
 
+## Independent confirmation of the two default changes (2026-11-05)
+
+An external contributor grepped startup logs from the same node (4×H100, TP4+EP,
+MiniMax-M2.7, this issue's serve config with a smaller `--max-model-len`), one run
+per version, and reported the first cross-version server-side diff for this
+configuration:
+[comment](https://github.com/vllm-project/vllm/issues/63705#issuecomment-6656162111).
+
+| fact | v0.26.0 | v0.29.0 |
+|---|---|---|
+| TP group all-reduce chain | `['PYNCCL']` | `['FLASHINFER', 'PYNCCL']` |
+| EP group all-reduce chain | `['PYNCCL']` | `['PYNCCL']` |
+| model runner | V1 (line absent) | V2 (`Using V2 Model Runner`) |
+| `Enabled custom fusions` | `norm_quant, act_quant` | `norm_quant, act_quant` |
+
+Three things follow, all from logs that were already being produced:
+
+1. FlashInfer all-reduce **did** enter the TP dispatch chain in 0.29.0
+   ([#52998](https://github.com/vllm-project/vllm/pull/52998)), while the EP group
+   stayed on PYNCCL. The change is TP-side, not EP-side.
+2. Model Runner V2 became active in 0.29.0
+   ([#53183](https://github.com/vllm-project/vllm/pull/53183)) on this configuration.
+3. `allreduce_rms` was **off in both versions**, which removes the
+   `fuse_allreduce_rms` hypothesis above as a variable *between these two runs* —
+   for this configuration, with these logs.
+
+Both toggles (`VLLM_ALLREDUCE_USE_FLASHINFER=0`, `VLLM_USE_V2_MODEL_RUNNER=0`) are
+queued on H100s. Whether either default costs the +22.7% tpot still needs those
+numbers: a log says what is configured, not what it costs.
+
 ## How to verify (and how servediff automates the diff)
 
 Reproduce 0.26.0 vs 0.29.0 under the same flags, keep both startup logs, diff the
@@ -82,6 +112,9 @@ line it came from. `servediff` only reads logs; it does not judge which change
 caused the slowdown — it tells you what to A/B.
 
 ---
-*Servediff project note: this is G3 growth experiment — evidence that an external
-developer uses servediff to locate a real difference. Comment draft lives in
-`docs/issue-63705-comment-draft.md`; posting requires user approval.*
+*Servediff project note: G3 growth experiment. Status 2026-11-05 — an external
+developer applied the log-based checks proposed in this thread to their own node and
+reported the first 0.26-vs-0.29 server-side diff (section above); the checks were
+found useful, but they grepped by hand rather than running servediff, so the
+"external developer runs servediff on a real difference" signal is still pending.
+Comment drafts live in `docs/`; posting requires user approval.*
