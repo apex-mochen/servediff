@@ -94,6 +94,29 @@ Both toggles (`VLLM_ALLREDUCE_USE_FLASHINFER=0`, `VLLM_USE_V2_MODEL_RUNNER=0`) a
 queued on H100s. Whether either default costs the +22.7% tpot still needs those
 numbers: a log says what is configured, not what it costs.
 
+### Source-level check of the log statements (v0.29.0 tag)
+
+The statements `servediff` parses are unchanged in 0.29.0 —
+`cuda_communicator.py` still emits `"Using %s all-reduce backends (in dispatch order)
+for group '%s' out of potential backends: %s."` via `logger.info_once`, and
+`flashinfer_all_reduce.py` still emits the auto-selected backend and the two fusion
+workspaces. Two details change how those lines should be read:
+
+- **The dispatch list is a candidate set, not the per-call behaviour.** The docstring
+  of `_log_all_reduce_backend_selection` says the chain tries backends in order and
+  "falls through to the next one if the current backend rejects the input (size/dtype
+  gates) or is disabled"; the printed list is "the subset of potential backends that
+  may be chosen at dispatch time for this group", and "the actual per-call choice
+  depends on the input tensor". So `['FLASHINFER', 'PYNCCL']` on the TP group means
+  FlashInfer is *first in line* and will take the tensors it accepts — it does not
+  mean every collective went through FlashInfer. This is exactly why a config-only
+  reading cannot price the change, as the reporter noted.
+- **The FlashInfer auto-selection line is DEBUG since 0.29.0** (`logger.debug_once`),
+  so at the default INFO level it is absent even when FlashInfer is enabled. The
+  dispatch-chain line stays `info_once`, which is why the chain is the reliable
+  cross-version signal and why the independent reproduction above reported the chain
+  (and the model runner) but no FlashInfer backend/fusion lines.
+
 ## How to verify (and how servediff automates the diff)
 
 Reproduce 0.26.0 vs 0.29.0 under the same flags, keep both startup logs, diff the

@@ -114,10 +114,13 @@ model_runner                     V2                                             
 
 The first two separate *chosen* from *possible*: FlashInfer sitting in `potential`
 but not in `dispatch` means it was not used for that group. The last two record
-whether FlashInfer's fused workspaces were actually built — absence there is a
-result, not a gap. `model_runner` covers V1 vs V2 (so `VLLM_USE_V2_MODEL_RUNNER=0`
-runs are identifiable), and `compile.fusions` carries `allreduce_rms` when
-`fuse_allreduce_rms` is on.
+whether FlashInfer's fused workspaces were actually built, but read their absence
+carefully: since 0.29.0 the FlashInfer auto-selection line is logged at DEBUG
+(`debug_once`), so on a default INFO log it may simply not have been printed. The
+`all-reduce backends (in dispatch order)` line is `info_once` in 0.29.0, which makes
+the dispatch chain the reliable cross-version signal. `model_runner` covers V1 vs V2
+(so `VLLM_USE_V2_MODEL_RUNNER=0` runs are identifiable), and `compile.fusions` carries
+`allreduce_rms` when `fuse_allreduce_rms` is on.
 
 That makes the question raised in
 [vllm#63705](https://github.com/vllm-project/vllm/issues/63705) — *did 0.29 turn
