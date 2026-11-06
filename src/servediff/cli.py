@@ -418,16 +418,31 @@ def _version() -> str:
         return "unknown"
 
 
+def _label(path) -> str:
+    return "stdin" if str(path) == "-" else str(path)
+
+
+def _read_log(path) -> str:
+    """Read a log path, or stdin when the path is `-`.
+
+    Logs usually live on the box that runs the server, so the useful shape is
+    `ssh node 'cat serve.log' | servediff show -` rather than scp first.
+    """
+    if str(path) == "-":
+        return sys.stdin.buffer.read().decode("utf-8", errors="replace")
+    return path.read_text(encoding="utf-8", errors="replace")
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--version", action="version", version=f"servediff {_version()}")
     sub = parser.add_subparsers(dest="command", required=True)
     show = sub.add_parser("show", help="effective config facts in one log")
-    show.add_argument("log", type=Path)
+    show.add_argument("log", type=Path, help="server log, or - to read stdin")
     show.add_argument("--json", action="store_true")
     d = sub.add_parser("diff", help="diff two server logs, or two `servediff env` snapshots")
-    d.add_argument("baseline", type=Path)
-    d.add_argument("candidate", type=Path)
+    d.add_argument("baseline", type=Path, help="server log or env snapshot; - reads stdin")
+    d.add_argument("candidate", type=Path, help="server log or env snapshot; - reads stdin")
     d.add_argument("--raw-args", action="store_true", help="also diff every raw argument (same engine only)")
     d.add_argument("--json", action="store_true")
     d.add_argument("--markdown", action="store_true", help="render a GitHub-flavored report (paste into issues)")
@@ -493,9 +508,9 @@ def main(argv=None) -> int:
         return 0
 
     if args.command == "show":
-        parsed = parse(args.log.read_text(encoding="utf-8", errors="replace"))
+        parsed = parse(_read_log(args.log))
         if not parsed["facts"]:
-            print(f"{args.log}: no vLLM or SGLang configuration lines recognised", file=sys.stderr)
+            print(f"{_label(args.log)}: no vLLM or SGLang configuration lines recognised", file=sys.stderr)
             return 2
         if args.json:
             print(json.dumps({k: {"value": f.value, "evidence": f.evidence} for k, f in parsed["facts"].items()},
@@ -506,8 +521,11 @@ def main(argv=None) -> int:
                 print(f"{key:32s} {_fmt(fact.value):60s} line {where if where else '-'}")
         return 0
 
-    text_a = args.baseline.read_text(encoding="utf-8", errors="replace")
-    text_b = args.candidate.read_text(encoding="utf-8", errors="replace")
+    if str(args.baseline) == "-" and str(args.candidate) == "-":
+        print("diff: stdin can be read once, so only one side may be '-'", file=sys.stderr)
+        return 2
+    text_a = _read_log(args.baseline)
+    text_b = _read_log(args.candidate)
     snaps = envsnap.is_snapshot(text_a), envsnap.is_snapshot(text_b)
     if any(snaps):
         if not all(snaps):
@@ -520,7 +538,7 @@ def main(argv=None) -> int:
         elif args.markdown:
             shown = rows if args.all else key
             print(_render_markdown(
-                path_a=str(args.baseline), path_b=str(args.candidate),
+                path_a=_label(args.baseline), path_b=_label(args.candidate),
                 engine_a=None, engine_b=None,
                 rows=shown, warnings=[],
                 differing=len(key), identical=len(rows) - len(key),
@@ -562,7 +580,7 @@ def main(argv=None) -> int:
                 warnings.append(msg)
         shown_rows = rows if args.all else differing
         print(_render_markdown(
-            path_a=str(args.baseline), path_b=str(args.candidate),
+            path_a=_label(args.baseline), path_b=_label(args.candidate),
             engine_a=a["engine"], engine_b=b["engine"],
             rows=shown_rows, warnings=warnings, notes=notes,
             differing=len(differing), identical=len(rows) - len(differing),

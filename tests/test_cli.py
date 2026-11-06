@@ -1,3 +1,4 @@
+import io
 import json
 import subprocess
 import sys
@@ -321,6 +322,32 @@ def test_multi_group_allreduce_is_kept_per_group():
     assert "FLASHINFER" in f["backend.allreduce_potential"].value
     assert f["backend.allreduce_flashinfer"].value == "trtllm"
     assert f["backend.allreduce_fusion"].value == "norm: trtllm"
+
+
+def test_show_reads_a_log_from_stdin(monkeypatch, capsys):
+    # Logs live on the box that runs the server; `ssh node 'cat serve.log' | servediff show -`
+    # should not need an scp first.
+    raw = (FIX / "vllm-0.29-tp4-ep-h200-allreduce.log").read_bytes()
+    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(raw), encoding="utf-8"))
+    assert servediff.main(["show", "-"]) == 0
+    out = capsys.readouterr().out
+    assert "backend.allreduce_dispatch" in out
+    assert "ep:0" in out
+
+
+def test_diff_reads_one_side_from_stdin(monkeypatch, capsys, tmp_path):
+    raw = (FIX / "vllm-0.29-tp4-ep-h200-allreduce.log").read_bytes()
+    other = tmp_path / "cand.log"
+    other.write_text("INFO [cuda_communicator.py:245] Using ['PYNCCL'] all-reduce backends "
+                     "(in dispatch order) for group 'tp:0' out of potential backends: ['PYNCCL']\n",
+                     encoding="utf-8")
+    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(raw), encoding="utf-8"))
+    assert servediff.main(["diff", "-", str(other), "--markdown"]) == 1
+    out = capsys.readouterr().out
+    assert "stdin" in out
+    assert "ep:0" in out
+    # stdin can only be consumed once, so both sides cannot be '-'
+    assert servediff.main(["diff", "-", "-"]) == 2
 
 
 def test_truncated_dispatch_line_still_yields_the_chain(tmp_path):

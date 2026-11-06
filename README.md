@@ -229,6 +229,19 @@ servediff diff old.log new.log --markdown
 Renders a GitHub-flavored table with a collapsible **Evidence** section quoting the
 exact log line behind each fact — ready to paste into a regression report.
 
+### Reading a log without copying it down
+
+Logs usually live on the box that ran the server. `-` reads stdin, so nothing has
+to be scp'd first:
+
+```bash
+ssh gpu-node 'cat /path/to/serve.log' | servediff show -
+ssh gpu-node 'cat /path/to/serve.log' | servediff diff v0.31.log -
+```
+
+Only one side can be `-` (stdin is read once), and `--markdown` labels it `stdin`
+in the report header.
+
 ### Capturing a run in one step
 
 ```bash

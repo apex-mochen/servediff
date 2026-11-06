@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.10 — 2026-11-06
+
+- `show` and `diff` accept `-` for stdin, so a log can be read straight off the
+  machine that produced it: `ssh node 'cat serve.log' | servediff show -`. Only one
+  side may be `-` (stdin is read once), and `--markdown` labels it `stdin`.
+
 ## 0.3.9 — 2026-11-06
 
 - Keep the all-reduce dispatch chain when the log line was truncated. The statement
