@@ -309,3 +309,41 @@ def test_allreduce_backend_selection_is_recorded():
     assert "FLASHINFER" in f["backend.allreduce_potential"].value
     assert f["backend.allreduce_flashinfer"].value == "mnnvl"
     assert f["backend.allreduce_fusion"].values == ["norm: mnnvl", "norm quantization: trtllm"]
+
+
+def test_single_rank_log_explains_the_missing_allreduce_path(tmp_path):
+    # A TP=1 log has no all-reduce group at all, so nothing is printed. Saying so
+    # is what keeps "absent" from being read as "unchanged".
+    log = tmp_path / "tp1.log"
+    log.write_text(
+        "INFO 10-28 11:28:09 [core.py:123] Initializing a V1 LLM engine (v0.30.0) with config: model='m'\n"
+        "INFO 10-28 11:28:12 [parallel_state.py:1827] world_size=1 rank=0 local_rank=0\n",
+        encoding="utf-8")
+    notes = servediff.absence_notes(servediff.parse(log.read_text(encoding="utf-8")))
+    assert len(notes) == 1 and "world_size=1" in notes[0] and "TP>1" in notes[0]
+
+
+def test_flashinfer_absence_is_explained_only_from_029(tmp_path):
+    # v0.29.0 moved the auto-selection line to DEBUG; before that its absence
+    # really did mean the path was not taken, so the note must not fire there.
+    chain = ("INFO [cuda_communicator.py:1] Using ['FLASHINFER', 'PYNCCL'] all-reduce backends "
+             "(in dispatch order) for group 'tp:0' out of potential backends: "
+             "['FLASHINFER', 'PYNCCL']\n")
+    for version, expected in (("0.26.0", False), ("0.29.0", True)):
+        log = tmp_path / f"v{version}.log"
+        log.write_text(
+            f"INFO [core.py:122] Initializing a V1 LLM engine (v{version}) with config: model='m'\n" + chain,
+            encoding="utf-8")
+        notes = servediff.absence_notes(servediff.parse(log.read_text(encoding="utf-8")))
+        assert any("DEBUG" in n for n in notes) is expected
+
+
+def test_markdown_reports_absence_notes(tmp_path, capsys):
+    body = ("INFO [core.py:123] Initializing a V1 LLM engine (v0.30.0) with config: model='m'\n"
+            "INFO [parallel_state.py:1827] world_size=1 rank=0 local_rank=0\n")
+    a, b = tmp_path / "a.log", tmp_path / "b.log"
+    a.write_text(body, encoding="utf-8")
+    b.write_text(body, encoding="utf-8")
+    assert servediff.main(["diff", str(a), str(b), "--markdown"]) == 0
+    out = capsys.readouterr().out
+    assert "ℹ️" in out and "world_size=1" in out

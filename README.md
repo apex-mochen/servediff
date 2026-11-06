@@ -122,6 +122,20 @@ the dispatch chain the reliable cross-version signal. `model_runner` covers V1 v
 (so `VLLM_USE_V2_MODEL_RUNNER=0` runs are identifiable), and `compile.fusions` carries
 `allreduce_rms` when `fuse_allreduce_rms` is on.
 
+A fact missing from *both* logs leaves no diff row at all, so it would otherwise be
+counted as "identical" without ever being compared. Since 0.3.8 `diff` names the reason
+where it can tell, instead of leaving that to the reader:
+
+```text
+> ℹ️ baseline: no all-reduce facts: world_size=1, so there is no all-reduce group and
+  no backend is chosen; a TP>1 run is what makes this path observable
+```
+
+That note is what separates *nothing changed* from *nothing could be seen*: on a TP=1
+log the all-reduce path does not exist to compare, and a TP>1 log that begins after
+engine init never printed the selection. The same mechanism flags a 0.29+ log whose
+FlashInfer fact is missing because the line is DEBUG-only.
+
 That makes the question raised in
 [vllm#63705](https://github.com/vllm-project/vllm/issues/63705) — *did 0.29 turn
 FlashInfer all-reduce on by default (#52998)?* — answerable from logs you already

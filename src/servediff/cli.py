@@ -306,6 +306,49 @@ def diff(a: dict, b: dict, raw_args: bool = False) -> list[dict]:
     return rows
 
 
+def _version_tuple(facts) -> tuple | None:
+    fact = facts.get("engine.version")
+    if not fact:
+        return None
+    match = re.match(r"(\d+)\.(\d+)\.(\d+)", str(fact.values[0]))
+    return tuple(int(part) for part in match.groups()) if match else None
+
+
+def _is_single_rank(fact) -> bool:
+    value = fact.value
+    values = value if isinstance(value, list) else [value]
+    return all(v == 1 for v in values)
+
+
+def absence_notes(parsed: dict) -> list[str]:
+    """Name the reason a log cannot yield a fact, where the tool can actually tell.
+
+    A fact absent from *both* logs leaves no diff row at all, so the summary says
+    "identical" about something that was never observed. For the all-reduce path
+    that silence carries the most weight: a single-rank run has no group to choose
+    a backend for, and since v0.29.0 the FlashInfer auto-selection line is logged
+    at DEBUG, so a default INFO log never contains it. Leaving the reader to guess
+    is how "absent" gets read as "off".
+    """
+    facts = parsed["facts"]
+    if "backend.allreduce_dispatch" not in facts:
+        world = facts.get("parallel.world_size")
+        if world is None:
+            return ["no all-reduce facts and no rank line: cannot tell whether this run had more than "
+                    "one rank, so an absent all-reduce path here is inconclusive"]
+        if _is_single_rank(world):
+            return ["no all-reduce facts: world_size=1, so there is no all-reduce group and no backend "
+                    "is chosen; a TP>1 run is what makes this path observable"]
+        return [f"no all-reduce facts although world_size={world.value}: the selection is printed once per "
+                "group at engine init, so a log that starts after initialisation cannot show it"]
+    version = _version_tuple(facts)
+    if "backend.allreduce_flashinfer" not in facts and version and version >= (0, 29, 0):
+        return ["backend.allreduce_flashinfer is absent although the dispatch chain printed: since "
+                f"v{'.'.join(map(str, version))} that line is logged at DEBUG, so a default INFO log never "
+                "contains it; the dispatch chain is the signal, not this fact"]
+    return []
+
+
 def _fmt(value) -> str:
     text = json.dumps(value, ensure_ascii=False) if not isinstance(value, str) else value
     return text if len(text) <= 60 else text[:57] + "..."
@@ -318,7 +361,7 @@ def _md_cell(value) -> str:
 
 
 def _render_markdown(*, path_a: str, path_b: str, engine_a, engine_b,
-                     rows: list[dict], warnings: list[str],
+                     rows: list[dict], warnings: list[str], notes: list[str] = [],
                      differing: int, identical: int, all_rows: bool) -> str:
     """Render a GitHub-flavored diff report, suitable for pasting into an issue."""
     lines: list[str] = ["# servediff report", ""]
@@ -328,6 +371,10 @@ def _render_markdown(*, path_a: str, path_b: str, engine_a, engine_b,
     for w in warnings:
         lines.append(f"> ⚠️ {w}")
     if warnings:
+        lines.append("")
+    for n in notes:
+        lines.append(f"> ℹ️ {n}")
+    if notes:
         lines.append("")
     lines += ["| Fact | Baseline | Candidate | Status |", "|---|---|---|---|"]
     for r in rows:
@@ -492,8 +539,12 @@ def main(argv=None) -> int:
     if not args.all:  # errors after "ready" (e.g. on shutdown) say nothing about the config
         rows = [r for r in rows if not r["key"].startswith("after_ready.")]
     differing = [r for r in rows if r["status"] != "same"]
+    notes = []
+    for side, parsed in (("baseline", a), ("candidate", b)):
+        notes.extend(f"{side}: {note}" for note in absence_notes(parsed))
     if args.json:
-        print(json.dumps({"differences": len(differing), "rows": rows}, indent=2, ensure_ascii=False, default=str))
+        print(json.dumps({"differences": len(differing), "notes": notes, "rows": rows},
+                         indent=2, ensure_ascii=False, default=str))
     elif args.markdown:
         warnings = []
         for side, parsed in (("baseline", a), ("candidate", b)):
@@ -508,7 +559,7 @@ def main(argv=None) -> int:
         print(_render_markdown(
             path_a=str(args.baseline), path_b=str(args.candidate),
             engine_a=a["engine"], engine_b=b["engine"],
-            rows=shown_rows, warnings=warnings,
+            rows=shown_rows, warnings=warnings, notes=notes,
             differing=len(differing), identical=len(rows) - len(differing),
             all_rows=bool(args.all)))
     else:
@@ -520,6 +571,10 @@ def main(argv=None) -> int:
                 print(f"warning: {side} server failed to start"
                       f"{': ' + _fmt(error.values[0]) if error else ''}; facts after the failure"  # first = root cause
                       " are absent because startup stopped, not because they were off\n")
+        for note in notes:
+            print(f"note: {note}")
+        if notes:
+            print()
         print(f"{'fact':32s} {'baseline':40s} {'candidate':40s} status")
         for r in rows if args.all else differing:
             print(f"{r['key']:32s} {_fmt(r['baseline'])[:40]:40s} {_fmt(r['candidate'])[:40]:40s} {r['status']}")

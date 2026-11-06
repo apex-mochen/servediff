@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.8 — 2026-11-06
+
+- `diff` now names why a fact could not be observed, for the two cases the tool can
+  actually tell: a single-rank log (`world_size=1`, so no all-reduce group exists and
+  no backend is chosen) and a v0.29.0+ log whose FlashInfer auto-selection fact is
+  missing because that line is logged at DEBUG. Previously a fact absent from *both*
+  logs produced no row at all and was silently counted as identical, which let
+  "nothing could be seen" read as "nothing changed". Reported in text, JSON (`notes`)
+  and `--markdown` output.
+
 ## 0.3.7 — 2026-11-05
 
 - Extract the all-reduce backend selection from TP startup logs: the chosen
