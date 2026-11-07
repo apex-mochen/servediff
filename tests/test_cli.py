@@ -215,6 +215,42 @@ def test_capture_snapshots_the_python_the_command_names(tmp_path, capsys):
     assert "does not name a python launcher" not in capsys.readouterr().err
 
 
+def test_capture_survives_ctrl_c_and_keeps_the_log(tmp_path, capsys, monkeypatch):
+    """Ctrl-C is how a server run ends; exit 1 there would read as "the inputs differ"."""
+    log = tmp_path / "run.log"
+    terminated = []
+
+    class FakeProc:
+        returncode = None
+
+        def __init__(self):
+            self.stdout = self._lines()
+
+        def _lines(self):
+            yield "INFO: started serving\n"
+            raise KeyboardInterrupt
+
+        def poll(self):
+            return None if not terminated else 0
+
+        def terminate(self):
+            terminated.append("terminate")
+
+        def wait(self, timeout=None):
+            self.returncode = -15
+
+    # Stub the snapshot so the only Popen in play is the fake server's.
+    monkeypatch.setattr(servediff.envsnap, "snapshot",
+                        lambda *a, **k: {"schema": "servediff-env/1", "packages": {}, "env": {},
+                                         "executable": "stub-python"})
+    monkeypatch.setattr(servediff.subprocess, "Popen", lambda *a, **k: FakeProc())
+    rc = servediff.main(["capture", "-o", str(log), "--", "fake-server"])
+    assert rc == 130
+    assert terminated == ["terminate"]
+    assert "INFO: started serving" in log.read_text(encoding="utf-8")
+    assert "interrupted; server stopped, log kept" in capsys.readouterr().err
+
+
 def test_capture_reports_missing_command(tmp_path, capsys):
     log = tmp_path / "x.log"
     assert servediff.main(["capture", "-o", str(log), "--", "no-such-binary-xyz"]) == 2

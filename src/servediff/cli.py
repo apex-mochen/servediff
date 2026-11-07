@@ -562,12 +562,31 @@ def main(argv=None) -> int:
             print(f"capture: cannot start {cmd[0]}: {exc}", file=sys.stderr)
             return 2
         with open(args.output, "w", encoding="utf-8", errors="replace") as logf:
-            for line in proc.stdout:
-                logf.write(line)
-                logf.flush()
-                sys.stdout.write(line)
-                sys.stdout.flush()
-        proc.wait()
+            interrupted = False
+            try:
+                for line in proc.stdout:
+                    logf.write(line)
+                    logf.flush()
+                    sys.stdout.write(line)
+                    sys.stdout.flush()
+            except KeyboardInterrupt:
+                # Ctrl-C is how a server run ends in practice. Without this it bubbled
+                # out as a traceback with exit 1, which reads as "the inputs differ".
+                interrupted = True
+            finally:
+                if proc.poll() is None:
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+                        proc.wait()
+        if not interrupted:
+            proc.wait()
+        else:
+            print(f"\ninterrupted; server stopped, log kept: {args.output}"
+                  f" (startup lines printed before the interruption are still in it)", file=sys.stderr)
+            return 130
         print(f"\nserver exited with code {proc.returncode}; log: {args.output}", file=sys.stderr)
         return proc.returncode
 

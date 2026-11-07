@@ -45,6 +45,26 @@ The two `note:` lines are part of the answer, not noise: the excerpt posted in t
 issue carries no rank line, so this run cannot say whether it was multi-GPU at all,
 and the tool says so instead of leaving you to read silence as "unchanged".
 
+## Recording your own two logs
+
+Most people meet this with one log and a question, not two ready files. `capture` runs the
+server, tees its output, and snapshots the environment *before* launch, so the next run is
+directly comparable:
+
+```bash
+# before the upgrade, with the flags you actually use
+servediff capture -o before.log -- python -m vllm.entrypoints.openai.api_server --model <model> ...
+# Ctrl-C once the server is up: the startup lines are already in before.log
+servediff capture -o after.log -- <the same command>
+servediff diff before.log after.log                      # what the server did differently
+servediff diff before.log.env.json after.log.env.json    # package, GPU and engine env drift
+```
+
+Ctrl-C stops the server, keeps the log, and exits `130`. A run that ends on its own passes the
+server's exit code through, so `capture` is safe inside a script that checks it. If the command
+names a python launcher, that interpreter is the one snapshotted; for entry points like
+`vllm serve`, pass `--python <the server's python>`.
+
 ## Commands and exit codes
 
 | Command | What it reads | Exit codes |

@@ -22,6 +22,24 @@ servediff diff examples/issue-excerpts/vllm-47047-v0.23-default.log examples/iss
 
 从 PyPI 安装（`pip install servediff`）。另有一个同名但无关的工具放在第三方 Homebrew tap 里，`pip` 装到的这个才是本项目。
 
+## 采自己的两份日志
+
+多数人手里只有一份日志和一个疑问，而不是现成的两个文件。`capture` 会跑起 server、把输出同时
+转存，并在启动**之前**拍下环境快照，于是下一次运行天然可对比：
+
+```bash
+# 升级前，用你实际在用的参数
+servediff capture -o before.log -- python -m vllm.entrypoints.openai.api_server --model <model> ...
+# server 起来之后按 Ctrl-C：启动阶段的日志已经写进 before.log 了
+servediff capture -o after.log -- <同一条命令>
+servediff diff before.log after.log                      # server 到底哪里不一样
+servediff diff before.log.env.json after.log.env.json    # 包、GPU 与环境变量漂移
+```
+
+Ctrl-C 会停掉 server、保留日志、退出码 `130`；server 自己结束时则透传它的退出码，所以放在
+检查退出码的脚本里是安全的。命令里带 python 启动器时，快照的就是那个解释器；像 `vllm serve`
+这种入口脚本，用 `--python <server 的 python>` 指明。
+
 ## 子命令与退出码
 
 | 子命令 | 读什么 | 退出码 |

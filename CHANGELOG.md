@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.4 — 2026-11-07
+
+- `capture` survives Ctrl-C. That is how a server run actually ends: interrupt it once the
+  startup lines are printed. It used to leave a traceback and exit 1, which this tool
+  reserves for "the inputs differ"; it now stops the child, keeps the log, says where it
+  is, and exits 130. The server's own exit code is still passed through on a normal exit.
+- README documents `capture` as the way to produce both logs, since most people arrive
+  with one log and a question rather than two ready files.
+
 ## 0.4.3 — 2026-11-07
 
 - `capture` now snapshots the interpreter the command itself names. `capture -- python -m
