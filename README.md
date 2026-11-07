@@ -28,12 +28,22 @@ git clone https://github.com/apex-mochen/servediff && cd servediff
 servediff diff examples/issue-excerpts/vllm-47047-v0.23-default.log examples/issue-excerpts/vllm-47047-v0.23-marlin.log
 ```
 
+Install from PyPI. A different, unrelated tool also uses the name `servediff` in a
+third-party Homebrew tap; the `pip install servediff` package is this one.
+
 ```text
+note: baseline: no all-reduce facts and no rank line: cannot tell whether this run had more than one rank, so an absent all-reduce path here is inconclusive
+note: candidate: no all-reduce facts and no rank line: cannot tell whether this run had more than one rank, so an absent all-reduce path here is inconclusive
+
 fact                             baseline                                 candidate                                status
 backend.moe                      VLLM_CUTLASS (NvFp4)                     MARLIN (NvFp4)                           changed
 
 1 difference(s); 0 fact(s) identical. Absent means the log did not print it, not that it was off.
 ```
+
+The two `note:` lines are part of the answer, not noise: the excerpt posted in that
+issue carries no rank line, so this run cannot say whether it was multi-GPU at all,
+and the tool says so instead of leaving you to read silence as "unchanged".
 
 That is the difference the reporter of
 [vllm#47047](https://github.com/vllm-project/vllm/issues/47047) found by hand after a
@@ -52,18 +62,27 @@ servediff diff vllm-0.28.0.log vllm-0.30.0.log
 ```text
 warning: baseline server failed to start: RuntimeError: UVA is not available; facts after the failure are absent because startup stopped, not because they were off
 
+note: baseline: no all-reduce facts: world_size=1, so there is no all-reduce group and no backend is chosen; a TP>1 run is what makes this path observable
+note: candidate: no all-reduce facts: world_size=1, so there is no all-reduce group and no backend is chosen; a TP>1 run is what makes this path observable
+
 fact                             baseline                                 candidate                                status
 backend.attention                <absent>                                 FLASH_ATTN                               only_candidate
 backend.flash_attn_version       <absent>                                 2                                        only_candidate
 backend.sampling_flashinfer      <absent>                                 disabled                                 only_candidate
+compile.artifacts                <absent>                                 25 entries, 3 artifacts, 4996920 bytes   only_candidate
+compile.total_s                  <absent>                                 31.08                                    only_candidate
 cuda_graph.captures              <absent>                                 ["PIECEWISE x51", "FULL x2", "FULL x35"] only_candidate
 cuda_graph.pool_gib              <absent>                                 0.17                                     only_candidate
 engine.version                   0.28.0                                   0.30.0                                   changed
+kv_cache.layout                  <absent>                                 LBNHC                                    only_candidate
+model_loading.gib                <absent>                                 0.93                                     only_candidate
+model_loading.seconds            <absent>                                 19.122619                                only_candidate
+parallel.roles                   DP rank 0, PP rank 0, PCP rank 0, TP ... DP rank 0, PP rank 0, PCP rank 0, TP ... changed
 startup                          failed                                   ready                                    changed
-startup.error                    ["RuntimeError: UVA is not available", " <absent>                                 only_baseline
+startup.error                    ["RuntimeError: UVA is not available"... <absent>                                 only_baseline
 uva_buffers                      <absent>                                 fallback: device memory                  only_candidate
 
-9 difference(s); 8 fact(s) identical. Absent means the log did not print it, not that it was off.
+15 difference(s); 9 fact(s) identical. Absent means the log did not print it, not that it was off.
 ```
 
 0.28.0 does not start on WSL2 with default settings; 0.30.0 does, because it falls
@@ -73,14 +92,22 @@ v0.30.0. Forcing the V1 model runner on 0.28.0 (`VLLM_USE_V2_MODEL_RUNNER=0`) ma
 start, and the remaining server-side differences are:
 
 ```text
+note: baseline: no all-reduce facts: world_size=1, so there is no all-reduce group and no backend is chosen; a TP>1 run is what makes this path observable
+note: candidate: no all-reduce facts: world_size=1, so there is no all-reduce group and no backend is chosen; a TP>1 run is what makes this path observable
+
 fact                             baseline                                 candidate                                status
-cuda_graph.captures              ["mixed prefill-decode, PIECEWISE x51",  ["PIECEWISE x51", "FULL x2", "FULL x35"] changed
+compile.artifacts                25 entries, 3 artifacts, 4997798 bytes   25 entries, 3 artifacts, 4996920 bytes   changed
+compile.total_s                  32.58                                    31.08                                    changed
+cuda_graph.captures              ["mixed prefill-decode, PIECEWISE x51... ["PIECEWISE x51", "FULL x2", "FULL x35"] changed
 cuda_graph.pool_gib              0.36                                     0.17                                     changed
 engine.version                   0.28.0                                   0.30.0                                   changed
-model_runner                     <absent>                                 V2                                       only_candidate
+kv_cache.layout                  <absent>                                 LBNHC                                    only_candidate
+model_loading.seconds            13.191946                                19.122619                                changed
+model_runner                     V1                                       V2                                       changed
+parallel.roles                   DP rank 0, PP rank 0, PCP rank 0, TP ... DP rank 0, PP rank 0, PCP rank 0, TP ... changed
 uva_buffers                      <absent>                                 fallback: device memory                  only_candidate
 
-5 difference(s); 11 fact(s) identical. Absent means the log did not print it, not that it was off.
+10 difference(s); 13 fact(s) identical. Absent means the log did not print it, not that it was off.
 ```
 
 ## Validated against real TP>1 logs

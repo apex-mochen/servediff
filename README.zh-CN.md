@@ -16,7 +16,11 @@ pip install .
 servediff diff examples/issue-excerpts/vllm-47047-v0.23-default.log examples/issue-excerpts/vllm-47047-v0.23-marlin.log
 ```
 
-输出只有一行差异：MoE backend 从 `VLLM_CUTLASS (NvFp4)` 变为 `MARLIN (NvFp4)`。这正是 [vllm#47047](https://github.com/vllm-project/vllm/issues/47047) 的报告者在 v0.21 → v0.23 吞吐下降后，靠人工找出来的差异。
+输出是一条差异：MoE backend 从 `VLLM_CUTLASS (NvFp4)` 变为 `MARLIN (NvFp4)`。这正是 [vllm#47047](https://github.com/vllm-project/vllm/issues/47047) 的报告者在 v0.21 → v0.23 吞吐下降后，靠人工找出来的差异。
+
+前面还会打印两行 `note:`：这份摘录里没有 rank 行，工具无法判断它是不是多卡运行，所以它直接说明「此处无法判定」，而不是让你把沉默读成「没变」。这是输出的一部分，不是噪声。
+
+从 PyPI 安装（`pip install servediff`）。另有一个同名但无关的工具放在第三方 Homebrew tap 里，`pip` 装到的这个才是本项目。
 
 ## 真实案例：参数相同，vLLM 0.28.0 对 0.30.0
 

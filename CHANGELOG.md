@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.1 — 2026-11-07
+
+- Table cells mark truncated values with `...` instead of cutting them mid-word. A
+  cell that ended in `TP ran` read like the value itself rather than a clipped column.
+- README examples regenerated from this build. The quickstart block now shows the two
+  `note:` lines the tool actually prints, and the 0.28-vs-0.30 blocks carry the real
+  `15 difference(s); 9 fact(s) identical` and `10 difference(s); 13 fact(s) identical`
+  — the old numbers predated several fact rules.
+
 ## 0.4.0 — 2026-11-06
 
 - `servediff series a.log b.log c.log` compares three or more runs in one table with

@@ -684,7 +684,10 @@ def main(argv=None) -> int:
             print()
         print(f"{'fact':32s} {'baseline':40s} {'candidate':40s} status")
         for r in rows if args.all else differing:
-            print(f"{r['key']:32s} {_fmt(r['baseline'])[:40]:40s} {_fmt(r['candidate'])[:40]:40s} {r['status']}")
+            # Mark truncation instead of cutting a value mid-word: a cell that ends
+            # in `TP ran` reads like the value itself, not like a clipped column.
+            print(f"{r['key']:32s} {_short(_fmt(r['baseline']), 40):40s}"
+                  f" {_short(_fmt(r['candidate']), 40):40s} {r['status']}")
         print(f"\n{len(differing)} difference(s); {len(rows) - len(differing)} fact(s) identical."
               " Absent means the log did not print it, not that it was off.")
     return 1 if differing else 0
