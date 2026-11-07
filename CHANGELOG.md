@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.3 — 2026-11-07
+
+- `capture` now snapshots the interpreter the command itself names. `capture -- python -m
+  vllm...` used to snapshot the interpreter servediff runs on, which is a different venv
+  often enough that a later snapshot diff compared two copies of servediff and reported
+  no difference — the failure mode this tool exists to name. When the command does not
+  name a python launcher, the snapshot line now says which interpreter it describes and
+  points at `--python`.
+- The snapshot line prints the interpreter path it used, so the JSON and the log agree.
+
 ## 0.4.2 — 2026-11-07
 
 - An unreadable path (`servediff show typo.log`, `diff` with a missing side) no longer

@@ -532,15 +532,28 @@ def main(argv=None) -> int:
                   file=sys.stderr)
             return 2
         # Snapshot the environment before the server starts, so we capture what it launched with.
+        # When the command itself names a Python launcher (`capture -- python -m vllm...`), that
+        # launcher *is* the server's environment; snapshotting our own would describe the wrong
+        # venv and make a later snapshot diff compare two copies of servediff.
+        snapshot_python = args.python
+        if snapshot_python is None and cmd:
+            launcher = Path(cmd[0]).name.lower()
+            if re.fullmatch(r"python(\d+(\.\d+)*)?((\.exe)?)", launcher):
+                snapshot_python = cmd[0]
         try:
-            snap = envsnap.snapshot(args.python)
+            snap = envsnap.snapshot(snapshot_python)
         except (RuntimeError, OSError) as exc:
             print(f"servediff capture: env snapshot failed: {exc}", file=sys.stderr)
             return 2
         snap_path = args.output.with_suffix(args.output.suffix + ".env.json")
         snap_path.write_text(json.dumps(snap, indent=2, ensure_ascii=False, sort_keys=True) + "\n",
                              encoding="utf-8")
-        print(f"env snapshot -> {snap_path}", file=sys.stderr)
+        print(f"env snapshot -> {snap_path}  (interpreter: {snap.get('executable') or snapshot_python})",
+              file=sys.stderr)
+        if snapshot_python is None:
+            print("  note: the command does not name a python launcher, so this snapshot describes"
+                  " the interpreter servediff runs on; pass --python <the server's python> if the"
+                  " server lives in another venv", file=sys.stderr)
         print(f"log -> {args.output}  (running: {' '.join(shlex.quote(p) for p in cmd)})", file=sys.stderr)
         try:
             proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,

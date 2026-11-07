@@ -53,7 +53,7 @@ and the tool says so instead of leaving you to read silence as "unchanged".
 | `servediff diff <a> <b>` | two startup logs, or two `servediff env` snapshots; `--json`, `--markdown`, `--all`, `--raw-args` | `0` identical; `1` at least one difference; `2` usage error, unreadable path, or one log mixed with one snapshot |
 | `servediff series <a> <b> <c> ...` | three or more startup logs, in the column order you give → one fact per row; `--json`, `--markdown`, `--all`, `--raw-args` | `0` same across every log; `1` at least one fact differs; `2` fewer than three inputs |
 | `servediff env [--python P] [-o snap.json]` | that interpreter's packages, GPU info, and env vars whose names start with `VLLM_` / `SGLANG_` / `SGL_` / `CUDA_` / `NCCL_` / `TORCH_` / `PYTORCH_` / `FLASHINFER_` / `TRITON_` or are `HF_HUB_OFFLINE` / `TRANSFORMERS_OFFLINE`; secret-looking names become `<redacted>` | `0` written; `2` snapshot failed |
-| `servediff capture [-o run.log] -- <server command>` | runs the server, tees its log, and writes `<out>.env.json` **before** launch | the server's own exit code |
+| `servediff capture [-o run.log] -- <server command>` | runs the server, tees its log to stdout and to the file, and writes `<out>.env.json` **before** launch. If the command names a python launcher (`capture -- python -m vllm...`), that interpreter is the one snapshotted; otherwise pass `--python` to point at the server's venv | the server's own exit code |
 
 `1` always means *the inputs differ* — never *something went wrong* — so
 `servediff diff old.log new.log` works directly as a CI gate. At most one input may be

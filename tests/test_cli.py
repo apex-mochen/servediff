@@ -205,6 +205,16 @@ def test_capture_tees_output_and_writes_env_snapshot(tmp_path):
     assert "pytest" in data["packages"]
 
 
+def test_capture_snapshots_the_python_the_command_names(tmp_path, capsys):
+    """`capture -- python -m vllm...` must snapshot that interpreter, not servediff's own."""
+    log = tmp_path / "run.log"
+    rc = servediff.main(["capture", "-o", str(log), "--", sys.executable, "-c", "print('hi')"])
+    assert rc == 0
+    data = json.loads(log.with_suffix(log.suffix + ".env.json").read_text(encoding="utf-8"))
+    assert data["executable"] == sys.executable
+    assert "does not name a python launcher" not in capsys.readouterr().err
+
+
 def test_capture_reports_missing_command(tmp_path, capsys):
     log = tmp_path / "x.log"
     assert servediff.main(["capture", "-o", str(log), "--", "no-such-binary-xyz"]) == 2
