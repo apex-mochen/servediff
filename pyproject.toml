@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "servediff"
-version = "0.4.4"
+version = "0.4.5"
 description = "Diff what your vLLM / SGLang server actually ran with: auto-selected backends, CUDA graphs, startup failures, dependency versions."
 readme = "README.md"
 requires-python = ">=3.10"

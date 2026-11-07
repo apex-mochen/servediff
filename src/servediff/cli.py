@@ -436,14 +436,20 @@ def _render_markdown(*, path_a: str, path_b: str, engine_a, engine_b,
     return "\n".join(lines)
 
 
-def _short(text: str, width: int) -> str:
-    return text if len(text) <= width else text[: width - 3] + "..."
+def _short(text: str, width: int, keep_tail: int = 0) -> str:
+    """Trim to `width`. With `keep_tail`, elide the middle so the ends stay visible: in a
+    multi-column table two values that differ only at the end must not render the same."""
+    if len(text) <= width:
+        return text
+    if not keep_tail or width - 3 - keep_tail < 4:
+        return text[: width - 3] + "..."
+    return text[: width - 3 - keep_tail] + "..." + text[-keep_tail:]
 
 
 def _render_text_series(labels: list[str], rows: list[dict], width: int = 30) -> str:
     lines = [f"{'fact':32s} " + " ".join(f"{_short(label, width):{width}s}" for label in labels)]
     for row in rows:
-        cells = " ".join(f"{_short(_fmt(value), width):{width}s}" for value in row["values"])
+        cells = " ".join(f"{_short(_fmt(value), width, keep_tail=8):{width}s}" for value in row["values"])
         lines.append(f"{row['key']:32s} {cells}".rstrip())
     return "\n".join(lines)
 

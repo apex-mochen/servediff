@@ -235,8 +235,8 @@ servediff env --python /path/to/new-venv/bin/python -o new.json
 servediff diff old.json new.json
 ```
 
-Excerpt from the same two environments (20 inference-relevant rows; 74 other packages
-hidden unless you pass `--all`):
+Excerpt from those two environments (20 inference-relevant rows; the rest of the package
+list is hidden unless you pass `--all`):
 
 ```text
 pkg.flashinfer-python            0.6.16.post3                             0.6.18.post1                             changed
@@ -339,14 +339,14 @@ Exit codes: `0` no differences, `1` differences, `2` nothing recognised.
 
 ## Limits
 
-- Tested on: log excerpts posted in vllm#47047 (v0.23) and vllm#53472 (v0.23, v0.26);
-  full startup logs of vLLM 0.28.0 and 0.30.0 and one SGLang log (single-GPU dense);
-  a real TP=8 startup log from vllm#48591 (v0.23.1, one line per worker + role
-  assignment); a real SGLang startup log from sgl-project/sglang#4862 (v0.4.4, TP=4,
-  Qwen2.5-Omni-7B — `server_args=ServerArgs(...)` keyword-call form parsed, startup
-  failure + root-cause error recorded). The parallel-config and all-reduce rules are
-  checked against real TP>1 logs; MoE models in full logs, recent SGLang versions and
-  other engines are not yet verified.
+- **Tested on:** log excerpts posted in vllm#47047 (v0.23) and vllm#53472 (v0.23, v0.26);
+  full startup logs of vLLM 0.28.0 and 0.30.0 (single GPU, WSL2); a real TP=8 startup log
+  from vllm#48591 (v0.23.1, one line per worker + role assignment); a TP4+EP excerpt from
+  a 4×H200 node in vllm#45604 (v0.29.0, two all-reduce groups); a SGLang startup log from
+  sgl-project/sglang#4862 (v0.4.4, TP=4, Qwen2.5-Omni-7B — the `server_args=ServerArgs(...)`
+  keyword-call form is parsed, startup failure + root-cause error recorded). The
+  parallel-config and all-reduce rules are checked against real TP>1 logs; MoE models in
+  full logs, SGLang versions other than 0.4.4 and other engines are not yet verified.
 - Parsing is regex-based on log text, which changes between versions. A missed line
   shows up as `<absent>`, never as a wrong value — please report it.
 

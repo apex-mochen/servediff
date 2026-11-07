@@ -428,6 +428,17 @@ def test_series_keeps_the_middle_column(capsys):
     assert out.splitlines()[0].count("|") == 5
 
 
+def test_series_text_keeps_values_distinct_after_truncation():
+    """Two values that differ only at the end must not render as the same text; the row is
+    labelled "changed", so identical-looking cells would read as a bug in the report."""
+    rows = [{"key": "backend.moe_prepare_finalize",
+             "values": ["MoEPrepareAndFinalizeNoDPEPMonolithic",
+                        "MoEPrepareAndFinalizeNoDPEPModular"]}]
+    text = servediff._render_text_series(["a.log", "b.log"], rows, width=30)
+    assert "nolithic" in text and "Modular" in text
+    assert "MoEPrepareAndFinalizeNoDPEP..." not in text
+
+
 def test_truncated_dispatch_line_still_yields_the_chain(tmp_path):
     # Log sinks cut long lines, and this one carries a seven-item potential list.
     # The truncated form must still yield the chain, while the same sentence quoted

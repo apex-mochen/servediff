@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.5 — 2026-11-07
+
+- `series` text output keeps both ends of a long value instead of cutting it at a fixed
+  column width. Two backends that differed only in their last characters
+  (`…NoDPEPMonolithic` vs `…NoDPEPModular`) rendered as identical text in two columns while
+  the row was labelled "changed" — a report that hides the difference it reports. Markdown
+  output was never truncated and is unchanged.
+- `Limits` now lists what the fixtures actually contain (including the TP4+EP H200 excerpt
+  from vllm#45604) instead of claiming a single-GPU SGLang log that is not in the repo;
+  `tests/fixtures/README.md` documents all seven fixtures rather than five.
+
 ## 0.4.4 — 2026-11-07
 
 - `capture` survives Ctrl-C. That is how a server run actually ends: interrupt it once the
