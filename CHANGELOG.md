@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.2 — 2026-11-07
+
+- An unreadable path (`servediff show typo.log`, `diff` with a missing side) no longer
+  raises a traceback and exits 1. Exit 1 means "the two sides differ", so a mistyped
+  path used to read as a detected difference; it now prints one line and exits 2.
+- `diff` on two `servediff env` snapshots marks truncated cells with `...`, like the
+  log diff already did.
+- README gains a commands-and-exit-codes table, including which env vars `env` records
+  and the fact that `1` never means "something went wrong".
+
 ## 0.4.1 — 2026-11-07
 
 - Table cells mark truncated values with `...` instead of cutting them mid-word. A

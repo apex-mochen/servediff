@@ -471,6 +471,10 @@ def _label(path) -> str:
     return "stdin" if str(path) == "-" else str(path)
 
 
+class InputError(Exception):
+    """An input path could not be read. Callers map it to exit 2, never to 1."""
+
+
 def _read_log(path) -> str:
     """Read a log path, or stdin when the path is `-`.
 
@@ -479,7 +483,13 @@ def _read_log(path) -> str:
     """
     if str(path) == "-":
         return sys.stdin.buffer.read().decode("utf-8", errors="replace")
-    return path.read_text(encoding="utf-8", errors="replace")
+    try:
+        return path.read_text(encoding="utf-8", errors="replace")
+    except OSError as exc:
+        # Exit 1 means "the two sides differ" to every caller and CI script, so an
+        # unreadable path must not borrow it: raise a traceback here and a typo looks
+        # like a regression.
+        raise InputError(f"{path}: {exc.strerror or exc}") from exc
 
 
 def main(argv=None) -> int:
@@ -569,7 +579,11 @@ def main(argv=None) -> int:
         if sum(1 for path in args.logs if str(path) == "-") > 1:
             print("series: stdin can be read once, so at most one entry may be '-'", file=sys.stderr)
             return 2
-        parsed_list = [parse(_read_log(path)) for path in args.logs]
+        try:
+            parsed_list = [parse(_read_log(path)) for path in args.logs]
+        except InputError as exc:
+            print(f"series: {exc}", file=sys.stderr)
+            return 2
         for path, parsed in zip(args.logs, parsed_list):
             if not parsed["facts"]:
                 print(f"{_label(path)}: no vLLM or SGLang configuration lines recognised", file=sys.stderr)
@@ -592,7 +606,11 @@ def main(argv=None) -> int:
         return 1 if differing else 0
 
     if args.command == "show":
-        parsed = parse(_read_log(args.log))
+        try:
+            parsed = parse(_read_log(args.log))
+        except InputError as exc:
+            print(f"show: {exc}", file=sys.stderr)
+            return 2
         if not parsed["facts"]:
             print(f"{_label(args.log)}: no vLLM or SGLang configuration lines recognised", file=sys.stderr)
             return 2
@@ -608,8 +626,12 @@ def main(argv=None) -> int:
     if str(args.baseline) == "-" and str(args.candidate) == "-":
         print("diff: stdin can be read once, so only one side may be '-'", file=sys.stderr)
         return 2
-    text_a = _read_log(args.baseline)
-    text_b = _read_log(args.candidate)
+    try:
+        text_a = _read_log(args.baseline)
+        text_b = _read_log(args.candidate)
+    except InputError as exc:
+        print(f"diff: {exc}", file=sys.stderr)
+        return 2
     snaps = envsnap.is_snapshot(text_a), envsnap.is_snapshot(text_b)
     if any(snaps):
         if not all(snaps):
@@ -631,7 +653,8 @@ def main(argv=None) -> int:
             shown = rows if args.all else key
             print(f"{'fact':32s} {'baseline':40s} {'candidate':40s} status")
             for r in shown:
-                print(f"{r['key']:32s} {_fmt(r['baseline'])[:40]:40s} {_fmt(r['candidate'])[:40]:40s} {r['status']}")
+                print(f"{r['key']:32s} {_short(_fmt(r['baseline']), 40):40s}"
+                      f" {_short(_fmt(r['candidate']), 40):40s} {r['status']}")
             print(f"\n{len(key)} difference(s) in Python, GPU, inference packages and engine env vars;"
                   f" {len(rows) - len(key)} in other packages{'' if args.all else ' (--all to list them)'}.")
         return 1 if rows else 0

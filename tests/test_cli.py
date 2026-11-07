@@ -158,6 +158,15 @@ def test_unrecognised_log_exits_2(tmp_path):
     assert servediff.main(["show", str(log)]) == 2
 
 
+def test_unreadable_path_is_exit_2_not_a_difference(tmp_path, capsys):
+    """A typo'd path must not borrow exit 1, which means "the two sides differ"."""
+    missing = str(tmp_path / "not-there.log")
+    assert servediff.main(["show", missing]) == 2
+    assert servediff.main(["diff", missing, str(tmp_path / "also-missing.log")]) == 2
+    err = capsys.readouterr().err
+    assert "not-there.log" in err
+
+
 def test_diff_exit_codes(tmp_path):
     a, b = tmp_path / "a.log", tmp_path / "b.log"
     a.write_text(VLLM)

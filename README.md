@@ -45,6 +45,20 @@ The two `note:` lines are part of the answer, not noise: the excerpt posted in t
 issue carries no rank line, so this run cannot say whether it was multi-GPU at all,
 and the tool says so instead of leaving you to read silence as "unchanged".
 
+## Commands and exit codes
+
+| Command | What it reads | Exit codes |
+|---|---|---|
+| `servediff show <log>` | one startup log (or `-` for stdin) → the facts it printed, each with its line number; `--json` | `0` read something; `2` unreadable path or no line recognised |
+| `servediff diff <a> <b>` | two startup logs, or two `servediff env` snapshots; `--json`, `--markdown`, `--all`, `--raw-args` | `0` identical; `1` at least one difference; `2` usage error, unreadable path, or one log mixed with one snapshot |
+| `servediff series <a> <b> <c> ...` | three or more startup logs, in the column order you give → one fact per row; `--json`, `--markdown`, `--all`, `--raw-args` | `0` same across every log; `1` at least one fact differs; `2` fewer than three inputs |
+| `servediff env [--python P] [-o snap.json]` | that interpreter's packages, GPU info, and env vars whose names start with `VLLM_` / `SGLANG_` / `SGL_` / `CUDA_` / `NCCL_` / `TORCH_` / `PYTORCH_` / `FLASHINFER_` / `TRITON_` or are `HF_HUB_OFFLINE` / `TRANSFORMERS_OFFLINE`; secret-looking names become `<redacted>` | `0` written; `2` snapshot failed |
+| `servediff capture [-o run.log] -- <server command>` | runs the server, tees its log, and writes `<out>.env.json` **before** launch | the server's own exit code |
+
+`1` always means *the inputs differ* — never *something went wrong* — so
+`servediff diff old.log new.log` works directly as a CI gate. At most one input may be
+`-`, because stdin can only be read once.
+
 That is the difference the reporter of
 [vllm#47047](https://github.com/vllm-project/vllm/issues/47047) found by hand after a
 v0.21 → v0.23 throughput drop. The example files are the log lines posted in that
