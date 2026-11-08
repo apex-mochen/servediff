@@ -90,10 +90,19 @@ names a python launcher, that interpreter is the one snapshotted; for entry poin
 | `servediff series <a> <b> <c> ...` | three or more startup logs, in the column order you give → one fact per row; `--json`, `--markdown`, `--all`, `--raw-args` | `0` same across every log; `1` at least one fact differs; `2` fewer than three inputs |
 | `servediff env [--python P] [-o snap.json]` | that interpreter's packages, GPU info, and env vars whose names start with `VLLM_` / `SGLANG_` / `SGL_` / `CUDA_` / `NCCL_` / `TORCH_` / `PYTORCH_` / `FLASHINFER_` / `TRITON_` or are `HF_HUB_OFFLINE` / `TRANSFORMERS_OFFLINE`; secret-looking names become `<redacted>` | `0` written; `2` snapshot failed |
 | `servediff capture [-o run.log] -- <server command>` | runs the server, tees its log to stdout and to the file, and writes `<out>.env.json` **before** launch. If the command names a python launcher (`capture -- python -m vllm...`), that interpreter is the one snapshotted; otherwise pass `--python` to point at the server's venv | the server's own exit code |
+| `servediff demo` | two excerpt logs shipped inside the package → a real diff with no log files of your own; run this first after installing | `1` always (the bundled logs differ; see the note it prints) |
+| `servediff audit <log>` | the lines no rule reads, split into noise (counted) and shapes worth a look (listed); `--top N`, `--everything`, `--markdown` | `0` reported; `2` unreadable path |
 
 `1` always means *the inputs differ* — never *something went wrong* — so
 `servediff diff old.log new.log` works directly as a CI gate. At most one input may be
 `-`, because stdin can only be read once.
+
+```yaml
+# .github/workflows/startup-log.yml — fail the job when a version bump changes startup
+- run: pip install servediff
+- run: servediff diff old.log new.log --markdown >> "$GITHUB_STEP_SUMMARY"
+  # exit 1 fails the step; the summary carries the table for whoever reads the run
+```
 
 That is the difference the reporter of
 [vllm#47047](https://github.com/vllm-project/vllm/issues/47047) found by hand after a
@@ -154,11 +163,13 @@ startup                          failed                                   ready 
 startup.error                    ["RuntimeError: UVA is not available"... <absent>                                 only_baseline
 uva_buffers                      <absent>                                 fallback: device memory                  only_candidate
 weights.available_ram_gib        <absent>                                 4.23                                     only_candidate
+weights.cache                    <absent>                                 miss (from scratch)                      only_candidate
 weights.checkpoint_gib           <absent>                                 0.92                                     only_candidate
 weights.filesystem               <absent>                                 EXT4                                     only_candidate
+weights.load_s                   <absent>                                 10.49                                    only_candidate
 weights.prefetch                 <absent>                                 disabled (EXT4 is not a network FS)      only_candidate
 
-41 difference(s); 13 fact(s) identical. Absent means the log did not print it, not that it was off.
+43 difference(s); 13 fact(s) identical. Absent means the log did not print it, not that it was off.
 ```
 
 0.28.0 does not start on WSL2 with default settings; 0.30.0 does, because it falls
@@ -194,8 +205,10 @@ parallel.roles                   DP rank 0, PP rank 0, PCP rank 0, TP ... DP ran
 server.scale_out                 <absent>                                 disabled                                 only_candidate
 uva_buffers                      <absent>                                 fallback: device memory                  only_candidate
 weights.available_ram_gib        4.94                                     4.23                                     changed
+weights.cache                    <absent>                                 miss (from scratch)                      only_candidate
+weights.load_s                   7.86                                     10.49                                    changed
 
-22 difference(s); 31 fact(s) identical. Absent means the log did not print it, not that it was off.
+24 difference(s); 31 fact(s) identical. Absent means the log did not print it, not that it was off.
 ```
 
 Rows of that kind are the reason this exists, and none of them shows up in a bug report.
@@ -340,13 +353,14 @@ contains `TOKEN`, `KEY`, `SECRET`, `PASSWORD`, `CREDENTIAL` or `AUTH` are replac
 | KV cache capacity | `Available KV cache memory: … GiB`, `GPU KV cache size: … tokens`, `Maximum concurrency for … tokens per request: …x` | — |
 | model identity | `Resolved architecture: …`, `Using max model len …` — the values the engine settled on, which can differ from the requested args | — |
 | engine init cost | `init engine (profile, create kv cache, warmup model) took … s` | — |
-| listening address | `Starting vLLM server on http://…` | — |
+| loading cost, split | `Loading model from scratch`, `Initializing model took … s`, `Loading weights took … s`, `Model loading took … GiB memory and … seconds` — so a slower startup names its step | — |
+| weight source | `Filesystem type for checkpoints: … Checkpoint size: … Available RAM: …`, `Auto-prefetch is …` (prefetch is skipped on a filesystem the loader does not treat as a network FS) | — |
+| GPU memory headroom | free / total at startup, desired utilization, budgeted GiB, plus `CUDA graph memory profiling` mode and the effective utilization it leaves (`equivalent to --gpu-memory-utilization=…`, `increase … to …` to keep the old KV cache) | — |
+| server surface | `Supported tasks: …`, `Scale-out endpoints are …`, chat template content format, FlashInfer autotune skipped, listening address | — |
 | server command | — (not printed) | `sgl start command: …` (the exact invocation, defaults included) |
-| GPU memory headroom | `Free memory on device (x/y GiB) on startup. Desired GPU memory utilization is (f, z GiB)` | — |
 | kernel selection | one fact per op from `Final IR op priority …`, e.g. `kernel.ir_op.rms_norm=native`; the autotune gate from `Not enough SMs to use max_autotune_gemm mode` | — |
 | sampler defaults | `Default vLLM sampling parameters have been overridden by the model's generation_config.json` | — |
 | JIT behaviour | `JIT kernel warmup finished in … s`, `monitored JIT compilations … mode=` | — |
-| model loading | `Model loading took … GiB memory and … seconds` | — |
 | torch.compile | `collected artifacts: …`, `torch.compile took … s in total` | — |
 | startup outcome | ready / failed + root-cause error | ready / failed + root-cause error |
 
@@ -430,13 +444,14 @@ Exit codes: `0` no differences, `1` differences, `2` nothing recognised.
   shows up as `<absent>`, never as a wrong value — please report it. Run
   `servediff audit run1.log` first: it prints the lines no rule reads yet, and that
   report is the useful half of a bug report. On a real 170-line vLLM startup log that
-  is 78 unread lines, of which 59 are noise (the route table, banner art, deprecation
-  warnings, progress bars, access logs) and 19 are shapes worth a look — the report
+  is 68 unread lines, of which 59 are noise (the route table, banner art, deprecation
+  warnings, progress bars, access logs) and 9 are shapes worth a look — the report
   counts the noise and lists only the second group, so what you paste is short.
-  The issue form asks for exactly the three things that turn a line into a fixture.
+  `servediff audit --markdown run1.log` wraps it in a code fence sized around any
+  backticks inside, so it can go straight into the issue form's third field.
 - One worked example end to end: [writeups/wsl-uva-028-vs-030.md](writeups/wsl-uva-028-vs-030.md)
   — same flags on a laptop GPU under WSL2, 0.28.0 dies with `RuntimeError: UVA is not
-  available`, 0.30.0 starts; the startup-log diff is 41 differences and 13 identical facts,
+  available`, 0.30.0 starts; the startup-log diff is 43 differences and 13 identical facts,
   and the one line that explains it is the pinned-memory fallback from vllm#56908.
 
 ## License

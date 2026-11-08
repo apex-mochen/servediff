@@ -133,6 +133,15 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
     # and V2 (model_runner) print the same message.
     (re.compile(r"Model loading took ([\d.]+) GiB memory and ([\d.]+) seconds"),
      lambda m: [("model_loading.gib", float(m[1])), ("model_loading.seconds", float(m[2]))]),
+    # The loading phase splits into three timed steps. Comparing "startup is slower"
+    # between two versions is meaningless until you know which step grew: constructing
+    # the module, reading shards, or compiling. The scratch line says whether the run
+    # even had a disk cache to read from.
+    (re.compile(r"Loading model from scratch"), lambda m: [("weights.cache", "miss (from scratch)")]),
+    (re.compile(r"Initializing model took ([\d.]+) seconds"),
+     lambda m: [("model_init.seconds", float(m[1]))]),
+    (re.compile(r"Loading weights took ([\d.]+) seconds"),
+     lambda m: [("weights.load_s", float(m[1]))]),
     # torch.compile outcome: artifact count/size reflects compile behaviour; total
     # wall time is comparable between versions on the same machine.
     (re.compile(r"collected artifacts: (.+?) total"),
@@ -623,6 +632,8 @@ def main(argv=None) -> int:
     a.add_argument("logs", type=Path, nargs="+", help="server logs, or - to read stdin")
     a.add_argument("--top", type=int, default=0, help="only the N most common shapes worth a look")
     a.add_argument("--everything", action="store_true", help="also list the noise shapes")
+    a.add_argument("--markdown", action="store_true",
+                   help="wrap the report in a code fence, ready to paste into an issue")
     args = parser.parse_args(argv)
 
     if args.command == "audit":
@@ -640,6 +651,18 @@ def main(argv=None) -> int:
                 return 2
             blocks.append(auditmod.report(Path(_label(path)), text,
                                           limit=args.top, everything=args.everything))
+        if args.markdown:
+            # The issue form asks for the engine, the line, and this report, so step three
+            # should be one paste. The fence is made longer than any run of backticks in
+            # the text: log messages do quote flags with them, and a stray ``` would end
+            # the block early and truncate exactly what the reader needs.
+            body = "\n\n".join(blocks)
+            longest = max((len(run) for run in re.findall("`+", body)), default=0)
+            fence = "`" * max(3, longest + 1)
+            print(f"{fence}text")
+            print(body)
+            print(fence)
+            return 0
         print("\n\n".join(blocks))
         return 0
 

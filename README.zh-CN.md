@@ -59,7 +59,7 @@ Ctrl-C 会停掉 server、保留日志、退出码 `130`；server 自己结束�
 | `servediff env [--python P] [-o snap.json]` | 该解释器的包、GPU 信息，以及名字以 `VLLM_` / `SGLANG_` / `SGL_` / `CUDA_` / `NCCL_` / `TORCH_` / `PYTORCH_` / `FLASHINFER_` / `TRITON_` 开头的环境变量和 `HF_HUB_OFFLINE` / `TRANSFORMERS_OFFLINE`；看起来像密钥的名字一律写成 `<redacted>` | `0` 已写出；`2` 快照失败 |
 | `servediff capture [-o run.log] -- <启动命令>` | 跑起 server、把日志同时输出到终端和文件，并在启动**之前**写出 `<out>.env.json`。命令里自带 python 启动器时（`capture -- python -m vllm...`），快照的就是那个解释器；否则用 `--python` 指到 server 所在的环境 | server 自己的退出码 |
 | `servediff demo` | 用包内自带的 vllm#47047 摘录跑一次 diff，不需要任何现成日志 | `1`（这两份日志确实有差异，那是结果） |
-| `servediff audit <log>...` | 列出没有任何规则读到的行，按 shape 归并计数；`--top N` 只留前 N 条 | `0` 已读；`2` 读不了，或 `-` 用了不止一次 |
+| `servediff audit <log>...` | 列出没有任何规则读到的行，分成噪声（只报数量）和「值得看一眼」的形状（逐条列出）；`--top N` / `--everything` / `--markdown` | `0` 已读；`2` 读不了，或 `-` 用了不止一次 |
 
 `1` 只表示「输入不同」，不表示「出错」，所以 `servediff diff old.log new.log` 可以直接当 CI 门禁。`-` 至多出现一次：stdin 只能读一遍。
 
@@ -85,7 +85,7 @@ servediff diff old.json new.json
 ## 边界
 
 - 已测试：vllm#47047、#53472 里贴出的日志片段（v0.23、v0.26）；vLLM 0.28.0 / 0.30.0 的完整启动日志（单卡、WSL2）；vllm#48591 的真实 TP=8 启动日志（v0.23.1，每个 worker 一行 + role 分配）；vllm#45604 里 4×H200 的 TP4+EP 片段（v0.29.0，两个 all-reduce group）；sglang#4862 的 SGLang 启动日志（v0.4.4、TP=4、Qwen2.5-Omni-7B，`server_args=ServerArgs(...)` 这种关键字调用形式已解析，启动失败与根因错误已记录）。其中有一份不是片段、而是真实跑出来的日志：单卡 RTX 4060 Laptop（8 GB，WSL2）上的 vLLM 0.33.0、Qwen2.5-0.5B，由 `capture` 写入——服务确实响应了 `/health` 和一个生成请求，Ctrl-C 退出 `130` 且日志保留，同一条命令的两份环境快照 diff 出来正好就是决定「起不来 / 起得来」的那两个变量。并行配置与 all-reduce 规则是在真实 TP>1 日志上核对的；完整日志里的 MoE 模型、0.4.4 之外的 SGLang 版本、其他引擎尚未验证。
-- 解析是基于日志文本的正则匹配，跨版本会变。识别不到的行显示为 `<absent>`，不会显示成错误的值；发现漏识别的行请提 issue，并附上 `servediff audit run1.log` 的输出——它把没被规则读的行分成两类：噪声（路由表、banner、deprecation、进度条、access log，只报数量）和「值得看一眼」的形状（这些才列出来）。170 行真实 vLLM 启动日志的实际结果是 78 行未读里 59 行噪声、19 行值得看一眼，要粘贴的东西很短。
+- 解析是基于日志文本的正则匹配，跨版本会变。识别不到的行显示为 `<absent>`，不会显示成错误的值；发现漏识别的行请提 issue，并附上 `servediff audit run1.log` 的输出——它把没被规则读的行分成两类：噪声（路由表、banner、deprecation、进度条、access log，只报数量）和「值得看一眼」的形状（这些才列出来）。170 行真实 vLLM 启动日志的实际结果是 68 行未读里 59 行噪声、9 行值得看一眼，要粘贴的东西很短；`servediff audit --markdown run1.log` 直接把它包成一段代码块，可以原样贴进 issue 表单。
 
 本页对应的功能细节以英文 `README.md` 为准（新增的 `demo` / `audit` 子命令、`kernel.ir_op.*` 等事实都在那里逐条列出）。
 

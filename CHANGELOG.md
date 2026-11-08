@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.4.16 — 2026-11-08
+
+- The loading phase is now three facts instead of one: `weights.cache` (`miss (from
+  scratch)` when the run had nothing to read from disk), `model_init.seconds` and
+  `weights.load_s`. "Startup got slower" is not answerable until you can see whether the
+  time went into constructing the module or reading shards. Audit on the real 170-line
+  log: 71 unread / 12 worth a look → **68 unread / 9 worth a look**.
+- `servediff audit --markdown`: wraps the report in a code fence sized around the longest
+  run of backticks inside it (log messages quote flags with them, and a shorter fence ends
+  the block early, silently cutting the lines that follow), so the third field of the
+  issue form is one paste rather than a reformat.
+- README: the English command table never listed `demo` or `audit` — the two commands a
+  fresh install needs — and now does; a GitHub Actions snippet shows the `--markdown` diff
+  going into a step summary with exit 1 failing the job. The extracts table gained rows
+  for the split loading cost, the weight source/prefetch decision, GPU headroom including
+  the CUDA-graph-profiling effective utilization, and the server surface facts.
+- Both worked examples regenerated again, because three new facts move the counts:
+  `43 difference(s); 13 fact(s) identical` (was 41/13) and `24 difference(s); 31 fact(s)
+  identical` (was 22/31), plus the `writeups/wsl-uva-028-vs-030.md` table from the same run.
+- 56 tests.
+
 ## 0.4.15 — 2026-11-08
 
 - Eleven facts from lines the 0.4.14 audit still called worth a look, all of them things

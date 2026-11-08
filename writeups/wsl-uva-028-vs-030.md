@@ -89,11 +89,13 @@ startup                          failed                                   ready 
 startup.error                    ["RuntimeError: UVA is not available"... <absent>                                 only_baseline
 uva_buffers                      <absent>                                 fallback: device memory                  only_candidate
 weights.available_ram_gib        <absent>                                 4.23                                     only_candidate
+weights.cache                    <absent>                                 miss (from scratch)                      only_candidate
 weights.checkpoint_gib           <absent>                                 0.92                                     only_candidate
 weights.filesystem               <absent>                                 EXT4                                     only_candidate
+weights.load_s                   <absent>                                 10.49                                    only_candidate
 weights.prefetch                 <absent>                                 disabled (EXT4 is not a network FS)      only_candidate
 
-41 difference(s); 13 fact(s) identical. Absent means the log did not print it, not that it was off.
+43 difference(s); 13 fact(s) identical. Absent means the log did not print it, not that it was off.
 ```
 
 Exit code `1` here means "the two logs differ", not "the tool failed". `2` would mean it

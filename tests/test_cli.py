@@ -521,6 +521,34 @@ def test_audit_does_not_call_a_read_line_unread():
                 f"line {lineno} is read but reported unread: {evidence[:60]}")
 
 
+def test_loading_phase_is_three_separate_steps():
+    # "Startup got slower" is unanswerable until the phase is split: building the module,
+    # reading shards, compiling. These lines were unread until the audit named them.
+    text = (
+        "(EngineCore pid=1) INFO 11-08 10:55:26 [model_runner.py:399] Loading model from scratch...\n"
+        "(EngineCore pid=1) INFO 11-08 10:55:29 [base_loader.py:82] Initializing model took 2.732282 seconds\n"
+        "(EngineCore pid=1) INFO 11-08 10:55:32 [default_loader.py:506] Loading weights took 3.13 seconds\n")
+    f = servediff.parse(text)["facts"]
+    assert f["weights.cache"].value == "miss (from scratch)"
+    assert abs(f["model_init.seconds"].value - 2.732282) < 1e-9
+    assert f["weights.load_s"].value == 3.13
+
+
+def test_audit_markdown_wraps_one_pasteable_block(tmp_path, capsys):
+    # The issue form wants this report as its third field; --markdown makes that a paste.
+    # The fence must be longer than any backtick run inside, or the block ends early and
+    # the reader silently loses the lines that follow.
+    log = tmp_path / "run.log"
+    log.write_text('info: server says "use --max-model-len ```8192```" and nothing else\n'
+                   "(EngineCore pid=1) INFO 11-08 10:55:26 [x.py:9] Some unread config line\n",
+                   encoding="utf-8")
+    assert servediff.main(["audit", str(log), "--markdown"]) == 0
+    out = capsys.readouterr().out
+    assert out.startswith("````text\n"), out[:40]
+    assert out.rstrip().endswith("````")
+    assert "Some unread config line" in out
+
+
 def test_package_version_is_the_same_number_the_cli_prints():
     # __version__ used to be a literal "0.1.0" while --version read the installed
     # distribution, so anyone checking servediff.__version__ saw a stale release.
