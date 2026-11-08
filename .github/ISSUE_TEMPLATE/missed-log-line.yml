@@ -1,0 +1,55 @@
+name: A log line servediff missed
+description: A startup log line that servediff reads nothing from — the most useful bug report this tool can get.
+title: "[missed line] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        servediff is a set of regex rules over startup logs, so a line it does not know about
+        is the normal way it gets better. A missed line shows up as `<absent>` in `servediff show`
+        or `servediff diff` — never as a wrong value — and `servediff audit` names the lines no
+        rule reads.
+
+        One line plus the audit output is enough. No need to attach a whole log: strip the host
+        paths if you prefer.
+  - type: input
+    id: engine
+    attributes:
+      label: Engine and version
+      description: The engine and version that printed the line, and the log format if you know it.
+      placeholder: vLLM 0.30.0, TP=1, single GPU — or SGLang 0.4.4, TP=4
+    validations:
+      required: true
+  - type: textarea
+    id: line
+    attributes:
+      label: The line, verbatim
+      description: Paste it exactly as it appears, including the timestamp and the `[file.py:NN]` tag. Numbers can stay.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: audit
+    attributes:
+      label: servediff audit output
+      description: |
+        Run `servediff audit your.log` and paste the section headed "N line(s) worth a look".
+        If the line is listed there, that is already the proof.
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: expected
+    attributes:
+      label: What you expected to see
+      description: The fact you were looking for, or the fact name you would give this line.
+      placeholder: kv_cache.layout, backend.moe, or a new one
+  - type: textarea
+    id: context
+    attributes:
+      label: The two runs you were comparing
+      description: |
+        What changed between them (version bump, different GPU, different flags) and what the
+        log line would have told you. This is what turns a fixture into a rule.
+    validations:
+      required: false

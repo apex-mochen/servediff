@@ -410,6 +410,11 @@ Exit codes: `0` no differences, `1` differences, `2` nothing recognised.
   is 78 unread lines, of which 59 are noise (the route table, banner art, deprecation
   warnings, progress bars, access logs) and 19 are shapes worth a look — the report
   counts the noise and lists only the second group, so what you paste is short.
+  The issue form asks for exactly the three things that turn a line into a fixture.
+- One worked example end to end: [writeups/wsl-uva-028-vs-030.md](writeups/wsl-uva-028-vs-030.md)
+  — same flags on a laptop GPU under WSL2, 0.28.0 dies with `RuntimeError: UVA is not
+  available`, 0.30.0 starts; the startup-log diff is 29 differences and 13 identical facts,
+  and the one line that explains it is the pinned-memory fallback from vllm#56908.
 
 ## License
 
