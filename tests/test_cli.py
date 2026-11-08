@@ -23,9 +23,11 @@ def changed(a: str, b: str) -> dict:
 
 def test_47047_moe_backend_difference_is_found():
     # The difference the reporter found by hand in vllm#47047.
-    assert changed("vllm-47047-v0.23-default.log", "vllm-47047-v0.23-marlin.log") == {
-        "backend.moe": ("VLLM_CUTLASS (NvFp4)", "MARLIN (NvFp4)"),
-    }
+    diff = changed("vllm-47047-v0.23-default.log", "vllm-47047-v0.23-marlin.log")
+    assert diff["backend.moe"] == ("VLLM_CUTLASS (NvFp4)", "MARLIN (NvFp4)")
+    # The marlin excerpt also quotes the concurrency line the default one omits; that
+    # is a real presence difference (reported as absent), not a backend change.
+    assert diff["kv_cache.max_concurrency"] == ("<absent>", 54.14)
 
 
 def test_53472_version_swap_is_found():
@@ -65,6 +67,14 @@ def test_real_server_log_from_033_is_parsed():
     # Facts an excerpt cannot carry: the graph capture list and the compiled artifacts.
     assert f["cuda_graph.captures"].value == ["PIECEWISE x51", "FULL x2", "FULL x35"]
     assert f["model_loading.gib"].value == 0.93
+    # What the engine settled on, and the capacity it ended up with.
+    assert f["model.architecture"].value == "Qwen2ForCausalLM"
+    assert f["model.max_len"].value == 2048
+    assert f["kv_cache.memory_gib"].value == 1.91
+    assert f["kv_cache.tokens"].value == 166848
+    assert f["kv_cache.max_concurrency"].value == 81.47
+    assert f["engine.init_s"].value == 33.06
+    assert f["server.bind"].value == "http://0.0.0.0:8001"
 
 
 # --- Synthetic lines in the formats of the user's real logs -----------------------

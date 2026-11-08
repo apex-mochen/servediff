@@ -104,6 +104,23 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
     (re.compile(r"rank \d+ in world size \d+ is assigned as (DP rank \d+, PP rank \d+, PCP rank \d+, TP rank \d+(?:, ETP rank \S+)?, EP rank \S+, EPLB rank \S+)"),
      lambda m: [("parallel.roles", m[1])]),
     (re.compile(r"Using (\S+) KV cache layout"), lambda m: [("kv_cache.layout", m[1])]),
+    # Model identity as the engine resolved it, and the context length it settled on.
+    # Both can differ from the requested args (auto-derivation, --max-model-len caps),
+    # so a diff that only shows args moving does not explain the run.
+    (re.compile(r"Resolved architecture: (\S+)"), lambda m: [("model.architecture", m[1])]),
+    (re.compile(r"Using max model len (\d+)"), lambda m: [("model.max_len", int(m[1]))]),
+    # KV-cache capacity after memory profiling: the numbers people watch when
+    # concurrency drops after an upgrade.
+    (re.compile(r"Available KV cache memory: ([\d.]+) GiB"),
+     lambda m: [("kv_cache.memory_gib", float(m[1]))]),
+    (re.compile(r"GPU KV cache size: (\d[\d,]*) tokens"),
+     lambda m: [("kv_cache.tokens", int(m[1].replace(",", "")))]),
+    (re.compile(r"Maximum concurrency for (\d[\d,]*) tokens per request: ([\d.]+)x"),
+     lambda m: [("kv_cache.max_concurrency", float(m[2]))]),
+    # Engine init covers profiling, KV-cache allocation and warmup; the parenthesised
+    # part is torch.compile alone, recorded separately as compile.total_s.
+    (re.compile(r"init engine .*? took ([\d.]+) s"), lambda m: [("engine.init_s", float(m[1]))]),
+    (re.compile(r"Starting vLLM server on (http://\S+)"), lambda m: [("server.bind", m[1])]),
     # Model loading cost: memory footprint and wall time. Both V1 (gpu_model_runner)
     # and V2 (model_runner) print the same message.
     (re.compile(r"Model loading took ([\d.]+) GiB memory and ([\d.]+) seconds"),

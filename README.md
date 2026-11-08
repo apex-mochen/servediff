@@ -107,16 +107,21 @@ compile.artifacts                <absent>                                 25 ent
 compile.total_s                  <absent>                                 31.08                                    only_candidate
 cuda_graph.captures              <absent>                                 ["PIECEWISE x51", "FULL x2", "FULL x35"] only_candidate
 cuda_graph.pool_gib              <absent>                                 0.17                                     only_candidate
+engine.init_s                    <absent>                                 109.17                                   only_candidate
 engine.version                   0.28.0                                   0.30.0                                   changed
 kv_cache.layout                  <absent>                                 LBNHC                                    only_candidate
+kv_cache.max_concurrency         <absent>                                 69.3                                     only_candidate
+kv_cache.memory_gib              <absent>                                 1.62                                     only_candidate
+kv_cache.tokens                  <absent>                                 141936                                   only_candidate
 model_loading.gib                <absent>                                 0.93                                     only_candidate
 model_loading.seconds            <absent>                                 19.122619                                only_candidate
 parallel.roles                   DP rank 0, PP rank 0, PCP rank 0, TP ... DP rank 0, PP rank 0, PCP rank 0, TP ... changed
+server.bind                      <absent>                                 http://0.0.0.0:8031                      only_candidate
 startup                          failed                                   ready                                    changed
 startup.error                    ["RuntimeError: UVA is not available"... <absent>                                 only_baseline
 uva_buffers                      <absent>                                 fallback: device memory                  only_candidate
 
-15 difference(s); 9 fact(s) identical. Absent means the log did not print it, not that it was off.
+20 difference(s); 11 fact(s) identical. Absent means the log did not print it, not that it was off.
 ```
 
 0.28.0 does not start on WSL2 with default settings; 0.30.0 does, because it falls
@@ -134,14 +139,18 @@ compile.artifacts                25 entries, 3 artifacts, 4997798 bytes   25 ent
 compile.total_s                  32.58                                    31.08                                    changed
 cuda_graph.captures              ["mixed prefill-decode, PIECEWISE x51... ["PIECEWISE x51", "FULL x2", "FULL x35"] changed
 cuda_graph.pool_gib              0.36                                     0.17                                     changed
+engine.init_s                    74.0                                     109.17                                   changed
 engine.version                   0.28.0                                   0.30.0                                   changed
 kv_cache.layout                  <absent>                                 LBNHC                                    only_candidate
+kv_cache.max_concurrency         60.52                                    69.3                                     changed
+kv_cache.memory_gib              1.42                                     1.62                                     changed
+kv_cache.tokens                  123952                                   141936                                   changed
 model_loading.seconds            13.191946                                19.122619                                changed
 model_runner                     V1                                       V2                                       changed
 parallel.roles                   DP rank 0, PP rank 0, PCP rank 0, TP ... DP rank 0, PP rank 0, PCP rank 0, TP ... changed
 uva_buffers                      <absent>                                 fallback: device memory                  only_candidate
 
-10 difference(s); 13 fact(s) identical. Absent means the log did not print it, not that it was off.
+14 difference(s); 16 fact(s) identical. Absent means the log did not print it, not that it was off.
 ```
 
 ## Validated against real TP>1 logs
@@ -270,7 +279,11 @@ contains `TOKEN`, `KEY`, `SECRET`, `PASSWORD`, `CREDENTIAL` or `AUTH` are replac
 | model runner, UVA fallback | `Using V2 Model Runner`; V1 runner detected via `gpu_model_runner.py` module; pinned-memory fallback | — |
 | all-reduce path | chosen chain per TP group + candidate pool (`all-reduce backends (in dispatch order) … out of potential backends`), FlashInfer's auto-selected backend and its norm / norm-quantization fusion workspaces (0.3.7+) | — |
 | parallel config | `world_size`, DP/PP/PCP/TP/ETP/EP/EPLB role assignment | — |
-| KV cache layout | `Using LBNHC KV cache layout` (0.30+) | — |
+| KV cache layout | `Using LBNHC KV cache layout` (0.30+) | `KV Cache is allocated. dtype: …` |
+| KV cache capacity | `Available KV cache memory: … GiB`, `GPU KV cache size: … tokens`, `Maximum concurrency for … tokens per request: …x` | — |
+| model identity | `Resolved architecture: …`, `Using max model len …` — the values the engine settled on, which can differ from the requested args | — |
+| engine init cost | `init engine (profile, create kv cache, warmup model) took … s` | — |
+| listening address | `Starting vLLM server on http://…` | — |
 | model loading | `Model loading took … GiB memory and … seconds` | — |
 | torch.compile | `collected artifacts: …`, `torch.compile took … s in total` | — |
 | startup outcome | ready / failed + root-cause error | ready / failed + root-cause error |

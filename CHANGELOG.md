@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.4.7 — 2026-11-08
+
+- Seven more facts are read from a vLLM startup log, all of them found missing while
+  diffing the real 0.33.0 log from the previous entry: `model.architecture`
+  (`Resolved architecture`), `model.max_len` (`Using max model len`),
+  `kv_cache.memory_gib`, `kv_cache.tokens`, `kv_cache.max_concurrency`,
+  `engine.init_s` and `server.bind`. These are the numbers that move when a flag change
+  costs you concurrency; before this, a diff could show the args changing and the
+  capacity silently not at all.
+- `model.max_len` is the value the engine settled on, not the requested one, which is
+  why the same `--max-model-len` can still differ between runs.
+- README examples regenerated from the build: 0.28.0 vs 0.30.0 now reads
+  `20 difference(s); 11 fact(s) identical`, and the V1-runner pair
+  `14 difference(s); 16 fact(s) identical`. The vllm#47047 fixture diff now also
+  reports a concurrency line that only one side quoted — a presence difference, not a
+  backend change.
+
 ## 0.4.6 — 2026-11-08
 
 - `capture` verified against a live server, not a fake process: vLLM 0.33.0 on one RTX 4060
