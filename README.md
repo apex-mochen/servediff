@@ -404,9 +404,9 @@ Exit codes: `0` no differences, `1` differences, `2` nothing recognised.
   and all-reduce rules are checked against real TP>1 logs; MoE models in
   full logs, SGLang versions other than 0.4.4 and other engines are not yet verified.
 - Parsing is regex-based on log text, which changes between versions. A missed line
-  shows up as `<absent>`, never as a wrong value — please report it.
-  `tools/audit_unread_lines.py <log>...` prints the lines no rule reads yet, which is
-  where any such report should start.
+  shows up as `<absent>`, never as a wrong value — please report it. Run
+  `servediff audit run1.log` first: it prints the lines no rule reads yet, and that
+  report is the useful half of a bug report.
 
 ## License
 

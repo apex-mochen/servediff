@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.13 — 2026-11-08
+
+- `servediff audit <log>` prints the lines no rule reads, grouped by shape, so a user
+  whose fact came out `<absent>` can hand over the exact gap instead of describing it.
+  The 0.4.9 release pointed at `tools/audit_unread_lines.py`, which only exists in a
+  checkout — the capability was unusable for anyone on PyPI. The dev script remains as
+  a wrapper over the same code.
+
 ## 0.4.12 — 2026-11-08
 
 - `servediff demo` diffs two excerpt logs carried inside the package. Until now a fresh

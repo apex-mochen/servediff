@@ -427,6 +427,21 @@ def test_demo_diffs_the_logs_it_ships():
     assert "demo: exit 1" in out.stderr  # says why 1 is a result, not a failure
 
 
+def test_audit_names_the_lines_nothing_reads():
+    # The report is what an external user pastes when a fact comes out <absent>.
+    from servediff import audit
+
+    real = (FIX / "vllm-0.33.0-real-rtx4060.log").read_text(encoding="utf-8")
+    counts = audit.unread(real)
+    blocks = audit.report(Path("real.log"), real)
+    assert sum(counts.values()) > 0
+    assert "unread line(s)" in blocks
+    # A fixture every line of which is read says so, instead of printing an empty list.
+    excerpt = (FIX / "vllm-47047-v0.23-default.log").read_text(encoding="utf-8")
+    assert not audit.unread(excerpt)
+    assert "nothing unread" in audit.report(Path("excerpt.log"), excerpt)
+
+
 def test_package_version_is_the_same_number_the_cli_prints():
     # __version__ used to be a literal "0.1.0" while --version read the installed
     # distribution, so anyone checking servediff.__version__ saw a stale release.

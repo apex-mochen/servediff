@@ -587,7 +587,27 @@ def main(argv=None) -> int:
     c.add_argument("run_cmd", nargs=argparse.REMAINDER, metavar="-- command",
                    help="server command, after --")
     sub.add_parser("demo", help="diff two logs shipped with the package; needs no log files")
+    a = sub.add_parser("audit", help="list log lines servediff reads nothing from (report a missed fact)")
+    a.add_argument("logs", type=Path, nargs="+", help="server logs, or - to read stdin")
+    a.add_argument("--top", type=int, default=0, help="only the N most common shapes per log")
     args = parser.parse_args(argv)
+
+    if args.command == "audit":
+        if sum(1 for path in args.logs if str(path) == "-") > 1:
+            print("audit: stdin can be read once, so at most one entry may be '-'", file=sys.stderr)
+            return 2
+        from servediff import audit as auditmod
+
+        blocks = []
+        for path in args.logs:
+            try:
+                text = _read_log(path)
+            except InputError as exc:
+                print(f"audit: {exc}", file=sys.stderr)
+                return 2
+            blocks.append(auditmod.report(Path(_label(path)), text, limit=args.top))
+        print("\n\n".join(blocks))
+        return 0
 
     if args.command == "demo":
         # A fresh install has nothing to diff, and the tool is useless until you find two
