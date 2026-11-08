@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.4.9 — 2026-11-08
+
+- Eight more facts, chosen by auditing what the parser still ignores rather than by
+  guessing: `gpu.free_gib` / `gpu.total_gib` / `gpu.utilization` / `gpu.budget_gib`
+  (startup memory headroom), `jit.warmup_s` and `jit.monitor_mode`, the
+  `compile.autotune_gemm` gate, `sampling.overridden` (the model's
+  `generation_config.json` quietly replacing the sampler flags),
+  `backend.candidates`, and SGLang's `server.command`.
+- Kernel selection is read one fact per op (`kernel.ir_op.rms_norm=native`,
+  `kernel.ir_op.gelu_and_mul_sparse=triton|native`) instead of one long
+  `IrOpPriorityConfig(...)` string. The long form is wider than the table, so two
+  different configs truncated to the same visible text while the row said "changed" —
+  a claim the output did not support.
+- `tools/audit_unread_lines.py` reports, per fixture, the lines no rule matches. That
+  is how the list above was found, and it is the first place to look before adding a
+  rule: a tool that shows "what the server actually ran with" is defined as much by
+  what it ignores. On the real 0.33.0 log the count of distinct unread shapes went
+  from 73 to 46.
+- README examples regenerated from the build: 0.28.0 vs 0.30.0 now reads
+  `29 difference(s); 13 fact(s) identical`, and the V1-runner pair
+  `16 difference(s); 25 fact(s) identical`.
+
 ## 0.4.8 — 2026-11-08
 
 - The first command in the README was wrong on the page people actually run. After 0.4.7

@@ -37,6 +37,13 @@ def test_53472_version_swap_is_found():
     assert diff["backend.moe_prepare_finalize"] == ("<absent>", "MoEPrepareAndFinalizeNoDPEPMonolithic")
 
 
+def test_candidate_backend_list_is_kept_including_ones_not_chosen():
+    # The excerpt lists every MoE backend the build considered. The chosen one can stay
+    # the same while this list shrinks, so it is a fact of its own.
+    f = facts("vllm-53472-v0.23.log")
+    assert f["backend.candidates"].value == "['FlashInfer TRTLLM', 'FlashInfer CUTLASS', 'TRITON', 'BATCHED_TRITON']"
+
+
 def test_53472_flag_restores_a_different_backend_name():
     diff = changed("vllm-53472-v0.26.log", "vllm-53472-v0.26-flag.log")
     assert diff == {
@@ -75,6 +82,21 @@ def test_real_server_log_from_033_is_parsed():
     assert f["kv_cache.max_concurrency"].value == 81.47
     assert f["engine.init_s"].value == 33.06
     assert f["server.bind"].value == "http://0.0.0.0:8001"
+    # What the 8 GB card had left, and what the engine was allowed to take.
+    assert f["gpu.free_gib"].value == 6.88
+    assert f["gpu.total_gib"].value == 8.0
+    assert f["gpu.utilization"].value == 0.45
+    assert f["gpu.budget_gib"].value == 3.6
+    # Silent gates inside startup: JIT compile time and whether late compiles are loud.
+    assert f["jit.warmup_s"].value == 0.0
+    assert f["jit.monitor_mode"].value == "warn"
+    assert f["compile.autotune_gemm"].value == "disabled (not enough SMs)"
+    # Sampling defaults came from the model, not from the flags.
+    assert "repetition_penalty" in f["sampling.overridden"].value
+    # One fact per op: the whole IrOpPriorityConfig line is too wide for the table and
+    # two different configs would truncate to the same visible string.
+    assert f["kernel.ir_op.rms_norm"].value == "native"
+    assert f["kernel.ir_op.gelu_and_mul_sparse"].value == "triton|native"
 
 
 # --- Synthetic lines in the formats of the user's real logs -----------------------
@@ -108,6 +130,16 @@ def test_sglang_shared_args_are_normalised():
     assert f["arg.prefix_cache"].value is False  # disable_radix_cache=True inverted
     assert f["arg.max_model_len"].value == 2048
     assert f["cuda_graph.prefill"].value == "disabled"  # ANSI codes stripped
+
+
+def test_sglang_launch_command_is_kept_verbatim():
+    # The launch line carries the flags SGLang defaulted, so it is the one place the
+    # full invocation survives; args alone cannot show what was left implicit.
+    f = facts("sglang-0.4.4-tp4.log")
+    command = f["server.command"].value
+    assert command.startswith("python3.12 -m sglang.launch_server")
+    assert "--tensor-parallel-size 4" in command
+    assert "--trust-remote-code" in command
 
 
 def test_cross_engine_diff_lines_up_shared_facts():

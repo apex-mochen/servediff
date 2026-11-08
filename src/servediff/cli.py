@@ -64,6 +64,9 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
     (re.compile(r"Using '?([^']+?)'? (?:(NvFp4|Fp8|Unquantized|Mxfp4|Int4|W4A16) )?MoE backend"),
      lambda m: [("backend.moe", m[1] if m[2] is None else f"{m[1]} ({m[2]})")]),
     (re.compile(r"Using (MoEPrepareAndFinalize\w+)"), lambda m: [("backend.moe_prepare_finalize", m[1])]),
+    # The backends this build would consider at all, printed on its own line. A diff
+    # that shows the chosen backend unchanged can still hide this list shrinking.
+    (re.compile(r"^backends: (\[[^\]]*\])"), lambda m: [("backend.candidates", m[1])]),
     (re.compile(r"Enforce eager set"), lambda m: [("cuda_graph", "disabled (enforce_eager)"),
                                                   ("compile", "disabled (enforce_eager)")]),
     (re.compile(r"cudagraph_mode[=:] ?'?(\w+)"), lambda m: [("cuda_graph.mode", m[1])]),
@@ -133,6 +136,29 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
      lambda m: [("compile.total_s", float(m[1]))]),
     (re.compile(r"Pinned memory is not available.*falling back to (.+?) for UVA buffers"),
      lambda m: [("uva_buffers", f"fallback: {m[1]}")]),
+    # Memory headroom at startup. The gap between free and budgeted memory is what a
+    # later OOM is judged against, and utilization can be "set" yet not reached.
+    (re.compile(r"Free memory on device \(([\d.]+)/([\d.]+) GiB\) on startup\. Desired GPU memory utilization is \(([\d.]+), ([\d.]+) GiB\)"),
+     lambda m: [("gpu.free_gib", float(m[1])),
+                ("gpu.total_gib", float(m[2])),
+                ("gpu.utilization", float(m[3])),
+                ("gpu.budget_gib", float(m[4]))]),
+    # A silent compile-time gate: without enough SMs the fast GEMM autotune path is
+    # skipped, which changes kernel selection without changing any argument.
+    (re.compile(r"Not enough SMs to use max_autotune_gemm mode"),
+     lambda m: [("compile.autotune_gemm", "disabled (not enough SMs)")]),
+    # Ops left native vs dispatched to a fused kernel, as the platform finally decided.
+    (re.compile(r"Final IR op priority after setting platform defaults: (.+)$"),
+     lambda m: _ir_op_facts(m[1])),
+    # Kernel JIT work inside the startup window, and whether late compiles are silent.
+    (re.compile(r"JIT kernel warmup finished in ([\d.]+)s"),
+     lambda m: [("jit.warmup_s", float(m[1]))]),
+    (re.compile(r"monitored JIT compilations during inference will use mode=(\w+)"),
+     lambda m: [("jit.monitor_mode", m[1])]),
+    # Sampling defaults are silently taken from the model's generation_config.json;
+    # two runs of the same flags can sample differently because of it.
+    (re.compile(r"generation_config\.json[`'\":]+ ?(.+)$"),
+     lambda m: [("sampling.overridden", m[1].strip().strip("`"))]),
     # Startup outcome. Without it, facts missing after a crash look like "not printed".
     (re.compile(r"Application startup complete"), lambda m: [("startup", "ready")]),
     (re.compile(r"EngineCore failed to start|Engine core initialization failed"),
@@ -143,6 +169,8 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
     (re.compile(r"Disable prefill CUDA graph because"), lambda m: [("cuda_graph.prefill", "disabled")]),
     (re.compile(r"The server is fired up and ready to roll"), lambda m: [("startup", "ready")]),
     (re.compile(r"KV Cache is allocated\. dtype: (\S+?),"), lambda m: [("kv_cache.dtype", m[1])]),
+    # SGLang prints the exact launch command, including the flags it defaulted.
+    (re.compile(r"sgl start command: (.+)$"), lambda m: [("server.command", m[1].strip())]),
 ]
 
 # Arguments that mean the same thing in both engines, mapped to one name.
@@ -161,6 +189,20 @@ SHARED_ARGS = {
     "backend.sampling_arg": (None, "sampling_backend", None),
     "port": (None, "port", None),
 }
+
+
+def _ir_op_facts(text: str) -> list[tuple[str, str]]:
+    """One fact per op, not one long blob for the whole config.
+
+    The full IrOpPriorityConfig line is far wider than the table, so two different
+    configs truncate to the same visible string and the row says "changed" while
+    looking identical. Splitting by op puts the difference on its own short key.
+    """
+    facts = []
+    for op, candidates in re.findall(r"(\w+)=\[([^\]]*)\]", text):
+        chosen = "|".join(c.strip().strip("'\"") for c in candidates.split(",") if c.strip())
+        facts.append((f"kernel.ir_op.{op}", chosen))
+    return facts or []
 
 
 def _literal_dict(text: str) -> dict | None:

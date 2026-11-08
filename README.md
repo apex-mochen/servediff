@@ -110,11 +110,19 @@ backend.attention                <absent>                                 FLASH_
 backend.flash_attn_version       <absent>                                 2                                        only_candidate
 backend.sampling_flashinfer      <absent>                                 disabled                                 only_candidate
 compile.artifacts                <absent>                                 25 entries, 3 artifacts, 4996920 bytes   only_candidate
+compile.autotune_gemm            <absent>                                 disabled (not enough SMs)                only_candidate
 compile.total_s                  <absent>                                 31.08                                    only_candidate
 cuda_graph.captures              <absent>                                 ["PIECEWISE x51", "FULL x2", "FULL x35"] only_candidate
 cuda_graph.pool_gib              <absent>                                 0.17                                     only_candidate
 engine.init_s                    <absent>                                 109.17                                   only_candidate
 engine.version                   0.28.0                                   0.30.0                                   changed
+gpu.budget_gib                   <absent>                                 3.6                                      only_candidate
+gpu.free_gib                     <absent>                                 6.93                                     only_candidate
+gpu.total_gib                    <absent>                                 8.0                                      only_candidate
+gpu.utilization                  <absent>                                 0.45                                     only_candidate
+jit.monitor_mode                 <absent>                                 warn                                     only_candidate
+jit.warmup_s                     <absent>                                 0.0                                      only_candidate
+kernel.ir_op.gelu_and_mul_sparse <absent>                                 triton|native                            only_candidate
 kv_cache.layout                  <absent>                                 LBNHC                                    only_candidate
 kv_cache.max_concurrency         <absent>                                 69.3                                     only_candidate
 kv_cache.memory_gib              <absent>                                 1.62                                     only_candidate
@@ -122,12 +130,13 @@ kv_cache.tokens                  <absent>                                 141936
 model_loading.gib                <absent>                                 0.93                                     only_candidate
 model_loading.seconds            <absent>                                 19.122619                                only_candidate
 parallel.roles                   DP rank 0, PP rank 0, PCP rank 0, TP ... DP rank 0, PP rank 0, PCP rank 0, TP ... changed
+sampling.overridden              <absent>                                 {'repetition_penalty': 1.1, 'temperat... only_candidate
 server.bind                      <absent>                                 http://0.0.0.0:8031                      only_candidate
 startup                          failed                                   ready                                    changed
 startup.error                    ["RuntimeError: UVA is not available"... <absent>                                 only_baseline
 uva_buffers                      <absent>                                 fallback: device memory                  only_candidate
 
-20 difference(s); 11 fact(s) identical. Absent means the log did not print it, not that it was off.
+29 difference(s); 13 fact(s) identical. Absent means the log did not print it, not that it was off.
 ```
 
 0.28.0 does not start on WSL2 with default settings; 0.30.0 does, because it falls
@@ -147,6 +156,8 @@ cuda_graph.captures              ["mixed prefill-decode, PIECEWISE x51... ["PIEC
 cuda_graph.pool_gib              0.36                                     0.17                                     changed
 engine.init_s                    74.0                                     109.17                                   changed
 engine.version                   0.28.0                                   0.30.0                                   changed
+jit.warmup_s                     <absent>                                 0.0                                      only_candidate
+kernel.ir_op.gelu_and_mul_sparse <absent>                                 triton|native                            only_candidate
 kv_cache.layout                  <absent>                                 LBNHC                                    only_candidate
 kv_cache.max_concurrency         60.52                                    69.3                                     changed
 kv_cache.memory_gib              1.42                                     1.62                                     changed
@@ -156,8 +167,15 @@ model_runner                     V1                                       V2    
 parallel.roles                   DP rank 0, PP rank 0, PCP rank 0, TP ... DP rank 0, PP rank 0, PCP rank 0, TP ... changed
 uva_buffers                      <absent>                                 fallback: device memory                  only_candidate
 
-14 difference(s); 16 fact(s) identical. Absent means the log did not print it, not that it was off.
+16 difference(s); 25 fact(s) identical. Absent means the log did not print it, not that it was off.
 ```
+
+Three of those rows are the kind that never appear in a bug report. `compile.autotune_gemm`
+and `kernel.ir_op.gelu_and_mul_sparse` show a faster kernel path being skipped or a
+different kernel being chosen with no argument changed; `sampling.overridden` shows the
+model's `generation_config.json` overriding the flags, which is why two "identical"
+launches can sample differently. `gpu.free_gib` versus `gpu.budget_gib` is the headroom
+an OOM is later judged against.
 
 ## Validated against real TP>1 logs
 
@@ -280,7 +298,7 @@ contains `TOKEN`, `KEY`, `SECRET`, `PASSWORD`, `CREDENTIAL` or `AUTH` are replac
 | version | banner / engine init | — (not printed) |
 | arguments | `non-default args` | `server_args` (all args) |
 | attention backend | `Using X attention backend` | `attention_backend` arg |
-| MoE backend | three log formats seen in 0.23–0.30 | `moe_runner_backend` arg |
+| MoE backend | three log formats seen in 0.23–0.30, plus the full candidate list when the build prints it separately | `moe_runner_backend` arg |
 | CUDA graph | eager mode, `cudagraph_mode`, capture sets, pool size | prefill CUDA graph disabled |
 | model runner, UVA fallback | `Using V2 Model Runner`; V1 runner detected via `gpu_model_runner.py` module; pinned-memory fallback | — |
 | all-reduce path | chosen chain per TP group + candidate pool (`all-reduce backends (in dispatch order) … out of potential backends`), FlashInfer's auto-selected backend and its norm / norm-quantization fusion workspaces (0.3.7+) | — |
@@ -290,6 +308,11 @@ contains `TOKEN`, `KEY`, `SECRET`, `PASSWORD`, `CREDENTIAL` or `AUTH` are replac
 | model identity | `Resolved architecture: …`, `Using max model len …` — the values the engine settled on, which can differ from the requested args | — |
 | engine init cost | `init engine (profile, create kv cache, warmup model) took … s` | — |
 | listening address | `Starting vLLM server on http://…` | — |
+| server command | — (not printed) | `sgl start command: …` (the exact invocation, defaults included) |
+| GPU memory headroom | `Free memory on device (x/y GiB) on startup. Desired GPU memory utilization is (f, z GiB)` | — |
+| kernel selection | one fact per op from `Final IR op priority …`, e.g. `kernel.ir_op.rms_norm=native`; the autotune gate from `Not enough SMs to use max_autotune_gemm mode` | — |
+| sampler defaults | `Default vLLM sampling parameters have been overridden by the model's generation_config.json` | — |
+| JIT behaviour | `JIT kernel warmup finished in … s`, `monitored JIT compilations … mode=` | — |
 | model loading | `Model loading took … GiB memory and … seconds` | — |
 | torch.compile | `collected artifacts: …`, `torch.compile took … s in total` | — |
 | startup outcome | ready / failed + root-cause error | ready / failed + root-cause error |
@@ -372,6 +395,8 @@ Exit codes: `0` no differences, `1` differences, `2` nothing recognised.
   full logs, SGLang versions other than 0.4.4 and other engines are not yet verified.
 - Parsing is regex-based on log text, which changes between versions. A missed line
   shows up as `<absent>`, never as a wrong value — please report it.
+  `tools/audit_unread_lines.py <log>...` prints the lines no rule reads yet, which is
+  where any such report should start.
 
 ## License
 
