@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.10 — 2026-11-08
+
+- `servediff.__version__` was a literal `"0.1.0"`, unchanged since the first release,
+  while `servediff --version` read the installed distribution and printed `0.4.9`. Any
+  script or test that checked `__version__` was reading a version nine releases old. It
+  is now read from the installed package, and a test pins both paths to one number.
+
 ## 0.4.9 — 2026-11-08
 
 - Eight more facts, chosen by auditing what the parser still ignores rather than by

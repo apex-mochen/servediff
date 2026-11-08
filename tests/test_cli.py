@@ -416,6 +416,14 @@ def test_cli_version_flag():
     assert re.fullmatch(r"servediff \d+\.\d+\.\d+\n", out.stdout)
 
 
+def test_package_version_is_the_same_number_the_cli_prints():
+    # __version__ used to be a literal "0.1.0" while --version read the installed
+    # distribution, so anyone checking servediff.__version__ saw a stale release.
+    import servediff as pkg
+
+    assert pkg.__version__ == servediff._version()
+
+
 def test_allreduce_backend_selection_is_recorded():
     # Real lines from a vLLM 0.23.1 TP=8 startup log (vllm#48591). The chosen
     # all-reduce list and the FlashInfer path are the only positive evidence that
