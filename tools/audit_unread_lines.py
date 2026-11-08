@@ -17,13 +17,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from servediff.cli import LINE_RULES, parse  # noqa: E402
+from servediff.cli import ANSI, LINE_RULES, parse  # noqa: E402
 
 TAIL = re.compile(r"\d+")
 
 
 def shape(line: str) -> str:
-    return TAIL.sub("N", line.strip())
+    return TAIL.sub("N", ANSI.sub("", line).strip())
 
 
 def audit(path: Path) -> Counter:
@@ -32,7 +32,9 @@ def audit(path: Path) -> Counter:
     engine = parsed["engine"]
     unread: Counter = Counter()
     for raw in text.splitlines():
-        line = raw
+        # Same normalisation parse() applies, so a line is "unread" here only when the
+        # parser really reads nothing from it.
+        line = ANSI.sub("", raw)
         if not line.strip():
             continue
         if "non-default args:" in line or "server_args=" in line:

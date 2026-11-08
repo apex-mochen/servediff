@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.11 — 2026-11-08
+
+- The 0.4.9 note here claimed the unread set on the real log went "from 73 to 46
+  shapes". It did not: the real movement was 87 lines / 80 shapes down to 80 lines /
+  73 shapes, and 73 was the after number, not the before one. Corrected; the rest of
+  that entry stands.
+- `tools/audit_unread_lines.py` now applies the same ANSI normalisation the parser does
+  before deciding a line is unread, so its report cannot count a line the parser reads.
+
 ## 0.4.10 — 2026-11-08
 
 - `servediff.__version__` was a literal `"0.1.0"`, unchanged since the first release,
@@ -23,8 +32,10 @@
 - `tools/audit_unread_lines.py` reports, per fixture, the lines no rule matches. That
   is how the list above was found, and it is the first place to look before adding a
   rule: a tool that shows "what the server actually ran with" is defined as much by
-  what it ignores. On the real 0.33.0 log the count of distinct unread shapes went
-  from 73 to 46.
+  what it ignores. On the real 0.33.0 log this set went from 87 lines / 80 distinct
+  shapes to 80 lines / 73 shapes; the remainder is route tables, the ASCII banner,
+  torch deprecation warnings, checkpoint-shard progress bars and `[backbone]`
+  compile-timing detail, none of which should be diffed.
 - README examples regenerated from the build: 0.28.0 vs 0.30.0 now reads
   `29 difference(s); 13 fact(s) identical`, and the V1-runner pair
   `16 difference(s); 25 fact(s) identical`.
