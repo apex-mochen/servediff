@@ -2,6 +2,10 @@
 
 **参数一样，server 却不一样。** `servediff` 告诉你 vLLM / SGLang server **实际**用了什么配置，以及两次运行之间哪里变了。
 
+![servediff demo：vllm#47047 的两份摘录日志，参数相同，MoE backend 从 VLLM_CUTLASS 变成 MARLIN](https://raw.githubusercontent.com/apex-mochen/servediff/main/assets/demo.svg)
+
+上面就是 `servediff demo` 在包内自带两份日志上的真实输出：参数相同，container 的 MoE backend 从 `VLLM_CUTLASS` 变成了 `MARLIN`。不需要你手上有任何日志就能看到。
+
 benchmark 结果文件只记录客户端。升级之后，server 可能会悄悄换掉 MoE 或 attention backend、改变 CUDA graph 的捕获方式、走另一条回退路径，或者底下的 torch / triton / flashinfer 版本已经不同。现在要发现这些，只能人工读启动日志、逐个 bisect。servediff 替你把日志读一遍。
 
 - **适合谁**：比较两次 vLLM / SGLang 运行的人，比如升级前后、改了某个参数、换了机器。

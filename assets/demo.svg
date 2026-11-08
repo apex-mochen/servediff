@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1050" height="444" viewBox="0 0 1050 444" role="img">
+  <rect width="1050" height="444" rx="8" fill="#0d1117"/>
+  <rect width="1050" height="30" rx="8" fill="#161b22"/>
+  <rect y="22" width="1050" height="8" fill="#161b22"/>
+<circle cx="22" cy="15" r="5" fill="#f85149"/><circle cx="37" cy="15" r="5" fill="#d29922"/><circle cx="52" cy="15" r="5" fill="#3fb950"/>
+<text x="22" y="64" fill="#79c0ff" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13">servediff demo: two excerpt logs from vllm#47047 (v0.23, same flags, container MoE backend</text>
+<text x="22" y="84" fill="#79c0ff" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13">  differs)</text>
+<text x="22" y="104" fill="#c9d1d9" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13"> </text>
+<text x="22" y="124" fill="#8b949e" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13">note: baseline: no all-reduce facts and no rank line: cannot tell whether this run had more than</text>
+<text x="22" y="144" fill="#8b949e" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13">  one rank, so an absent all-reduce path here is inconclusive</text>
+<text x="22" y="164" fill="#8b949e" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13">note: candidate: no all-reduce facts and no rank line: cannot tell whether this run had more</text>
+<text x="22" y="184" fill="#8b949e" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13">  than one rank, so an absent all-reduce path here is inconclusive</text>
+<text x="22" y="204" fill="#c9d1d9" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13"> </text>
+<text x="22" y="224" fill="#8b949e" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13">fact                             baseline                                 candidate                                status</text>
+<text x="22" y="244" fill="#e3b341" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13">backend.moe                      VLLM_CUTLASS (NvFp4)                     MARLIN (NvFp4)                           changed</text>
+<text x="22" y="264" fill="#79c0ff" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13">kv_cache.max_concurrency         &lt;absent&gt;                                 54.14                                    only_candidate</text>
+<text x="22" y="284" fill="#c9d1d9" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13"> </text>
+<text x="22" y="304" fill="#f0f6fc" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13">2 difference(s); 0 fact(s) identical. Absent means the log did not print it, not that it was</text>
+<text x="22" y="324" fill="#f0f6fc" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13">  off.</text>
+<text x="22" y="344" fill="#c9d1d9" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13"> </text>
+<text x="22" y="364" fill="#8b949e" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13">demo: exit 1. The two bundled logs do differ (the MoE backend, plus a KV cache line only one of</text>
+<text x="22" y="384" fill="#8b949e" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13">  them prints), so `diff` reports 1 here — 1 means "the inputs differ", not "the tool failed"; 2</text>
+<text x="22" y="404" fill="#8b949e" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13">  would mean it could not read them.</text>
+<text x="22" y="430" fill="#8b949e" font-size="11" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">$ servediff demo  ·  pip install servediff</text>
+</svg>

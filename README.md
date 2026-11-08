@@ -7,6 +7,12 @@
 **Same flags, different server.** `servediff` shows what your vLLM or SGLang server
 *actually* ran with — and what changed between two runs.
 
+![servediff demo: two excerpt logs from vllm#47047, same flags, the MoE backend differs and one log never prints the KV cache concurrency line](https://raw.githubusercontent.com/apex-mochen/servediff/main/assets/demo.svg)
+
+That is `servediff demo`, run on the two logs bundled in the package: same flags, and the
+container MoE backend went from `VLLM_CUTLASS` to `MARLIN`. No log of your own needed to
+see it.
+
 Benchmark result files only record the client side. After an upgrade, the server can
 silently pick a different MoE or attention backend, change its CUDA graph capture,
 fall back to another code path, or run against different torch / triton / flashinfer
