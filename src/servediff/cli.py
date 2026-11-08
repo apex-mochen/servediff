@@ -598,6 +598,18 @@ def _read_log(path) -> str:
         raise InputError(f"{path}: {exc.strerror or exc}") from exc
 
 
+def _audit_gate(max_shapes: int | None, shapes: int) -> int:
+    """Audit's exit code with a threshold: 1 means 'the parser is behind this log', not
+    'the log is different', so it does not collide with diff's 1."""
+    if max_shapes is None:
+        return 0
+    if shapes > max_shapes:
+        print(f"audit: {shapes} shape(s) worth a look is above --max-shapes {max_shapes}",
+              file=sys.stderr)
+        return 1
+    return 0
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--version", action="version", version=f"servediff {_version()}")
@@ -637,6 +649,9 @@ def main(argv=None) -> int:
     a.add_argument("--everything", action="store_true", help="also list the noise shapes")
     a.add_argument("--markdown", action="store_true",
                    help="wrap the report in a code fence, ready to paste into an issue")
+    a.add_argument("--max-shapes", type=int, default=None, metavar="N",
+                   help="exit 1 when the number of shapes worth a look is above N, so a"
+                        " pipeline can fail when a log format grows past the parser")
     args = parser.parse_args(argv)
 
     if args.command == "audit":
@@ -646,12 +661,17 @@ def main(argv=None) -> int:
         from servediff import audit as auditmod
 
         blocks = []
+        # Counted separately from the printed report so a threshold decision never depends
+        # on parsing the report text back.
+        shapes_worth_a_look = 0
         for path in args.logs:
             try:
                 text = _read_log(path)
             except InputError as exc:
                 print(f"audit: {exc}", file=sys.stderr)
                 return 2
+            counts, samples = auditmod.unread_samples(text)
+            shapes_worth_a_look += len(auditmod.split(counts, samples)[0])
             blocks.append(auditmod.report(Path(_label(path)), text,
                                           limit=args.top, everything=args.everything))
         if args.markdown:
@@ -665,9 +685,12 @@ def main(argv=None) -> int:
             print(f"{fence}text")
             print(body)
             print(fence)
-            return 0
+            return _audit_gate(args.max_shapes, shapes_worth_a_look)
         print("\n\n".join(blocks))
-        return 0
+        if args.max_shapes is not None:
+            print(f"\naudit: {shapes_worth_a_look} shape(s) worth a look, threshold"
+                  f" {args.max_shapes}", file=sys.stderr)
+        return _audit_gate(args.max_shapes, shapes_worth_a_look)
 
     if args.command == "demo":
         # A fresh install has nothing to diff, and the tool is useless until you find two

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.20 — 2026-11-08
+
+- `servediff audit --max-shapes N` exits `1` when more than N shapes need a look, so the
+  audit report can be a pipeline gate: run it against a log from your own upgrade and the
+  build fails when the server starts printing configuration this parser cannot read yet.
+  The count comes from the audit module, not from counting lines of the printed report
+  (that report truncates shapes, so a text count would be wrong on a large log). `1` here
+  means "the parser is behind this log", not "the inputs differ" — `diff`'s `1` keeps its
+  own meaning, and `audit` without the flag still exits `0`.
+- README: a `ci` badge (it existed and was not shown), and a short "why not just diff the
+  two logs" — timestamps, pids and redrawn progress bars make a text diff of a startup log
+  useless, and a value that moved is invisible inside a line that reworded itself.
+- 60 tests.
+
 ## 0.4.19 — 2026-11-08
 
 - Fixes the failed 0.4.18 release: the publish workflow runs the test suite from the
@@ -13,6 +27,9 @@
   trailing-period trap that has already broken this parser twice, asserting values *and*
   line numbers, and the sdist rule above. A visitor who can add a rule is worth more than
   a visitor who files an issue.
+- Also recorded, because it was claimed and wrong: PyPI's project page ships a CSP of
+  `img-src 'self' data:`, so the SVG cannot render there. It is a GitHub-surface asset
+  only; the alt text and the text sections carry the PyPI page.
 - 59 tests.
 
 ## 0.4.18 — 2026-11-08

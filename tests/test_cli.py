@@ -193,6 +193,23 @@ def test_failed_side_is_warned_about(tmp_path, capsys):
     assert "baseline server failed to start: RuntimeError: UVA is not available" in capsys.readouterr().out
 
 
+def test_audit_gate_fails_only_when_the_parser_is_behind(tmp_path, capsys):
+    # The count comes from the audit module, not from parsing the printed report back:
+    # the report truncates shapes, so a text-based count would be wrong on big logs.
+    log = tmp_path / "run.log"
+    log.write_text("INFO:     Started server process [123]\n"
+                   "Plain chatter about the weather, no configuration in it\n")
+    assert servediff.main(["audit", str(log), "--max-shapes", "0"]) == 1
+    assert "is above --max-shapes 0" in capsys.readouterr().err
+    assert servediff.main(["audit", str(log), "--max-shapes", "5"]) == 0
+    # Without the flag the exit code stays 0: a report is not a verdict.
+    assert servediff.main(["audit", str(log)]) == 0
+    # Access logs are noise, not "worth a look", so a threshold of 0 still passes.
+    noisy = tmp_path / "noise.log"
+    noisy.write_text('INFO:     127.0.0.1:52344 - "GET /health HTTP/1.1" 200 OK\n')
+    assert servediff.main(["audit", str(noisy), "--max-shapes", "0"]) == 0
+
+
 def test_skip_absent_keeps_only_rows_both_logs_printed(tmp_path, capsys):
     # A run that died leaves every later fact <absent>; those one-sided rows outnumber the
     # real differences and bury them. --skip-absent must hide them while still failing, and

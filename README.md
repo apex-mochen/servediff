@@ -3,6 +3,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/servediff)](https://pypi.org/project/servediff/)
 [![Python versions](https://img.shields.io/pypi/pyversions/servediff)](https://pypi.org/project/servediff/)
 [![License](https://img.shields.io/github/license/apex-mochen/servediff)](https://github.com/apex-mochen/servediff/blob/main/LICENSE)
+[![ci](https://github.com/apex-mochen/servediff/actions/workflows/ci.yml/badge.svg)](https://github.com/apex-mochen/servediff/actions/workflows/ci.yml)
 
 **Same flags, different server.** `servediff` shows what your vLLM or SGLang server
 *actually* ran with — and what changed between two runs.
@@ -25,6 +26,18 @@ builds. Today you find that by reading startup logs and bisecting by hand.
   server's Python environment. Offline, no GPU, no dependencies.
 - **What it does not do:** it does not say *which* difference caused a performance
   change. That still needs an A/B run. It tells you what to A/B.
+
+## Why not just `diff` the two logs
+
+Because a startup log is not a config file. `diff` compares text, and the text churns:
+timestamps, pids, two paths, progress bars that redraw the same line forty times. The values
+you care about sit *inside* lines whose wording also changes, so a one-line answer arrives
+buried in a few thousand irrelevant ones, and a value that went `0.45` → `0.41` is invisible
+while a line that merely reordered is loud. `servediff` reads each line into a named fact
+(`backend.moe`, `kv_cache.tokens`, `gpu.utilization_effective`) and compares the facts, so
+the diff is a table of settings — with the ones a log never printed marked `<absent>`
+instead of being guessed at.
+
 
 ## Try it in one minute (no GPU)
 
@@ -97,7 +110,7 @@ names a python launcher, that interpreter is the one snapshotted; for entry poin
 | `servediff env [--python P] [-o snap.json]` | that interpreter's packages, GPU info, and env vars whose names start with `VLLM_` / `SGLANG_` / `SGL_` / `CUDA_` / `NCCL_` / `TORCH_` / `PYTORCH_` / `FLASHINFER_` / `TRITON_` or are `HF_HUB_OFFLINE` / `TRANSFORMERS_OFFLINE`; secret-looking names become `<redacted>` | `0` written; `2` snapshot failed |
 | `servediff capture [-o run.log] -- <server command>` | runs the server, tees its log to stdout and to the file, and writes `<out>.env.json` **before** launch. If the command names a python launcher (`capture -- python -m vllm...`), that interpreter is the one snapshotted; otherwise pass `--python` to point at the server's venv | the server's own exit code |
 | `servediff demo` | two excerpt logs shipped inside the package → a real diff with no log files of your own; run this first after installing | `1` always (the bundled logs differ; see the note it prints) |
-| `servediff audit <log>` | the lines no rule reads, split into noise (counted) and shapes worth a look (listed); `--top N`, `--everything`, `--markdown` | `0` reported; `2` unreadable path |
+| `servediff audit <log>` | the lines no rule reads, split into noise (counted) and shapes worth a look (listed); `--top N`, `--everything`, `--markdown`, `--max-shapes N` | `0` reported; `1` more shapes worth a look than `--max-shapes` allows; `2` unreadable path |
 
 `1` always means *the inputs differ* — never *something went wrong* — so
 `servediff diff old.log new.log` works directly as a CI gate. At most one input may be
@@ -481,6 +494,10 @@ Exit codes: `0` no differences, `1` differences, `2` nothing recognised.
   counts the noise and lists only the second group, so what you paste is short.
   `servediff audit --markdown run1.log` wraps it in a code fence sized around any
   backticks inside, so it can go straight into the issue form's third field.
+  `servediff audit --max-shapes 20 run1.log` exits `1` when more than 20 shapes need a
+  look — put that in a pipeline against a log from your own upgrade and the build fails
+  when the server starts printing configuration this tool still cannot read, which is the
+  moment you want to know rather than three regressions later.
 - One worked example end to end: [writeups/wsl-uva-028-vs-030.md](writeups/wsl-uva-028-vs-030.md)
   — same flags on a laptop GPU under WSL2, 0.28.0 dies with `RuntimeError: UVA is not
   available`, 0.30.0 starts; the startup-log diff is 43 differences and 13 identical facts,
