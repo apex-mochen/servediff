@@ -416,6 +416,17 @@ def test_cli_version_flag():
     assert re.fullmatch(r"servediff \d+\.\d+\.\d+\n", out.stdout)
 
 
+def test_demo_diffs_the_logs_it_ships():
+    # A fresh install has no logs, so the first thing a new user runs has to work
+    # without any: demo reads two excerpts that travel inside the package.
+    out = subprocess.run([sys.executable, "-m", "servediff", "demo"],
+                         capture_output=True, text=True)
+    assert out.returncode == 1  # the bundled pair really differs
+    assert "backend.moe" in out.stdout
+    assert "MARLIN" in out.stdout
+    assert "demo: exit 1" in out.stderr  # says why 1 is a result, not a failure
+
+
 def test_package_version_is_the_same_number_the_cli_prints():
     # __version__ used to be a literal "0.1.0" while --version read the installed
     # distribution, so anyone checking servediff.__version__ saw a stale release.

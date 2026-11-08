@@ -24,6 +24,16 @@ builds. Today you find that by reading startup logs and bisecting by hand.
 
 ```bash
 pip install servediff
+servediff demo
+```
+
+`demo` diffs two excerpt logs that ship inside the package, so your first command
+produces real output without you finding logs first. It exits `1`, because the two
+logs do differ — that is the result, not a failure.
+
+The same pair, from the repo (the excerpt is public, from [vllm#47047](https://github.com/vllm-project/vllm/issues/47047)):
+
+```bash
 git clone https://github.com/apex-mochen/servediff && cd servediff
 servediff diff examples/issue-excerpts/vllm-47047-v0.23-default.log examples/issue-excerpts/vllm-47047-v0.23-marlin.log
 ```

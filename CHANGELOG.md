@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.12 — 2026-11-08
+
+- `servediff demo` diffs two excerpt logs carried inside the package. Until now a fresh
+  `pip install servediff` gave you a tool with nothing to run it on: every documented
+  command needs two startup logs, which is exactly what someone who has not hit the
+  problem yet does not have. The demo pair is public vllm#47047 text, and the command
+  prints why its exit code is 1 rather than 0.
+- The package now ships `servediff/examples/*.log` as package data.
+
 ## 0.4.11 — 2026-11-08
 
 - The 0.4.9 note here claimed the unread set on the real log went "from 73 to 46

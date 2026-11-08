@@ -586,7 +586,32 @@ def main(argv=None) -> int:
     c.add_argument("--python", help="interpreter for the env snapshot (default: this one)")
     c.add_argument("run_cmd", nargs=argparse.REMAINDER, metavar="-- command",
                    help="server command, after --")
+    sub.add_parser("demo", help="diff two logs shipped with the package; needs no log files")
     args = parser.parse_args(argv)
+
+    if args.command == "demo":
+        # A fresh install has nothing to diff, and the tool is useless until you find two
+        # logs. These two excerpts are public lines from vllm#47047, shipped inside the
+        # package, so the first command a new user runs produces real output.
+        from importlib.resources import files
+        import tempfile
+
+        print("servediff demo: two excerpt logs from vllm#47047 (v0.23, same flags, container"
+              " MoE backend differs)\n", file=sys.stderr)
+        base = files("servediff").joinpath("examples")
+        with tempfile.TemporaryDirectory() as tmp:
+            names = ["vllm-47047-v0.23-default.log", "vllm-47047-v0.23-marlin.log"]
+            paths = []
+            for name in names:
+                dest = Path(tmp) / name
+                dest.write_text(base.joinpath(name).read_text(encoding="utf-8"), encoding="utf-8")
+                paths.append(dest)
+            code = main(["diff", *map(str, paths)])
+        print(f"\ndemo: exit {code}. The two bundled logs do differ (the MoE backend, plus a KV"
+              " cache line only one of them prints), so `diff` reports 1 here — 1 means"
+              " \"the inputs differ\", not \"the tool failed\"; 2 would mean it could not"
+              " read them.", file=sys.stderr)
+        return code
 
     if args.command == "capture":
         cmd = args.run_cmd
