@@ -1,3 +1,8 @@
 include CHANGELOG.md CONTRIBUTING.md README.zh-CN.md
 recursive-include tests/fixtures *.log *.md
 recursive-include examples *.log
+# Tests run from the unpacked sdist in the publish workflow, so anything a test opens
+# has to be in here: tools/render_demo_svg.py and assets/demo.svg are read by
+# tests/test_demo_svg.py, and without them the release fails at "Tests from the sdist".
+recursive-include tools *.py
+include assets/demo.svg

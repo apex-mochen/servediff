@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.19 — 2026-11-08
+
+- Fixes the failed 0.4.18 release: the publish workflow runs the test suite from the
+  unpacked sdist, and the new `tests/test_demo_svg.py` opens `tools/render_demo_svg.py` and
+  `assets/demo.svg`, neither of which `MANIFEST.in` shipped. The sdist build itself was
+  fine; only the tests-from-the-sdist step caught it, which is the point of that step.
+  Both paths are now in `MANIFEST.in`, verified by building the sdist, unpacking it, and
+  running `pytest` there before tagging.
+- `CONTRIBUTING.md` rewritten to be usable by someone who has never seen the code: where a
+  rule goes and what a handler returns, why one fact per independent thing, the
+  trailing-period trap that has already broken this parser twice, asserting values *and*
+  line numbers, and the sdist rule above. A visitor who can add a rule is worth more than
+  a visitor who files an issue.
+- 59 tests.
+
 ## 0.4.18 — 2026-11-08
 
 - The README now opens on a picture instead of prose: `assets/demo.svg` is the real
