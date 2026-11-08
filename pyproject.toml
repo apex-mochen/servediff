@@ -4,19 +4,34 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "servediff"
-version = "0.4.7"
+version = "0.4.8"
 description = "Diff what your vLLM / SGLang server actually ran with: auto-selected backends, CUDA graphs, startup failures, dependency versions."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
 dependencies = []
-keywords = ["vllm", "sglang", "llm-inference", "performance-regression", "debugging"]
+keywords = [
+  "vllm",
+  "sglang",
+  "llm-inference",
+  "inference-server",
+  "llm-serving",
+  "startup-log",
+  "log-diff",
+  "kv-cache",
+  "cuda-graph",
+  "moe",
+  "tensor-parallel",
+  "performance-regression",
+  "debugging",
+]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Environment :: Console",
     "Intended Audience :: Developers",
     "Topic :: Software Development :: Debuggers",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: System :: Logging",
 ]
 
 [project.urls]

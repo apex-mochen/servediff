@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.8 — 2026-11-08
+
+- The first command in the README was wrong on the page people actually run. After 0.4.7
+  taught the parser to read the concurrency line, that 47047 pair prints
+  `2 difference(s); 0 fact(s) identical` — a `kv_cache.max_concurrency` row appears
+  because only one of the two excerpts quoted it — but the README still showed
+  `1 difference(s)`. Corrected, and the new row is explained as a presence difference
+  rather than a changed value.
+- Packaging metadata: the keyword list now carries the terms a person would actually
+  search for (startup-log, log-diff, kv-cache, cuda-graph, moe, tensor-parallel,
+  inference-server), and the package declares `Topic :: System :: Logging`. Discovery on
+  PyPI and GitHub is a packaging problem before it is a content problem.
+
 ## 0.4.7 — 2026-11-08
 
 - Seven more facts are read from a vLLM startup log, all of them found missing while

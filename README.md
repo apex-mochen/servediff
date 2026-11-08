@@ -37,13 +37,19 @@ note: candidate: no all-reduce facts and no rank line: cannot tell whether this 
 
 fact                             baseline                                 candidate                                status
 backend.moe                      VLLM_CUTLASS (NvFp4)                     MARLIN (NvFp4)                           changed
+kv_cache.max_concurrency         <absent>                                 54.14                                    only_candidate
 
-1 difference(s); 0 fact(s) identical. Absent means the log did not print it, not that it was off.
+2 difference(s); 0 fact(s) identical. Absent means the log did not print it, not that it was off.
 ```
 
 The two `note:` lines are part of the answer, not noise: the excerpt posted in that
 issue carries no rank line, so this run cannot say whether it was multi-GPU at all,
 and the tool says so instead of leaving you to read silence as "unchanged".
+
+The `kv_cache.max_concurrency` line is the second kind of answer worth noticing: the
+Marlin excerpt happened to quote the concurrency line, the other one did not, so it
+shows up as present-on-one-side rather than as a backend change. Read it as "one of
+these two logs tells you this, the other stays silent" — not as "the value changed".
 
 ## Recording your own two logs
 
