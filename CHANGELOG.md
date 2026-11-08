@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.17 — 2026-11-08
+
+- `servediff diff --skip-absent`: on the most common real pair — same flags, one run died —
+  the crash truncates one log, so every later fact is a one-sided `<absent>` row. That was
+  40 of the 43 rows on the 0.28.0-vs-0.30.0 pair and it buried the three that explain the
+  outcome. The flag keeps only facts both logs printed: **43 → 3 rows**, with the failure
+  warning kept and a line stating how many were hidden. Exit code stays 1 (the inputs do
+  differ) and `--json` carries both `differences` and `compared_both_sides`, so a script
+  cannot read a shorter table as a cleaner result.
+- 57 tests (the new one also checks the hidden count is not silently folded into
+  "identical").
+
 ## 0.4.16 — 2026-11-08
 
 - The loading phase is now three facts instead of one: `weights.cache` (`miss (from

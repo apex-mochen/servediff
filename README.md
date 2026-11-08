@@ -86,7 +86,7 @@ names a python launcher, that interpreter is the one snapshotted; for entry poin
 | Command | What it reads | Exit codes |
 |---|---|---|
 | `servediff show <log>` | one startup log (or `-` for stdin) → the facts it printed, each with its line number; `--json` | `0` read something; `2` unreadable path or no line recognised |
-| `servediff diff <a> <b>` | two startup logs, or two `servediff env` snapshots; `--json`, `--markdown`, `--all`, `--raw-args` | `0` identical; `1` at least one difference; `2` usage error, unreadable path, or one log mixed with one snapshot |
+| `servediff diff <a> <b>` | two startup logs, or two `servediff env` snapshots; `--json`, `--markdown`, `--all`, `--raw-args`, `--skip-absent` | `0` identical; `1` at least one difference; `2` usage error, unreadable path, or one log mixed with one snapshot |
 | `servediff series <a> <b> <c> ...` | three or more startup logs, in the column order you give → one fact per row; `--json`, `--markdown`, `--all`, `--raw-args` | `0` same across every log; `1` at least one fact differs; `2` fewer than three inputs |
 | `servediff env [--python P] [-o snap.json]` | that interpreter's packages, GPU info, and env vars whose names start with `VLLM_` / `SGLANG_` / `SGL_` / `CUDA_` / `NCCL_` / `TORCH_` / `PYTORCH_` / `FLASHINFER_` / `TRITON_` or are `HF_HUB_OFFLINE` / `TRANSFORMERS_OFFLINE`; secret-looking names become `<redacted>` | `0` written; `2` snapshot failed |
 | `servediff capture [-o run.log] -- <server command>` | runs the server, tees its log to stdout and to the file, and writes `<out>.env.json` **before** launch. If the command names a python launcher (`capture -- python -m vllm...`), that interpreter is the one snapshotted; otherwise pass `--python` to point at the server's venv | the server's own exit code |
@@ -222,6 +222,32 @@ share — the line also prints the value needed to keep the old KV cache, so a v
 changed only that default is visible here instead of as an unexplained capacity loss.
 `weights.prefetch` is the same story on the loading side: the loader skips prefetch on a
 filesystem it does not recognise as a network FS, and startup time changes with it.
+
+## When one of the two runs died
+
+The most common real pair is a run that crashed against the same flags that now work. The
+crash stops the log early, so every fact printed after it is `<absent>` on one side — on the
+0.28.0-vs-0.30.0 pair that is 40 of the 43 rows, and they bury the three that explain the
+outcome. `--skip-absent` keeps only the facts both logs printed, i.e. what changed on the
+same code path, and says how many it hid instead of quietly recounting them as identical:
+
+```text
+$ servediff diff vllm-0.28.0.log vllm-0.30.0.log --skip-absent
+warning: baseline server failed to start: RuntimeError: UVA is not available; facts after the failure are absent because startup stopped, not because they were off
+
+note: 40 difference(s) hidden by --skip-absent: one side never printed those lines, so they can only be listed, not compared
+
+fact                             baseline                                 candidate                                status
+engine.version                   0.28.0                                   0.30.0                                   changed
+parallel.roles                   DP rank 0, PP rank 0, PCP rank 0, TP ... DP rank 0, PP rank 0, PCP rank 0, TP ... changed
+startup                          failed                                   ready                                    changed
+
+3 difference(s); 13 fact(s) identical. 40 difference(s) skipped because one side never printed those lines (--skip-absent). Absent means the log did not print it, not that it was off.
+```
+
+The exit code is still 1: the inputs do differ. `--json` reports both counts
+(`differences` including the hidden ones, and `compared_both_sides` without them), so a
+script cannot mistake a smaller table for a cleaner result.
 
 ## Validated against real TP>1 logs
 

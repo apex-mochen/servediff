@@ -612,6 +612,9 @@ def main(argv=None) -> int:
     d.add_argument("--json", action="store_true")
     d.add_argument("--markdown", action="store_true", help="render a GitHub-flavored report (paste into issues)")
     d.add_argument("--all", action="store_true", help="also print unchanged facts")
+    d.add_argument("--skip-absent", action="store_true",
+                   help="hide facts one side never printed, so a failed run's tail does not"
+                        " bury the rows that both logs can be compared on")
     s = sub.add_parser("series", help="compare three or more server logs in one table")
     s.add_argument("logs", type=Path, nargs="+", help="server logs, in the column order you want; - reads stdin")
     s.add_argument("--raw-args", action="store_true", help="also compare every raw argument (same engine only)")
@@ -867,12 +870,27 @@ def main(argv=None) -> int:
     rows = diff(a, b, raw_args=args.raw_args)
     if not args.all:  # errors after "ready" (e.g. on shutdown) say nothing about the config
         rows = [r for r in rows if not r["key"].startswith("after_ready.")]
-    differing = [r for r in rows if r["status"] != "same"]
+    all_differing = [r for r in rows if r["status"] != "same"]
+    # A run that died at startup leaves every later fact <absent>, so one-sided rows
+    # outnumber real differences roughly 10:1 and bury them. --skip-absent keeps only
+    # the facts both logs printed: what changed on the same code path.
+    differing = all_differing
+    hidden_absent: list[dict] = []
+    if args.skip_absent:
+        hidden_absent = [r for r in all_differing if r["status"] != "changed"]
+        differing = [r for r in all_differing if r["status"] == "changed"]
+    identical = len(rows) - len(all_differing)
     notes = []
     for side, parsed in (("baseline", a), ("candidate", b)):
         notes.extend(f"{side}: {note}" for note in absence_notes(parsed))
+    if args.skip_absent and all_differing:
+        notes.append(f"{len(hidden_absent)} difference(s) hidden by --skip-absent: one side"
+                     " never printed those lines, so they can only be listed, not compared")
     if args.json:
-        print(json.dumps({"differences": len(differing), "notes": notes, "rows": rows},
+        print(json.dumps({"differences": len(all_differing),
+                          "compared_both_sides": len(differing),
+                          "hidden_absent": len(hidden_absent),
+                          "notes": notes, "rows": differing if args.skip_absent else rows},
                          indent=2, ensure_ascii=False, default=str))
     elif args.markdown:
         warnings = []
@@ -889,7 +907,7 @@ def main(argv=None) -> int:
             path_a=_label(args.baseline), path_b=_label(args.candidate),
             engine_a=a["engine"], engine_b=b["engine"],
             rows=shown_rows, warnings=warnings, notes=notes,
-            differing=len(differing), identical=len(rows) - len(differing),
+            differing=len(differing), identical=identical,
             all_rows=bool(args.all)))
     else:
         if a["engine"] != b["engine"]:
@@ -910,9 +928,12 @@ def main(argv=None) -> int:
             # in `TP ran` reads like the value itself, not like a clipped column.
             print(f"{r['key']:32s} {_short(_fmt(r['baseline']), 40):40s}"
                   f" {_short(_fmt(r['candidate']), 40):40s} {r['status']}")
-        print(f"\n{len(differing)} difference(s); {len(rows) - len(differing)} fact(s) identical."
-              " Absent means the log did not print it, not that it was off.")
-    return 1 if differing else 0
+        line = f"\n{len(differing)} difference(s); {identical} fact(s) identical."
+        if hidden_absent:
+            line += (f" {len(hidden_absent)} difference(s) skipped because one side never printed"
+                     " those lines (--skip-absent).")
+        print(line + " Absent means the log did not print it, not that it was off.")
+    return 1 if all_differing else 0
 
 
 if __name__ == "__main__":

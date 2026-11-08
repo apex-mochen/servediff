@@ -193,6 +193,28 @@ def test_failed_side_is_warned_about(tmp_path, capsys):
     assert "baseline server failed to start: RuntimeError: UVA is not available" in capsys.readouterr().out
 
 
+def test_skip_absent_keeps_only_rows_both_logs_printed(tmp_path, capsys):
+    # A run that died leaves every later fact <absent>; those one-sided rows outnumber the
+    # real differences and bury them. --skip-absent must hide them while still failing, and
+    # the counts must not silently reclassify a hidden difference as "identical".
+    a, b = tmp_path / "a.log", tmp_path / "b.log"
+    a.write_text(FAILED_STARTUP)
+    b.write_text(FALLBACK_STARTUP)
+    assert servediff.main(["diff", str(a), str(b), "--skip-absent"]) == 1
+    out = capsys.readouterr().out
+    assert "uva_buffers" not in out, out
+    assert "hidden by --skip-absent" in out
+    assert "1 difference(s); 1 fact(s) identical." in out, out
+    assert "2 difference(s) skipped because one side never printed those lines" in out
+    # JSON must stay honest about what it withheld.
+    capsys.readouterr()
+    assert servediff.main(["diff", str(a), str(b), "--skip-absent", "--json"]) == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["differences"] == 3 and payload["compared_both_sides"] == 1
+    assert payload["hidden_absent"] == 2
+    assert [r["key"] for r in payload["rows"]] == ["startup"]
+
+
 def test_cuda_graph_captures_and_pool():
     text = (
         "Capturing CUDA graphs (decode, FULL):   0%|          | 0/35 [00:00<?, ?it/s]"
