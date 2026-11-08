@@ -350,6 +350,42 @@ def test_v1_runner_detected_from_gpu_model_runner_module():
     assert f["model_runner"].value == "V1"
 
 
+def test_weight_loading_utilization_and_server_surface_facts():
+    # Lines the audit called out on a real log, each of which changes what a run costs
+    # or what it serves without changing any command-line flag.
+    text = (
+        "(EngineCore pid=1) INFO 11-08 10:55:29 [weight_utils.py:1144] Filesystem type for"
+        " checkpoints: EXT4. Checkpoint size: 0.92 GiB. Available RAM: 2.75 GiB.\n"
+        "(EngineCore pid=1) INFO 11-08 10:55:29 [weight_utils.py:1167] Auto-prefetch is disabled"
+        " because the filesystem (EXT4) is not a recognized network FS (NFS/Lustre).\n"
+        "(EngineCore pid=1) INFO 11-08 10:55:54 [gpu_worker.py:787] CUDA graph memory profiling is"
+        " enabled (default since v0.21.0). The current --gpu-memory-utilization=0.4500 is equivalent"
+        " to --gpu-memory-utilization=0.4141 without CUDA graph memory profiling. To maintain the"
+        " same effective KV cache size as before, increase --gpu-memory-utilization to 0.4859.\n"
+        "(EngineCore pid=1) INFO 11-08 10:55:54 [kernel_warmup.py:270] Skipping FlashInfer autotune"
+        " because it is disabled.\n"
+        "(APIServer pid=2) INFO 11-08 10:56:07 [entry.py:135] Supported tasks: ['generate']\n"
+        "(APIServer pid=2) INFO 11-08 10:56:08 [factories.py:105] Scale-out endpoints are disabled."
+        " Restart vllm serve with --enable-scale-out to enable them.\n"
+        "(APIServer pid=2) INFO 11-08 10:56:08 [hf.py:736] Detected the chat template content"
+        " format to be 'string'.\n")
+    f = servediff.parse(text)["facts"]
+    assert f["weights.filesystem"].value == "EXT4"
+    assert f["weights.checkpoint_gib"].value == 0.92
+    assert f["weights.available_ram_gib"].value == 2.75
+    assert f["weights.prefetch"].value == "disabled (EXT4 is not a network FS)"
+    assert f["cuda_graph.profiling"].value == "enabled (default since v0.21.0)"
+    # The sentence ends with a full stop; a greedy character class once swallowed it and
+    # float() raised on "0.4859." — keep the two numbers apart from the punctuation.
+    assert f["gpu.utilization_effective"].value == 0.4141
+    assert f["gpu.utilization_to_match_kv_cache"].value == 0.4859
+    assert f["kernel.flashinfer_autotune"].value == "disabled"
+    assert f["server.tasks"].value == "['generate']"
+    assert f["server.scale_out"].value == "disabled"
+    assert f["serving.chat_template_content_format"].value == "string"
+
+
+
 # Real TP>1 log excerpt, distilled from vLLM issue #48591 (0.23.1, TP=8,
 # dspark spec decode crash): every rank prints its own world_size line, the
 # assigned-as line has no ETP field, and the run fails at CUDA graph time.

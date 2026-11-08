@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.4.15 — 2026-11-08
+
+- Eleven facts from lines the 0.4.14 audit still called worth a look, all of them things
+  that change what a run costs or what it serves while every flag stays the same:
+  - `gpu.utilization_effective` and `gpu.utilization_to_match_kv_cache`, from
+    `CUDA graph memory profiling is enabled (default since v0.21.0)… equivalent to
+    --gpu-memory-utilization=0.4141 without … increase … to 0.4859`. A version that
+    changes only this default gives you less KV cache for the same flag, and the line
+    says so in numbers.
+  - `cuda_graph.profiling` — the mode itself, with the version it became the default.
+  - `weights.filesystem`, `weights.checkpoint_gib`, `weights.available_ram_gib` and
+    `weights.prefetch` — where the loader read from and whether it could prefetch
+    (`Auto-prefetch is disabled because the filesystem (EXT4) is not a recognized
+    network FS`). On a slow filesystem this is the whole startup-time difference.
+  - `kernel.flashinfer_autotune` (`disabled` when autotune is skipped),
+    `server.tasks`, `server.scale_out`, `serving.chat_template_content_format`.
+- A trailing full stop bit the parser again: `increase --gpu-memory-utilization to
+  ([\d.]+)` swallowed the sentence's period, so `float("0.4859.")` raised and
+  `servediff show` died with `exit 1` on a real log. The rule matches the period
+  explicitly now, and the test states the failure it prevents.
+- Audit on the real 170-line log: 78 unread / 19 worth a look (0.4.14) → **71 unread /
+  12 worth a look**, noise unchanged at 59.
+- README's two diffs were regenerated with this parser, because eleven new facts move
+  the counts: 0.28-vs-0.30 is now `41 difference(s); 13 fact(s) identical` (was 29/13),
+  and the V1-runner pair `22 difference(s); 31 fact(s) identical` (was 16/25). The
+  `writeups/wsl-uva-028-vs-030.md` table was regenerated from the same run.
+- 54 tests.
+
 ## 0.4.14 — 2026-11-08
 
 - `servediff audit` separates the gap into noise and shapes worth a look. On the real

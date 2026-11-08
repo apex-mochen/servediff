@@ -45,13 +45,10 @@ deliberate change in the engine, visible in one log line.
 
 ```console
 $ servediff diff vllm-0.28.0.log vllm-0.30.0.log
-warning: baseline server failed to start: RuntimeError: UVA is not available; facts after
-the failure are absent because startup stopped, not because they were off
+warning: baseline server failed to start: RuntimeError: UVA is not available; facts after the failure are absent because startup stopped, not because they were off
 
-note: baseline: no all-reduce facts: world_size=1, so there is no all-reduce group and
-no backend is chosen; a TP>1 run is what makes this path observable
-note: candidate: no all-reduce facts: world_size=1, so there is no all-reduce group and
-no backend is chosen; a TP>1 run is what makes this path observable
+note: baseline: no all-reduce facts: world_size=1, so there is no all-reduce group and no backend is chosen; a TP>1 run is what makes this path observable
+note: candidate: no all-reduce facts: world_size=1, so there is no all-reduce group and no backend is chosen; a TP>1 run is what makes this path observable
 
 fact                             baseline                                 candidate                                status
 backend.attention                <absent>                                 FLASH_ATTN                               only_candidate
@@ -60,14 +57,19 @@ backend.sampling_flashinfer      <absent>                                 disabl
 compile.artifacts                <absent>                                 25 entries, 3 artifacts, 4996920 bytes   only_candidate
 compile.autotune_gemm            <absent>                                 disabled (not enough SMs)                only_candidate
 compile.total_s                  <absent>                                 31.08                                    only_candidate
+cuda_graph.capture_gib           <absent>                                 [0.25, 0.17]                             only_candidate
+cuda_graph.capture_s             <absent>                                 [9, 11]                                  only_candidate
 cuda_graph.captures              <absent>                                 ["PIECEWISE x51", "FULL x2", "FULL x35"] only_candidate
 cuda_graph.pool_gib              <absent>                                 0.17                                     only_candidate
+cuda_graph.profiling             <absent>                                 enabled (default since v0.21.0)          only_candidate
 engine.init_s                    <absent>                                 109.17                                   only_candidate
 engine.version                   0.28.0                                   0.30.0                                   changed
 gpu.budget_gib                   <absent>                                 3.6                                      only_candidate
 gpu.free_gib                     <absent>                                 6.93                                     only_candidate
 gpu.total_gib                    <absent>                                 8.0                                      only_candidate
 gpu.utilization                  <absent>                                 0.45                                     only_candidate
+gpu.utilization_effective        <absent>                                 0.4151                                   only_candidate
+gpu.utilization_to_match_kv_cache <absent>                                 0.4849                                   only_candidate
 jit.monitor_mode                 <absent>                                 warn                                     only_candidate
 jit.warmup_s                     <absent>                                 0.0                                      only_candidate
 kernel.ir_op.gelu_and_mul_sparse <absent>                                 triton|native                            only_candidate
@@ -80,11 +82,18 @@ model_loading.seconds            <absent>                                 19.122
 parallel.roles                   DP rank 0, PP rank 0, PCP rank 0, TP ... DP rank 0, PP rank 0, PCP rank 0, TP ... changed
 sampling.overridden              <absent>                                 {'repetition_penalty': 1.1, 'temperat... only_candidate
 server.bind                      <absent>                                 http://0.0.0.0:8031                      only_candidate
+server.scale_out                 <absent>                                 disabled                                 only_candidate
+server.tasks                     <absent>                                 ['generate']                             only_candidate
+serving.chat_template_content_format <absent>                                 string                                   only_candidate
 startup                          failed                                   ready                                    changed
 startup.error                    ["RuntimeError: UVA is not available"... <absent>                                 only_baseline
 uva_buffers                      <absent>                                 fallback: device memory                  only_candidate
+weights.available_ram_gib        <absent>                                 4.23                                     only_candidate
+weights.checkpoint_gib           <absent>                                 0.92                                     only_candidate
+weights.filesystem               <absent>                                 EXT4                                     only_candidate
+weights.prefetch                 <absent>                                 disabled (EXT4 is not a network FS)      only_candidate
 
-29 difference(s); 13 fact(s) identical. Absent means the log did not print it, not that it was off.
+41 difference(s); 13 fact(s) identical. Absent means the log did not print it, not that it was off.
 ```
 
 Exit code `1` here means "the two logs differ", not "the tool failed". `2` would mean it

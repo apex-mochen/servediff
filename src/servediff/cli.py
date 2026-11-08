@@ -148,6 +148,33 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
                 ("gpu.total_gib", float(m[2])),
                 ("gpu.utilization", float(m[3])),
                 ("gpu.budget_gib", float(m[4]))]),
+    # CUDA graph memory profiling is on by default since v0.21.0, and it changes what a
+    # given --gpu-memory-utilization actually buys: the line itself prints the equivalent
+    # value without profiling and the value needed to keep the old KV cache size. Comparing
+    # two versions that differ only in this default is exactly the silent change servediff
+    # exists to surface, so both numbers are kept rather than the flag.
+    (re.compile(r"CUDA graph memory profiling is (enabled|disabled) \(default since v([\d.]+)\)"),
+     lambda m: [("cuda_graph.profiling", f"{m[1]} (default since v{m[2]})")]),
+    (re.compile(r"equivalent to --gpu-memory-utilization=([\d.]+) without CUDA graph memory profiling"),
+     lambda m: [("gpu.utilization_effective", float(m[1]))]),
+    (re.compile(r"increase --gpu-memory-utilization to ([\d.]+)\."),
+     lambda m: [("gpu.utilization_to_match_kv_cache", float(m[1]))]),
+    # Where the weights came from and whether the loader could prefetch them. On a slow
+    # filesystem this is the difference between a 10 s and a 100 s startup, and the
+    # checkpoint size line is the only place the loader states what it measured.
+    (re.compile(r"Filesystem type for checkpoints: (\w+)\. Checkpoint size: ([\d.]+) GiB\. Available RAM: ([\d.]+) GiB"),
+     lambda m: [("weights.filesystem", m[1]),
+                ("weights.checkpoint_gib", float(m[2])),
+                ("weights.available_ram_gib", float(m[3]))]),
+    (re.compile(r"Auto-prefetch is (disabled) because the filesystem \((\w+)\) is not a recognized network FS"),
+     lambda m: [("weights.prefetch", f"{m[1]} ({m[2]} is not a network FS)")]),
+    # What the server will actually serve, and whether it is allowed to fan out.
+    (re.compile(r"Supported tasks: (.+)"), lambda m: [("server.tasks", m[1].strip())]),
+    (re.compile(r"Scale-out endpoints are (disabled)"), lambda m: [("server.scale_out", m[1])]),
+    (re.compile(r"chat template content format to be '([^']+)'"),
+     lambda m: [("serving.chat_template_content_format", m[1])]),
+    (re.compile(r"Skipping FlashInfer autotune because it is (disabled)"),
+     lambda m: [("kernel.flashinfer_autotune", m[1])]),
     # A silent compile-time gate: without enough SMs the fast GEMM autotune path is
     # skipped, which changes kernel selection without changing any argument.
     (re.compile(r"Not enough SMs to use max_autotune_gemm mode"),

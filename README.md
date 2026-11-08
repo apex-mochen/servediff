@@ -122,14 +122,19 @@ backend.sampling_flashinfer      <absent>                                 disabl
 compile.artifacts                <absent>                                 25 entries, 3 artifacts, 4996920 bytes   only_candidate
 compile.autotune_gemm            <absent>                                 disabled (not enough SMs)                only_candidate
 compile.total_s                  <absent>                                 31.08                                    only_candidate
+cuda_graph.capture_gib           <absent>                                 [0.25, 0.17]                             only_candidate
+cuda_graph.capture_s             <absent>                                 [9, 11]                                  only_candidate
 cuda_graph.captures              <absent>                                 ["PIECEWISE x51", "FULL x2", "FULL x35"] only_candidate
 cuda_graph.pool_gib              <absent>                                 0.17                                     only_candidate
+cuda_graph.profiling             <absent>                                 enabled (default since v0.21.0)          only_candidate
 engine.init_s                    <absent>                                 109.17                                   only_candidate
 engine.version                   0.28.0                                   0.30.0                                   changed
 gpu.budget_gib                   <absent>                                 3.6                                      only_candidate
 gpu.free_gib                     <absent>                                 6.93                                     only_candidate
 gpu.total_gib                    <absent>                                 8.0                                      only_candidate
 gpu.utilization                  <absent>                                 0.45                                     only_candidate
+gpu.utilization_effective        <absent>                                 0.4151                                   only_candidate
+gpu.utilization_to_match_kv_cache <absent>                                 0.4849                                   only_candidate
 jit.monitor_mode                 <absent>                                 warn                                     only_candidate
 jit.warmup_s                     <absent>                                 0.0                                      only_candidate
 kernel.ir_op.gelu_and_mul_sparse <absent>                                 triton|native                            only_candidate
@@ -142,11 +147,18 @@ model_loading.seconds            <absent>                                 19.122
 parallel.roles                   DP rank 0, PP rank 0, PCP rank 0, TP ... DP rank 0, PP rank 0, PCP rank 0, TP ... changed
 sampling.overridden              <absent>                                 {'repetition_penalty': 1.1, 'temperat... only_candidate
 server.bind                      <absent>                                 http://0.0.0.0:8031                      only_candidate
+server.scale_out                 <absent>                                 disabled                                 only_candidate
+server.tasks                     <absent>                                 ['generate']                             only_candidate
+serving.chat_template_content_format <absent>                                 string                                   only_candidate
 startup                          failed                                   ready                                    changed
 startup.error                    ["RuntimeError: UVA is not available"... <absent>                                 only_baseline
 uva_buffers                      <absent>                                 fallback: device memory                  only_candidate
+weights.available_ram_gib        <absent>                                 4.23                                     only_candidate
+weights.checkpoint_gib           <absent>                                 0.92                                     only_candidate
+weights.filesystem               <absent>                                 EXT4                                     only_candidate
+weights.prefetch                 <absent>                                 disabled (EXT4 is not a network FS)      only_candidate
 
-29 difference(s); 13 fact(s) identical. Absent means the log did not print it, not that it was off.
+41 difference(s); 13 fact(s) identical. Absent means the log did not print it, not that it was off.
 ```
 
 0.28.0 does not start on WSL2 with default settings; 0.30.0 does, because it falls
@@ -162,10 +174,14 @@ note: candidate: no all-reduce facts: world_size=1, so there is no all-reduce gr
 fact                             baseline                                 candidate                                status
 compile.artifacts                25 entries, 3 artifacts, 4997798 bytes   25 entries, 3 artifacts, 4996920 bytes   changed
 compile.total_s                  32.58                                    31.08                                    changed
+cuda_graph.capture_gib           0.36                                     [0.25, 0.17]                             changed
+cuda_graph.capture_s             12                                       [9, 11]                                  changed
 cuda_graph.captures              ["mixed prefill-decode, PIECEWISE x51... ["PIECEWISE x51", "FULL x2", "FULL x35"] changed
 cuda_graph.pool_gib              0.36                                     0.17                                     changed
 engine.init_s                    74.0                                     109.17                                   changed
 engine.version                   0.28.0                                   0.30.0                                   changed
+gpu.utilization_effective        0.4031                                   0.4151                                   changed
+gpu.utilization_to_match_kv_cache 0.4969                                   0.4849                                   changed
 jit.warmup_s                     <absent>                                 0.0                                      only_candidate
 kernel.ir_op.gelu_and_mul_sparse <absent>                                 triton|native                            only_candidate
 kv_cache.layout                  <absent>                                 LBNHC                                    only_candidate
@@ -175,17 +191,24 @@ kv_cache.tokens                  123952                                   141936
 model_loading.seconds            13.191946                                19.122619                                changed
 model_runner                     V1                                       V2                                       changed
 parallel.roles                   DP rank 0, PP rank 0, PCP rank 0, TP ... DP rank 0, PP rank 0, PCP rank 0, TP ... changed
+server.scale_out                 <absent>                                 disabled                                 only_candidate
 uva_buffers                      <absent>                                 fallback: device memory                  only_candidate
+weights.available_ram_gib        4.94                                     4.23                                     changed
 
-16 difference(s); 25 fact(s) identical. Absent means the log did not print it, not that it was off.
+22 difference(s); 31 fact(s) identical. Absent means the log did not print it, not that it was off.
 ```
 
-Three of those rows are the kind that never appear in a bug report. `compile.autotune_gemm`
-and `kernel.ir_op.gelu_and_mul_sparse` show a faster kernel path being skipped or a
-different kernel being chosen with no argument changed; `sampling.overridden` shows the
-model's `generation_config.json` overriding the flags, which is why two "identical"
-launches can sample differently. `gpu.free_gib` versus `gpu.budget_gib` is the headroom
-an OOM is later judged against.
+Rows of that kind are the reason this exists, and none of them shows up in a bug report.
+`compile.autotune_gemm` and `kernel.ir_op.gelu_and_mul_sparse` show a faster kernel path
+being skipped or a different kernel being chosen with no argument changed;
+`sampling.overridden` shows the model's `generation_config.json` overriding the flags,
+which is why two "identical" launches can sample differently. `gpu.free_gib` versus
+`gpu.budget_gib` is the headroom an OOM is later judged against. `gpu.utilization_effective`
+is the utilization a run *actually* spends once CUDA graph memory profiling takes its
+share — the line also prints the value needed to keep the old KV cache, so a version that
+changed only that default is visible here instead of as an unexplained capacity loss.
+`weights.prefetch` is the same story on the loading side: the loader skips prefetch on a
+filesystem it does not recognise as a network FS, and startup time changes with it.
 
 ## Validated against real TP>1 logs
 
@@ -413,7 +436,7 @@ Exit codes: `0` no differences, `1` differences, `2` nothing recognised.
   The issue form asks for exactly the three things that turn a line into a fixture.
 - One worked example end to end: [writeups/wsl-uva-028-vs-030.md](writeups/wsl-uva-028-vs-030.md)
   — same flags on a laptop GPU under WSL2, 0.28.0 dies with `RuntimeError: UVA is not
-  available`, 0.30.0 starts; the startup-log diff is 29 differences and 13 identical facts,
+  available`, 0.30.0 starts; the startup-log diff is 41 differences and 13 identical facts,
   and the one line that explains it is the pinned-memory fallback from vllm#56908.
 
 ## License
