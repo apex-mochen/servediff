@@ -73,7 +73,7 @@ servediff diff old.json new.json
 
 ## 边界
 
-- 已测试：vllm#47047、#53472 里贴出的日志片段（v0.23、v0.26）；vLLM 0.28.0 / 0.30.0 的完整启动日志（单卡、WSL2）；vllm#48591 的真实 TP=8 启动日志（v0.23.1，每个 worker 一行 + role 分配）；vllm#45604 里 4×H200 的 TP4+EP 片段（v0.29.0，两个 all-reduce group）；sglang#4862 的 SGLang 启动日志（v0.4.4、TP=4、Qwen2.5-Omni-7B，`server_args=ServerArgs(...)` 这种关键字调用形式已解析，启动失败与根因错误已记录）。并行配置与 all-reduce 规则是在真实 TP>1 日志上核对的；完整日志里的 MoE 模型、0.4.4 之外的 SGLang 版本、其他引擎尚未验证。
+- 已测试：vllm#47047、#53472 里贴出的日志片段（v0.23、v0.26）；vLLM 0.28.0 / 0.30.0 的完整启动日志（单卡、WSL2）；vllm#48591 的真实 TP=8 启动日志（v0.23.1，每个 worker 一行 + role 分配）；vllm#45604 里 4×H200 的 TP4+EP 片段（v0.29.0，两个 all-reduce group）；sglang#4862 的 SGLang 启动日志（v0.4.4、TP=4、Qwen2.5-Omni-7B，`server_args=ServerArgs(...)` 这种关键字调用形式已解析，启动失败与根因错误已记录）。其中有一份不是片段、而是真实跑出来的日志：单卡 RTX 4060 Laptop（8 GB，WSL2）上的 vLLM 0.33.0、Qwen2.5-0.5B，由 `capture` 写入——服务确实响应了 `/health` 和一个生成请求，Ctrl-C 退出 `130` 且日志保留，同一条命令的两份环境快照 diff 出来正好就是决定「起不来 / 起得来」的那两个变量。并行配置与 all-reduce 规则是在真实 TP>1 日志上核对的；完整日志里的 MoE 模型、0.4.4 之外的 SGLang 版本、其他引擎尚未验证。
 - 解析是基于日志文本的正则匹配，跨版本会变。识别不到的行显示为 `<absent>`，不会显示成错误的值；发现漏识别的行请提 issue。
 
 许可证：Apache-2.0。

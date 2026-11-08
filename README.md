@@ -344,8 +344,12 @@ Exit codes: `0` no differences, `1` differences, `2` nothing recognised.
   from vllm#48591 (v0.23.1, one line per worker + role assignment); a TP4+EP excerpt from
   a 4×H200 node in vllm#45604 (v0.29.0, two all-reduce groups); a SGLang startup log from
   sgl-project/sglang#4862 (v0.4.4, TP=4, Qwen2.5-Omni-7B — the `server_args=ServerArgs(...)`
-  keyword-call form is parsed, startup failure + root-cause error recorded). The
-  parallel-config and all-reduce rules are checked against real TP>1 logs; MoE models in
+  keyword-call form is parsed, startup failure + root-cause error recorded). One log is a
+  live server run rather than an excerpt: vLLM 0.33.0 on a single RTX 4060 Laptop (8 GB)
+  under WSL2, Qwen2.5-0.5B, written by `capture` — the server answered `/health` and a
+  completion, Ctrl-C exited `130` and kept the log, and the two env snapshots of that run
+  diff down to the two variables that separated a crash from a start. The parallel-config
+  and all-reduce rules are checked against real TP>1 logs; MoE models in
   full logs, SGLang versions other than 0.4.4 and other engines are not yet verified.
 - Parsing is regex-based on log text, which changes between versions. A missed line
   shows up as `<absent>`, never as a wrong value — please report it.

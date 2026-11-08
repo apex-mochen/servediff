@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.6 — 2026-11-08
+
+- `capture` verified against a live server, not a fake process: vLLM 0.33.0 on one RTX 4060
+  Laptop (8 GB, WSL2), Qwen2.5-0.5B. The server reached `/health` and served a completion,
+  the log was written while it ran, the env snapshot landed before launch, and Ctrl-C exited
+  `130` with the log intact. A failed run still passed the server's exit code (`1`) through.
+- New fixture `vllm-0.33.0-real-rtx4060.log` — a full 170-line log from that run rather than
+  an issue excerpt — pinned by `test_real_server_log_from_033_is_parsed`, which guards
+  `engine.version`, `model_runner V2`, the attention backend, the KV-cache layout, UVA
+  fallback, world size, the CUDA-graph capture list and the model-loading size.
+- `Limits` states this run as evidence: the two env snapshots of the same command diff down
+  to the two variables that separated a crash from a start.
+
 ## 0.4.5 — 2026-11-07
 
 - `series` text output keeps both ends of a long value instead of cutting it at a fixed

@@ -50,6 +50,23 @@ def test_evidence_points_at_source_line():
     assert "TrtLlmBf16ExpertsMonolithic" in fact.evidence[0][1]
 
 
+def test_real_server_log_from_033_is_parsed():
+    # First fixture taken from a live server rather than an issue excerpt: vLLM 0.33.0
+    # on one RTX 4060 Laptop (8 GB) under WSL2, Qwen2.5-0.5B, captured by `capture`.
+    # It guards the whole chain: a real multiprocess log in, the same facts out.
+    f = facts("vllm-0.33.0-real-rtx4060.log")
+    assert f["engine.version"].value == "0.33.0"
+    assert f["model_runner"].value == "V2"
+    assert f["backend.attention"].value == "FLASH_ATTN"
+    assert f["kv_cache.layout"].value == "LBNHC"
+    assert f["uva_buffers"].value == "fallback: device memory"
+    assert f["parallel.world_size"].value == 1
+    assert f["startup"].value == "ready"
+    # Facts an excerpt cannot carry: the graph capture list and the compiled artifacts.
+    assert f["cuda_graph.captures"].value == ["PIECEWISE x51", "FULL x2", "FULL x35"]
+    assert f["model_loading.gib"].value == 0.93
+
+
 # --- Synthetic lines in the formats of the user's real logs -----------------------
 
 VLLM = """\
