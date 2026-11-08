@@ -309,7 +309,7 @@ contains `TOKEN`, `KEY`, `SECRET`, `PASSWORD`, `CREDENTIAL` or `AUTH` are replac
 | arguments | `non-default args` | `server_args` (all args) |
 | attention backend | `Using X attention backend` | `attention_backend` arg |
 | MoE backend | three log formats seen in 0.23–0.30, plus the full candidate list when the build prints it separately | `moe_runner_backend` arg |
-| CUDA graph | eager mode, `cudagraph_mode`, capture sets, pool size | prefill CUDA graph disabled |
+| CUDA graph | eager mode, `cudagraph_mode`, capture sets, capture time and memory, pool size | prefill CUDA graph disabled |
 | model runner, UVA fallback | `Using V2 Model Runner`; V1 runner detected via `gpu_model_runner.py` module; pinned-memory fallback | — |
 | all-reduce path | chosen chain per TP group + candidate pool (`all-reduce backends (in dispatch order) … out of potential backends`), FlashInfer's auto-selected backend and its norm / norm-quantization fusion workspaces (0.3.7+) | — |
 | parallel config | `world_size`, DP/PP/PCP/TP/ETP/EP/EPLB role assignment | — |
