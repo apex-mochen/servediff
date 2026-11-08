@@ -442,6 +442,49 @@ def test_audit_names_the_lines_nothing_reads():
     assert "nothing unread" in audit.report(Path("excerpt.log"), excerpt)
 
 
+def test_audit_separates_noise_from_shapes_worth_a_look():
+    # A report that dumps 80 lines, 59 of them route tables and banner art, does not get
+    # read. Noise is counted apart, and --everything is the only way to see it.
+    from servediff import audit
+
+    real = (FIX / "vllm-0.33.0-real-rtx4060.log").read_text(encoding="utf-8")
+    counts, samples = audit.unread_samples(real)
+    look, noise = audit.split(counts, samples)
+    assert sum(look.values()) < sum(counts.values())
+    assert sum(noise.values()) > 0
+    default = audit.report(Path("real.log"), real)
+    assert "line(s) worth a look" in default
+    assert "line(s) of noise" in default
+    assert "--everything to list them" in default
+    assert "Route: /" not in default
+    everything = audit.report(Path("real.log"), real, everything=True)
+    assert "Route: /" in everything
+    # Classifying on the shape alone loses the status code, so access logs would stay in
+    # the "worth a look" list; they must be noise.
+    assert audit.is_noise('INFO:     127.0.0.1:8000 - "GET /health HTTP/1.1" 200 OK')
+
+
+def test_audit_does_not_call_a_read_line_unread():
+    # audit and parse() must agree: a line parse() records a value from (here the
+    # graph-capture summary) may never be offered back to the user as ignored.
+    from servediff import audit
+    from servediff.cli import parse
+
+    real = (FIX / "vllm-0.33.0-real-rtx4060.log").read_text(encoding="utf-8")
+    facts = parse(real)["facts"]
+    assert facts["cuda_graph.capture_s"].value == [3, 4]
+    assert facts["cuda_graph.capture_gib"].value == [0.25, 0.18]
+
+    text_lines = real.splitlines()
+    counts, samples = audit.unread_samples(real)
+    for fact in facts.values():
+        for lineno, evidence in fact.evidence:
+            if not lineno:
+                continue  # engine / arg-derived facts carry no line number
+            assert audit.shape(evidence) not in counts, (
+                f"line {lineno} is read but reported unread: {evidence[:60]}")
+
+
 def test_package_version_is_the_same_number_the_cli_prints():
     # __version__ used to be a literal "0.1.0" while --version read the installed
     # distribution, so anyone checking servediff.__version__ saw a stale release.

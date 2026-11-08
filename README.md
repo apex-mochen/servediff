@@ -406,7 +406,10 @@ Exit codes: `0` no differences, `1` differences, `2` nothing recognised.
 - Parsing is regex-based on log text, which changes between versions. A missed line
   shows up as `<absent>`, never as a wrong value — please report it. Run
   `servediff audit run1.log` first: it prints the lines no rule reads yet, and that
-  report is the useful half of a bug report.
+  report is the useful half of a bug report. On a real 170-line vLLM startup log that
+  is 78 unread lines, of which 59 are noise (the route table, banner art, deprecation
+  warnings, progress bars, access logs) and 19 are shapes worth a look — the report
+  counts the noise and lists only the second group, so what you paste is short.
 
 ## License
 

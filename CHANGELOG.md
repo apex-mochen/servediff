@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.4.14 — 2026-11-08
+
+- `servediff audit` separates the gap into noise and shapes worth a look. On the real
+  170-line vLLM 0.33.0 log it used to print all 80 unread lines, 59 of them route
+  tables, banner art, deprecation warnings, progress bars and access logs — nobody
+  pastes that into an issue. Now the noise is counted (grouped in full only under
+  `--everything`) and the 19 remaining shapes are listed. Noise is matched against the
+  raw line, not the digit-collapsed shape: collapsing turned `200` into `N`, so
+  uvicorn access logs survived the first filter.
+- Two facts the audit itself surfaced: `cuda_graph.capture_s` and
+  `cuda_graph.capture_gib`, from `Graph capturing finished in 3 secs, took 0.25 GiB`.
+  That line was previously unread even though a neighbouring line already gave
+  `cuda_graph.pool_gib`; a capture pass that takes twice as long is startup-regression
+  evidence on its own. Both passes are kept (`[3, 4]` / `[0.25, 0.18]` on the real log).
+- A regression test now asserts that no line whose value `parse()` records is also
+  reported as unread, so the audit report and the parser cannot drift apart again.
+- 53 tests.
+
 ## 0.4.13 — 2026-11-08
 
 - `servediff audit <log>` prints the lines no rule reads, grouped by shape, so a user

@@ -76,6 +76,11 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
      lambda m: [("cuda_graph.captures", f"{m[1]} x{m[2]}")]),
     (re.compile(r"CUDA graph pool memory: ([\d.]+) GiB \(actual\)"),
      lambda m: [("cuda_graph.pool_gib", float(m[1]))]),
+    # The end of a capture pass: "Graph capturing finished in 3 secs, took 0.25 GiB".
+    # Printed once per pass (decode and prefill capture separately), so both values are
+    # kept -- a capture that took twice as long is a startup-time regression on its own.
+    (re.compile(r"Graph capturing finished in (\d+) secs, took ([\d.]+) GiB"),
+     lambda m: [("cuda_graph.capture_s", int(m[1])), ("cuda_graph.capture_gib", float(m[2]))]),
     (re.compile(r"FlashInfer top-p/top-k sampling (disabled|enabled)"),
      lambda m: [("backend.sampling_flashinfer", m[1])]),
     (re.compile(r"Using (V\d) Model Runner"), lambda m: [("model_runner", m[1])]),
@@ -589,7 +594,8 @@ def main(argv=None) -> int:
     sub.add_parser("demo", help="diff two logs shipped with the package; needs no log files")
     a = sub.add_parser("audit", help="list log lines servediff reads nothing from (report a missed fact)")
     a.add_argument("logs", type=Path, nargs="+", help="server logs, or - to read stdin")
-    a.add_argument("--top", type=int, default=0, help="only the N most common shapes per log")
+    a.add_argument("--top", type=int, default=0, help="only the N most common shapes worth a look")
+    a.add_argument("--everything", action="store_true", help="also list the noise shapes")
     args = parser.parse_args(argv)
 
     if args.command == "audit":
@@ -605,7 +611,8 @@ def main(argv=None) -> int:
             except InputError as exc:
                 print(f"audit: {exc}", file=sys.stderr)
                 return 2
-            blocks.append(auditmod.report(Path(_label(path)), text, limit=args.top))
+            blocks.append(auditmod.report(Path(_label(path)), text,
+                                          limit=args.top, everything=args.everything))
         print("\n\n".join(blocks))
         return 0
 
