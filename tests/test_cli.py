@@ -767,6 +767,35 @@ def test_a_per_request_crash_reads_its_indexerror_as_the_cause():
     assert not look, sorted(look)
 
 
+def test_a_multi_node_box_reads_its_per_card_model_and_its_nic_grid_as_noise():
+    # vllm#66192, a GB200 NVL node: the aggregate line is printed empty and each card
+    # carries the model, and `collect_env` ends with the InfiniBand NIC topology grid.
+    # An empty value is an absence, so the promoting pass is what fills gpu.model.
+    path = FIX / "vllm-0.33.0rc1-gb200.log"
+    f = servediff.parse(path.read_text(encoding="utf-8"))["facts"]
+    assert f["gpu.model"].value == "NVIDIA GB200"
+    assert all(str(v).strip() for fact in f.values() for v in fact.values)
+    assert f["env.os"].value == "Ubuntu 24.04.3 LTS (aarch64)"
+    counts, samples = servediff_audit.unread_samples(path.read_text(encoding="utf-8"))
+    look, _ = servediff_audit.split(counts, samples)
+    assert not look, sorted(look)
+    # The topologies and their legends describe the machine, not the run.
+    assert servediff_audit.is_noise("NIC0: mlx5_0")
+    assert servediff_audit.is_noise("NIC0\tNODE\t X \tPIX\tNODE\tNODE\tNODE\tNODE")
+    assert servediff_audit.is_noise("NIC Legend:")
+
+
+def test_a_single_gpu_report_reads_the_model_once_even_when_the_line_repeats_it():
+    # vllm#66193 prints `GPU models and configuration : GPU 0: NVIDIA RTX PRO 6000 …` —
+    # the value carries the per-card prefix, which is not part of the model name.
+    path = FIX / "vllm-0.33.0rc1-rtx-pro-6000.log"
+    f = servediff.parse(path.read_text(encoding="utf-8"))["facts"]
+    assert f["gpu.model"].value == "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+    counts, samples = servediff_audit.unread_samples(path.read_text(encoding="utf-8"))
+    look, _ = servediff_audit.split(counts, samples)
+    assert not look, sorted(look)
+
+
 def test_the_tp8_report_log_leaves_nothing_unread_because_these_facts_are_read():
     # Every line below is a shape the audit named as "no rule reads them" on a real
     # vLLM 0.23.1 TP=8 startup log. They are the configuration that made that run

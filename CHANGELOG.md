@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.4.29 — 2026-11-09
+
+- Two more reports, both on hardware the earlier logs did not cover: a GB200 NVL node
+  (vllm#66192, aarch64, SM100, torch 2.14.0) and an RTX PRO 6000 Blackwell box
+  (vllm#66193). Each carried 9 and 13 "shapes worth a look" that were all machine
+  topology — the InfiniBand NIC grid (`NIC0: mlx5_0`, one row per NIC, `NIC Legend:`) —
+  and an empty `GPU models and configuration` fact that said nothing.
+- An empty value is an absence now. Multi-node images print
+  `GPU models and configuration :` with nothing after the colon and then one
+  `GPU 0: NVIDIA GB200` per card; that produced `gpu.model = ""`, which compares equal to
+  another log's empty string instead of being absent.
+- The per-card line is read as the model when the aggregate is silent, and the aggregate's
+  own per-card prefix is dropped: `GPU models and configuration : GPU 0: NVIDIA RTX PRO 6000
+  Blackwell Server Edition` now yields `NVIDIA RTX PRO 6000 Blackwell Server Edition`, not
+  `GPU 0: NVIDIA …`.
+- Two new fixtures, two new tests, 72 tests.
+
 ## 0.4.28 — 2026-11-09
 
 - The second class of misses, found the same way: twelve logs from issues the tool had never

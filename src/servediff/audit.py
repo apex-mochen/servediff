@@ -56,6 +56,11 @@ def message(line: str) -> str:
 # They are matched against the *raw* line, not the shape, because collapsing digits
 # destroys the input they key on (a 200 status becomes N).
 NOISE = (
+    # An InfiniBand NIC topology table (GB200 / HGX multi-node): the same grid as the
+    # GPU one, one row per NIC, its chip names, and its legend.
+    re.compile(r"^NIC\s*\d+: \S+$"),
+    re.compile(r"^NIC\d+([\s]|$)"),
+    re.compile(r"^NIC Legend:"),
     re.compile(r"Route: /\S*"),  # the HTTP route table
     re.compile(r"[\u2580-\u259f]{2,}"),  # box-drawing banners (██▄█▀)
     re.compile(r"\[\w+\.py:\d+\]\s*$"),  # banner lines that printed nothing after the tag

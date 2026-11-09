@@ -507,8 +507,10 @@ Exit codes: `0` no differences, `1` differences, `2` nothing recognised.
   yields the version facts instead of 175 "shapes worth a look". The NVIDIA side and a
   second engine are covered by more public reports: a production-image `collect_env`
   (vllm#63505, vLLM 0.32.0, CUDA 13.0), an eight-card MI355X block (vllm#65611) and a
-  gVisor run (vllm#65250) — each 44–61 "worth a look" lines before, nothing after; and six
-  SGLang startup logs (sglang#41654, #42684, #43741, #46756, #48502, #49206), where the
+  gVisor run (vllm#65250) — each 44–61 "worth a look" lines before, nothing after; a GB200
+  NVL node (vllm#66192, aarch64, SM100) and an RTX PRO 6000 Blackwell box (vllm#66193) —
+  nothing after, once the per-card model line and the InfiniBand NIC grid were understood;
+  and six SGLang startup logs (sglang#41654, #42684, #43741, #46756, #48502, #49206), where the
   brackets around SGLang's timestamp and its own `name: value` dump were the misses. The
   parallel-config and all-reduce rules are checked against real TP>1 logs; MoE models in
   full logs, SGLang versions other than 0.4.4–0.5.20, Intel GPUs and other engines are not

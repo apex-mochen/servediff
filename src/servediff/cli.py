@@ -42,7 +42,7 @@ _ABSENT = ("n/a", "not set", "unknown")
 
 def _env(key, value):
     text = str(value).strip()
-    if text.lower() in _ABSENT or text.lower().startswith("could not collect"):
+    if not text or text.lower() in _ABSENT or text.lower().startswith("could not collect"):
         return []
     return [(key, text)]
 
@@ -154,7 +154,12 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
     (re.compile(r"^HIP runtime version\s+:\s*(.+)$"), lambda m: _env("env.hip", m[1])),
     (re.compile(r"^OS\s+:\s*(.+)$"), lambda m: [("env.os", m[1].strip())]),
     (re.compile(r"^Python version\s+:\s*(\S+)"), lambda m: [("env.python", m[1])]),
-    (re.compile(r"^GPU models and configuration\s+:\s*(.+)$"), lambda m: _env("gpu.model", m[1])),
+    (re.compile(r"^GPU models and configuration\s+:\s*(?:(?:GPU|NIC) \d+: )?(.+)$"),
+     lambda m: _env("gpu.model", m[1])),
+    # Multi-node boxes print the aggregate empty and then one `GPU 0: NVIDIA GB200`
+    # per card; the post-pass below promotes that to gpu.model only when nothing
+    # else stated it.
+    (re.compile(r"^GPU \d+: (.+)$"), lambda m: _env("gpu.card", m[1])),
     (re.compile(r"^\[pip3\] (torch|triton|transformers|numpy|flashinfer-python)==(\S+)\b"),
      lambda m: [(f"env.pip.{m[1]}", m[2])]),
     # collect_env ends with the environment the engine ran in. Any NAME=value there is a
@@ -491,6 +496,9 @@ def parse(text: str) -> dict:
                             put("startup", "failed", lineno, line)
                     put(key, value, lineno, line)
 
+    card = facts.pop("gpu.card", None)
+    if card is not None and "gpu.model" not in facts:
+        facts["gpu.model"] = card
     if engine:
         facts.setdefault("engine", Fact()).add(engine, 0, "(detected from log format)")
     for name, (vllm_key, sglang_key, transform) in SHARED_ARGS.items():

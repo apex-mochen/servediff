@@ -96,6 +96,8 @@ ran: six vLLM and six SGLang.
 | sglang#41654 | SGLang 0.5.20 environment dump | 39 | 0 |
 | sglang#42684 | NIXL backend, scheduler dies at startup | 12 | 0 |
 | sglang#43741 / #49206 / #48502 / #46756 | four shorter SGLang reports | 11 / 3 / 2 / 0 | 0 |
+| vllm#66192 | GB200 NVL node, aarch64, SM100 | 9 | 0 |
+| vllm#66193 | RTX PRO 6000 Blackwell, aggregate line repeats the card prefix | 13 | 0 |
 
 Three classes of miss, none of which is a single bad regex:
 
@@ -118,8 +120,15 @@ Three classes of miss, none of which is a single bad regex:
   the prefix handling on its own, which is how the two drifted apart.
 
 The machine-inventory half is the same idea as the ROCm block: an eight-card `rocm-smi`
-weight / hops / link-type matrix, the GPU topology grid with its `Legend:`, `GPU N:` headers
-and Hypervisor lines describe the box, not the run.
+weight / hops / link-type matrix, the GPU topology grid with its `Legend:`, `GPU N:` headers,
+Hypervisor lines and the InfiniBand `NIC0: mlx5_0` grid describe the box, not the run.
+
+- **An empty value that looks like a fact.** A multi-node image prints
+  `GPU models and configuration :` and then one `GPU 0: NVIDIA GB200` per card, so the
+  aggregate yielded `gpu.model = ""` — a fact that matched another log's empty string instead
+  of being absent. Empty is now an absence, and when the aggregate is silent the per-card
+  line supplies the model (with its own `GPU 0:` prefix removed, since some images paste the
+  whole card line after the colon).
 
 Two useful side effects on the way:
 
@@ -135,13 +144,12 @@ Two useful side effects on the way:
 
 ## What zero does and does not mean
 
-Zero here is a claim about **what these eighteen logs print**, not about log space. The four
-full logs above, two fixtures (a crashed startup and a clean 170-line run) and the twelve
+Zero here is a claim about **what these twenty logs print**, not about log space. The four
+full logs above, two fixtures (a crashed startup and a clean 170-line run) and the fourteen
 issue pastes all report `nothing worth a look`; a log from a stack none of them covers may
 well print shapes no rule knows — and one did: the ROCm block started at 175 and needed two
-rounds of work before it reached zero, and the twelve pastes after it added three more
-classes of miss before they did. That is
-precisely why the audit prints the second group at all, and why
+rounds of work before it reached zero, and the pastes after it added four more classes of
+miss before they did. That is precisely why the audit prints the second group at all, and why
 `servediff audit --max-shapes 20` exists as a gate: zero is measured per log, and the next
 unfamiliar log is expected to break it.
 
