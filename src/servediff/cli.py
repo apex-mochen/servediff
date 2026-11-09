@@ -708,6 +708,17 @@ class InputError(Exception):
     """An input path could not be read. Callers map it to exit 2, never to 1."""
 
 
+def _expand_logs(paths):
+    """Directories become every *.log inside them, so one command audits a corpus."""
+    out = []
+    for path in paths:
+        if str(path) != "-" and path.is_dir():
+            out.extend(sorted(path.glob("*.log")))
+        else:
+            out.append(path)
+    return out
+
+
 def _read_log(path) -> str:
     """Read a log path, or stdin when the path is `-`.
 
@@ -787,20 +798,41 @@ def main(argv=None) -> int:
             return 2
         from servediff import audit as auditmod
 
+        logs = _expand_logs(args.logs)
         blocks = []
+        summary = []
         # Counted separately from the printed report so a threshold decision never depends
         # on parsing the report text back.
         shapes_worth_a_look = 0
-        for path in args.logs:
+        for path in logs:
             try:
                 text = _read_log(path)
             except InputError as exc:
                 print(f"audit: {exc}", file=sys.stderr)
                 return 2
             counts, samples = auditmod.unread_samples(text)
-            shapes_worth_a_look += len(auditmod.split(counts, samples)[0])
+            look, _ = auditmod.split(counts, samples)
+            shapes_worth_a_look += len(look)
             blocks.append(auditmod.report(Path(_label(path)), text,
                                           limit=args.top, everything=args.everything))
+            summary.append((Path(_label(path)).name, sum(counts.values()), len(counts), look))
+        if len(logs) > 1 and not args.markdown:
+            # A corpus asks a different question from one log: which of these still
+            # has a shape no rule reads. One line each, then only the rows that matter.
+            out = []
+            for name, unread, shapes, look in summary:
+                verdict = (f"{len(look)} shape(s) worth a look" if look
+                           else "nothing worth a look")
+                out.append(f"{name:<42} {unread:>6} unread  {shapes:>4} shape(s)  {verdict}")
+                for line, count in look.most_common(args.top or None):
+                    out.append(f"    {count:>4}  {line[:150]}")
+            with_look = sum(1 for item in summary if item[3])
+            out.append(f"{len(logs)} log(s): {with_look} with shapes worth a look")
+            print("\n".join(out))
+            if args.max_shapes is not None:
+                print(f"audit: {shapes_worth_a_look} shape(s) worth a look,"
+                      f" threshold {args.max_shapes}", file=sys.stderr)
+            return _audit_gate(args.max_shapes, shapes_worth_a_look)
         if args.markdown:
             # The issue form asks for the engine, the line, and this report, so step three
             # should be one paste. The fence is made longer than any run of backticks in

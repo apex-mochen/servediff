@@ -61,6 +61,9 @@ NOISE = (
     re.compile(r"^NIC\s*\d+: \S+$"),
     re.compile(r"^NIC\d+([\s]|$)"),
     re.compile(r"^NIC Legend:"),
+    # `ldd` output: one absolute path per shared library, a dependency dump rather
+    # than a runtime setting.
+    re.compile(r"^/[\w./+-]+\.so[\w.]*$"),
     re.compile(r"Route: /\S*"),  # the HTTP route table
     re.compile(r"[\u2580-\u259f]{2,}"),  # box-drawing banners (██▄█▀)
     re.compile(r"\[\w+\.py:\d+\]\s*$"),  # banner lines that printed nothing after the tag

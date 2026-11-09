@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.30 — 2026-11-09
+
+- `servediff audit` takes a directory (or several paths) and answers for the whole corpus:
+  one line per log with its unread count, shape count and verdict, then only the rows that
+  matter. `servediff audit tests/fixtures` audits all twenty logs in one command, which is
+  the claim this project rests on, now checkable in one line instead of twenty runs.
+- One more report from the field: vllm#65873, a GB10 (aarch64) box running
+  `Nemotron-3.5-Super-VL-120B-A12B-NVFP4` with native MTP. Its nine shapes worth a look were
+  all absolute paths to `libcudnn*.so` — an `ldd` dependency dump, which is machine
+  inventory, not a setting. Now noise; the log reports nothing worth a look.
+  A missing library in an `ImportError` stays a fact.
+- Twenty fixtures, 76 tests.
+
 ## 0.4.29 — 2026-11-09
 
 - Two more reports, both on hardware the earlier logs did not cover: a GB200 NVL node

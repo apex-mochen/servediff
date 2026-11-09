@@ -60,6 +60,14 @@ servediff diff examples/issue-excerpts/vllm-47047-v0.23-default.log examples/iss
 Install from PyPI. A different, unrelated tool also uses the name `servediff` in a
 third-party Homebrew tap; the `pip install servediff` package is this one.
 
+The measurement this project is built on — twenty logs pasted into public bug reports,
+nothing the parser cannot read — is one command in a checkout, and it answers for every log
+with one line each:
+
+```bash
+servediff audit tests/fixtures      # a directory audits every *.log inside it
+```
+
 ```text
 note: baseline: no all-reduce facts and no rank line: cannot tell whether this run had more than one rank, so an absent all-reduce path here is inconclusive
 note: candidate: no all-reduce facts and no rank line: cannot tell whether this run had more than one rank, so an absent all-reduce path here is inconclusive
@@ -110,7 +118,7 @@ names a python launcher, that interpreter is the one snapshotted; for entry poin
 | `servediff env [--python P] [-o snap.json]` | that interpreter's packages, GPU info, and env vars whose names start with `VLLM_` / `SGLANG_` / `SGL_` / `CUDA_` / `NCCL_` / `TORCH_` / `PYTORCH_` / `FLASHINFER_` / `TRITON_` or are `HF_HUB_OFFLINE` / `TRANSFORMERS_OFFLINE`; secret-looking names become `<redacted>` | `0` written; `2` snapshot failed |
 | `servediff capture [-o run.log] -- <server command>` | runs the server, tees its log to stdout and to the file, and writes `<out>.env.json` **before** launch. If the command names a python launcher (`capture -- python -m vllm...`), that interpreter is the one snapshotted; otherwise pass `--python` to point at the server's venv | the server's own exit code |
 | `servediff demo` | two excerpt logs shipped inside the package → a real diff with no log files of your own; run this first after installing | `1` always (the bundled logs differ; see the note it prints) |
-| `servediff audit <log>` | the lines no rule reads, split into noise (counted) and shapes worth a look (listed); `--top N`, `--everything`, `--markdown`, `--max-shapes N` | `0` reported; `1` more shapes worth a look than `--max-shapes` allows; `2` unreadable path |
+| `servediff audit <log|dir>` | the lines no rule reads, split into noise (counted) and shapes worth a look (listed); a directory (or several paths) is audited as one corpus, one line per log; `--top N`, `--everything`, `--markdown`, `--max-shapes N` | `0` reported; `1` more shapes worth a look than `--max-shapes` allows; `2` unreadable path |
 
 `1` always means *the inputs differ* — never *something went wrong* — so
 `servediff diff old.log new.log` works directly as a CI gate. At most one input may be

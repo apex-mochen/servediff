@@ -123,6 +123,10 @@ The machine-inventory half is the same idea as the ROCm block: an eight-card `ro
 weight / hops / link-type matrix, the GPU topology grid with its `Legend:`, `GPU N:` headers,
 Hypervisor lines and the InfiniBand `NIC0: mlx5_0` grid describe the box, not the run.
 
+- **A dependency dump read as settings.** A GB10 box reporting a native-MTP failure
+  (vllm#65873) printed every `libcudnn*.so` by absolute path — `ldd` output. Nine lines,
+  nine "settings". A bare shared-library path is now noise; an `ImportError: libcudart.so.13:
+  cannot open shared object file` is the opposite case and stays a fact.
 - **An empty value that looks like a fact.** A multi-node image prints
   `GPU models and configuration :` and then one `GPU 0: NVIDIA GB200` per card, so the
   aggregate yielded `gpu.model = ""` — a fact that matched another log's empty string instead

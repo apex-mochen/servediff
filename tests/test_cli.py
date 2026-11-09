@@ -221,6 +221,50 @@ def test_audit_gate_fails_only_when_the_parser_is_behind(tmp_path, capsys):
     assert servediff.main(["audit", str(noisy), "--max-shapes", "0"]) == 0
 
 
+def test_a_directory_is_audited_as_one_corpus_with_a_line_per_log(capsys):
+    # The claim "twenty logs from public reports, nothing worth a look" should be
+    # checkable in one command rather than twenty.
+    logs = sorted(FIX.glob("*.log"))
+    assert servediff.main(["audit", str(FIX)]) == 0
+    out = capsys.readouterr().out
+    assert f"{len(logs)} log(s): 0 with shapes worth a look" in out
+    assert "nothing worth a look" in out
+    assert servediff.main(["audit", str(FIX), "--max-shapes", "0"]) == 0
+
+
+def test_a_corpus_names_the_one_log_that_still_has_a_shape(tmp_path, capsys):
+    clean = tmp_path / "clean.log"
+    clean.write_text((FIX / "vllm-0.30.0-gvisor-cuda-collectenv.log").read_text(encoding="utf-8"),
+                     encoding="utf-8")
+    odd = tmp_path / "odd.log"
+    odd.write_text("TENSOR_PARALLEL_STRIDE 37 for rank 3 on device 5\n", encoding="utf-8")
+    assert servediff.main(["audit", str(tmp_path), "--max-shapes", "0"]) == 1
+    out = capsys.readouterr().out
+    assert "odd.log" in out
+    assert "1 with shapes worth a look" in out
+
+
+def test_a_library_dependency_dump_is_noise_but_a_missing_library_is_a_fact():
+    # vllm#65873 on a GB10 box: `ldd` lists every cudnn module by absolute path. That is a
+    # dependency dump, not a setting, and it should not read as thirty "settings".
+    assert servediff_audit.is_noise("/usr/lib/aarch64-linux-gnu/libcudnn_ops.so.9.9.9")
+    assert servediff_audit.is_noise("/usr/lib/aarch64-linux-gnu/libcudnn_engines_precompiled.so.9.9.9")
+    # An ImportError naming a missing library is the opposite case and stays readable.
+    assert not servediff_audit.is_noise(
+        "ImportError: libcudart.so.13: cannot open shared object file: No such file or directory")
+
+
+def test_a_gb10_box_reads_its_model_and_its_dependency_list_as_noise():
+    path = FIX / "vllm-0.33.0-gb10-nemotron-nvfp4.log"
+    f = servediff.parse(path.read_text(encoding="utf-8"))["facts"]
+    assert f["engine.version"].value.startswith("0.33.0")
+    assert f["gpu.model"].value == "NVIDIA GB10"
+    assert f["env.os"].value == "Ubuntu 24.04.5 LTS (aarch64)"
+    counts, samples = servediff_audit.unread_samples(path.read_text(encoding="utf-8"))
+    look, _ = servediff_audit.split(counts, samples)
+    assert not look, sorted(look)
+
+
 def test_skip_absent_keeps_only_rows_both_logs_printed(tmp_path, capsys):
     # A run that died leaves every later fact <absent>; those one-sided rows outnumber the
     # real differences and bury them. --skip-absent must hide them while still failing, and

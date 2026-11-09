@@ -31,6 +31,13 @@ servediff diff examples/issue-excerpts/vllm-47047-v0.23-default.log examples/iss
 
 差异落在 MoE backend：从 `VLLM_CUTLASS (NvFp4)` 变为 `MARLIN (NvFp4)`。这正是 [vllm#47047](https://github.com/vllm-project/vllm/issues/47047) 的报告者在 v0.21 → v0.23 吞吐下降后，靠人工找出来的差异。
 
+这个项目所依赖的那个测量结果——二十份从公开 bug 报告里粘下来的日志，没有一行是解析器读不了的——在仓库里是一条命令，每份日志一行结论：
+
+```bash
+servediff audit tests/fixtures      # 给目录就审计里面所有 *.log
+```
+
+
 前面还会打印两行 `note:`：这份摘录里没有 rank 行，工具无法判断它是不是多卡运行，所以它直接说明「此处无法判定」，而不是让你把沉默读成「没变」。这是输出的一部分，不是噪声。
 
 从 PyPI 安装（`pip install servediff`）。另有一个同名但无关的工具放在第三方 Homebrew tap 里，`pip` 装到的这个才是本项目。
@@ -63,7 +70,7 @@ Ctrl-C 会停掉 server、保留日志、退出码 `130`；server 自己结束�
 | `servediff env [--python P] [-o snap.json]` | 该解释器的包、GPU 信息，以及名字以 `VLLM_` / `SGLANG_` / `SGL_` / `CUDA_` / `NCCL_` / `TORCH_` / `PYTORCH_` / `FLASHINFER_` / `TRITON_` 开头的环境变量和 `HF_HUB_OFFLINE` / `TRANSFORMERS_OFFLINE`；看起来像密钥的名字一律写成 `<redacted>` | `0` 已写出；`2` 快照失败 |
 | `servediff capture [-o run.log] -- <启动命令>` | 跑起 server、把日志同时输出到终端和文件，并在启动**之前**写出 `<out>.env.json`。命令里自带 python 启动器时（`capture -- python -m vllm...`），快照的就是那个解释器；否则用 `--python` 指到 server 所在的环境 | server 自己的退出码 |
 | `servediff demo` | 用包内自带的 vllm#47047 摘录跑一次 diff，不需要任何现成日志 | `1`（这两份日志确实有差异，那是结果） |
-| `servediff audit <log>...` | 列出没有任何规则读到的行，分成噪声（只报数量）和「值得看一眼」的形状（逐条列出）；`--top N` / `--everything` / `--markdown` / `--max-shapes N` | `0` 已读；`1` 值得看一眼的形状超过 `--max-shapes`；`2` 读不了，或 `-` 用了不止一次 |
+| `servediff audit <log|dir>...` | 列出没有任何规则读到的行，分成噪声（只报数量）和「值得看一眼」的形状（逐条列出）；给目录（或给多个路径）时按一个语料整体跑，每份日志一行结论；`--top N` / `--everything` / `--markdown` / `--max-shapes N` | `0` 已读；`1` 值得看一眼的形状超过 `--max-shapes`；`2` 读不了，或 `-` 用了不止一次 |
 
 `1` 只表示「输入不同」，不表示「出错」，所以 `servediff diff old.log new.log` 可以直接当 CI 门禁。`-` 至多出现一次：stdin 只能读一遍。
 

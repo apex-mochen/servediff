@@ -1,0 +1,192 @@
+==============================
+        System Info
+==============================
+OS                           : Ubuntu 24.04.5 LTS (aarch64)
+GCC version                  : (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+Clang version                : Could not collect
+CMake version                : version 3.31.6
+Libc version                 : glibc-2.39
+
+==============================
+       PyTorch Info
+==============================
+PyTorch version              : 2.15.0a0+fd23299d96
+Is debug build               : False
+CUDA used to build PyTorch   : 13.5
+ROCM used to build PyTorch   : N/A
+XPU used to build PyTorch    : N/A
+
+==============================
+      Python Environment
+==============================
+Python version               : 3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0] (64-bit runtime)
+Python platform              : Linux-7.0.0-1019-nvidia-aarch64-with-glibc2.39
+    
+==============================
+       CUDA / GPU Info
+==============================
+Is CUDA available            : True
+CUDA runtime version         : 13.5.37
+CUDA_MODULE_LOADING set to   : 
+GPU models and configuration : GPU 0: NVIDIA GB10
+Nvidia driver version        : 580.178.04
+cuDNN version                : Probably one of the following:
+/usr/lib/aarch64-linux-gnu/libcudnn.so.9.28.0
+/usr/lib/aarch64-linux-gnu/libcudnn_adv.so.9.28.0
+/usr/lib/aarch64-linux-gnu/libcudnn_cnn.so.9.28.0
+/usr/lib/aarch64-linux-gnu/libcudnn_engines_runtime_compiled.so.9.28.0
+/usr/lib/aarch64-linux-gnu/libcudnn_engines_tensor_ir.so.9.28.0
+/usr/lib/aarch64-linux-gnu/libcudnn_ext.so.9.28.0
+/usr/lib/aarch64-linux-gnu/libcudnn_graph.so.9.28.0
+/usr/lib/aarch64-linux-gnu/libcudnn_heuristic.so.9.28.0
+/usr/lib/aarch64-linux-gnu/libcudnn_ops.so.9.28.0
+HIP runtime version          : N/A
+MIOpen runtime version       : N/A
+Is XNNPACK available         : False
+
+==============================
+          CPU Info
+==============================
+Architecture:                            aarch64
+CPU op-mode(s):                          64-bit
+Byte Order:                              Little Endian
+CPU(s):                                  20
+On-line CPU(s) list:                     0-19
+Vendor ID:                               ARM
+Model name:                              Cortex-X925
+Model:                                   1
+Thread(s) per core:                      1
+Core(s) per socket:                      10
+Socket(s):                               1
+Stepping:                                r0p1
+Frequency boost:                         disabled
+CPU(s) scaling MHz:                      100%
+CPU max MHz:                             3900.0000
+CPU min MHz:                             1378.0000
+BogoMIPS:                                2000.00
+Flags:                                   fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm jscvt fcma lrcpc dcpop sha3 sm3 sm4 asimddp sha512 sve asimdfhm dit uscat ilrcpc flagm sb paca pacg dcpodp sve2 sveaes svepmull svebitperm svesha3 svesm4 flagm2 frint svei8mm svebf16 i8mm bf16 dgh bti ecv afp wfxt
+Model name:                              Cortex-A725
+Model:                                   1
+Thread(s) per core:                      1
+Core(s) per socket:                      10
+Socket(s):                               1
+Stepping:                                r0p1
+CPU(s) scaling MHz:                      100%
+CPU max MHz:                             2808.0000
+CPU min MHz:                             338.0000
+BogoMIPS:                                2000.00
+Flags:                                   fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm jscvt fcma lrcpc dcpop sha3 sm3 sm4 asimddp sha512 sve asimdfhm dit uscat ilrcpc flagm sb paca pacg dcpodp sve2 sveaes svepmull svebitperm svesha3 svesm4 flagm2 frint svei8mm svebf16 i8mm bf16 dgh bti ecv afp wfxt
+L1d cache:                               1.3 MiB (20 instances)
+L1i cache:                               1.3 MiB (20 instances)
+L2 cache:                                25 MiB (20 instances)
+L3 cache:                                24 MiB (2 instances)
+NUMA node(s):                            1
+NUMA node0 CPU(s):                       0-19
+Vulnerability Gather data sampling:      Not affected
+Vulnerability Ghostwrite:                Not affected
+Vulnerability Indirect target selection: Not affected
+Vulnerability Itlb multihit:             Not affected
+Vulnerability L1tf:                      Not affected
+Vulnerability Mds:                       Not affected
+Vulnerability Meltdown:                  Not affected
+Vulnerability Mmio stale data:           Not affected
+Vulnerability Old microcode:             Not affected
+Vulnerability Reg file data sampling:    Not affected
+Vulnerability Retbleed:                  Not affected
+Vulnerability Spec rstack overflow:      Not affected
+Vulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl
+Vulnerability Spectre v1:                Mitigation; __user pointer sanitization
+Vulnerability Spectre v2:                Mitigation; CSV2, BHB
+Vulnerability Srbds:                     Not affected
+Vulnerability Tsa:                       Not affected
+Vulnerability Tsx async abort:           Not affected
+Vulnerability Vmscape:                   Not affected
+
+==============================
+Versions of relevant libraries
+==============================
+[pip3] flashinfer-python==0.7.2.post1+7192be6d
+[pip3] nccl-extensions==0.1.0
+[pip3] nccl4py==0.6.0
+[pip3] numpy==2.1.0
+[pip3] nvidia-cuda-cccl==13.3.4.3.1
+[pip3] nvidia-cuda-crt==13.4.92
+[pip3] nvidia-cuda-nvcc==13.4.92
+[pip3] nvidia-cuda-runtime==13.4.92
+[pip3] nvidia-cudnn-frontend==1.32.1
+[pip3] nvidia-cutlass-dsl==4.8.0
+[pip3] nvidia-cutlass-dsl-libs-base==4.8.0
+[pip3] nvidia-cutlass-dsl-libs-core==4.8.0
+[pip3] nvidia-cutlass-dsl-libs-cu12==4.8.0
+[pip3] nvidia-cutlass-dsl-libs-cu13==4.8.0
+[pip3] nvidia-ml-py==13.615.71
+[pip3] nvidia-nvvm==13.4.92
+[pip3] pyzmq==27.2.0
+[pip3] tokenspeed-triton==3.9.10.post20261028
+[pip3] torch==2.15.0a0+fd23299d96
+[pip3] torch_c_dlpack_ext==0.1.5
+[pip3] torchcodec==0.17.0
+[pip3] torchvision==0.30.0a0+6da25ff8
+[pip3] transformers==5.20.2
+[pip3] triton==3.9.0+gitaad2a60d
+[pip3] triton_kernels==1.0.0+gitaad2a60d
+[conda] Could not collect
+
+==============================
+         vLLM Info
+==============================
+ROCM Version                 : Could not collect
+vLLM Version                 : 0.33.0+2d8e9a9b.dev
+vLLM Build Flags:
+  CUDA Archs: 8.0 8.6 9.0 10.0 11.0 12.0+PTX; ROCm: Disabled; XPU: Disabled
+GPU Topology:
+  	[4mGPU0	NIC0	NIC1	NIC2	NIC3	CPU Affinity	NUMA Affinity	GPU NUMA ID[0m
+GPU0	 X 	NODE	NODE	NODE	NODE	0-19	0		N/A
+NIC0	NODE	 X 	PIX	NODE	NODE				
+NIC1	NODE	PIX	 X 	NODE	NODE				
+NIC2	NODE	NODE	NODE	 X 	PIX				
+NIC3	NODE	NODE	NODE	PIX	 X 				
+
+Legend:
+
+  X    = Self
+  SYS  = Connection traversing PCIe as well as the SMP interconnect between NUMA nodes (e.g., QPI/UPI)
+  NODE = Connection traversing PCIe as well as the interconnect between PCIe Host Bridges within a NUMA node
+  PHB  = Connection traversing PCIe as well as a PCIe Host Bridge (typically the CPU)
+  PXB  = Connection traversing multiple PCIe bridges (without traversing the PCIe Host Bridge)
+  PIX  = Connection traversing at most a single PCIe bridge
+  NV#  = Connection traversing a bonded set of # NVLinks
+
+NIC Legend:
+
+  NIC0: rocep1s0f0
+  NIC1: rocep1s0f1
+  NIC2: roceP2p1s0f0
+  NIC3: roceP2p1s0f1
+
+==============================
+     Environment Variables
+==============================
+NVIDIA_VISIBLE_DEVICES=void
+CUBLAS_VERSION=13.10.0.20
+PYTORCH_TRITON_VERSION=3.9.0+gitaad2a60d
+NVIDIA_REQUIRE_CUDA=cuda>=9.0
+TORCH_CUDA_ARCH_LIST=8.0 8.6 9.0 10.0 11.0 12.0+PTX
+NCCL_VERSION=2.32.5
+NVIDIA_DRIVER_CAPABILITIES=compute,utility,video
+CUDA_ARCH_LIST=8.0 8.6 9.0 10.0 11.0 12.0
+CUDA_VERSION=13.5.0.025
+CUBLASMP_VERSION=0.11.0.4074
+CUDNN_FRONTEND_VERSION=1.32.0
+MAX_JOBS=12
+CUDA_COMPONENT_LIST=crt nvrtc driver-dev culibos-dev cudart cudart-dev nvcc tileiras cupti
+CUDNN_VERSION=9.28.0.42
+LD_LIBRARY_PATH=/usr/local/cuda/compat/lib.real:/opt/hpcx/ucx/lib:/opt/ffmpeg-safe/lib:/usr/local/lib/python3.12/dist-packages/torch/lib:/usr/local/lib/python3.12/dist-packages/torch_tensorrt/lib:/usr/local/nixlbench/lib:/usr/local/lib:/opt/amazon/efa/lib:/usr/lib:/usr/local/cuda/compat/lib:/usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/local/nixl/lib/x86_64-linux-gnu:/usr/local/nixl/lib/aarch64-linux-gnu
+NVIDIA_CTK_LIBCUDA_DIR=/usr/lib/aarch64-linux-gnu
+CUDA_DRIVER_VERSION=620.70.04
+CUDA_HOME=/usr/local/cuda
+CUDA_HOME=/usr/local/cuda
+PYTORCH_NVML_BASED_CUDA_CHECK=1
+TORCHINDUCTOR_COMPILE_THREADS=1
+TORCHINDUCTOR_CACHE_DIR=/tmp/torchinductor_root
+
