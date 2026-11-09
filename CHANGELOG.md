@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.4.22 — 2026-11-09
+
+- `servediff audit` now reads a crashed log. Every line of a real multi-process log carries
+  a preamble (`(EngineCore pid=3811) ERROR 10-28 11:26:34 [core.py:1346] …`), and the noise
+  patterns described the message, not the prefixed line — so a whole traceback came back as
+  "shapes worth a look". The classifier now strips the preamble first (process, level,
+  `MM-DD HH:MM:SS` timestamp, `- INFO -`, `module.py:line`), then matches the message, and
+  also retries with a trailing `# comment` removed. On the four full real logs in this repo
+  the count of shapes worth a look went 146 → 1 (vLLM 0.28.0 crash, UVA), 66 → 5 (0.28.0 with
+  the V1 runner), 89 → 4 (0.30.0 killed after starting), 190 → 70 (the TP=8 0.23.1 report) —
+  and what is left in the last one is configuration the parser genuinely does not read yet
+  (`Using Eagle3 auxiliary layers from config`, `Model loading took … GiB and … seconds`).
+- Traceback frames, `^^^` markers, `Process EngineCore:`, `--- Logging error ---` dumps,
+  `[shutdown]` teardown lines, uvicorn's shutdown narration, `resource_tracker` and NCCL
+  teardown warnings, `[Autotuner]: Autotuning process starts`, and text pasted from the issue
+  template are all noise now. A real setting that carries the same preamble stays visible:
+  the new test asserts three such lines are *not* noise, so widening a pattern has to break
+  the suite.
+- New fixture `tests/fixtures/vllm-crash-traceback.log`: a 43-line excerpt of a real crashed
+  startup (engine and API-server tracebacks, a logging-error dump, shutdown chatter), with
+  machine paths anonymised but line shapes untouched. `audit` on it reports `nothing worth a
+  look`, while the `RuntimeError: UVA is not available` line stays consumed by the
+  `startup.error` rule rather than appearing as unread.
+- 62 tests.
+
 ## 0.4.21 — 2026-11-09
 
 - Reads the last nine lines of the real vLLM 0.33.0 startup log that no rule matched. Four

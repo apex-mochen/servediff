@@ -504,6 +504,13 @@ Exit codes: `0` no differences, `1` differences, `2` nothing recognised.
   is worth a look, lists only that second group, so what you paste is short. On that log
   nothing is left worth a look, and a test holds it that way: the day a version prints a
   configuration line this parser does not read, the suite fails and names the shape.
+  A log that died is the other common case, and its report had the same problem for a
+  different reason: every frame of the traceback is a line no rule reads, so a 151-line
+  crashed startup came back as 146 "shapes worth a look". The noise classifier now matches
+  the message after stripping the `(EngineCore pid=…) ERROR … [core.py:…]` preamble, so
+  frames, carets, `[shutdown]` chatter and logging-error dumps are counted as noise and
+  that log reports **1** — the `Casting torch.bfloat16 to torch.float32` warning, which
+  really is a setting the parser does not read yet.
   `servediff audit --markdown run1.log` wraps it in a code fence sized around any
   backticks inside, so it can go straight into the issue form's third field.
   `servediff audit --max-shapes 20 run1.log` exits `1` when more than 20 shapes need a

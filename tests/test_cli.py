@@ -568,6 +568,37 @@ def test_the_one_real_log_has_nothing_left_worth_a_look():
     assert "nothing worth a look" in audit.report(Path("real.log"), real)
 
 
+def test_a_crashed_real_log_does_not_report_its_own_traceback():
+    # The most common real log is one that died. Its traceback is dozens of lines, each
+    # prefixed with `(EngineCore pid=…) ERROR … [core.py:…]`, and the noise patterns only
+    # describe the message — so without stripping that preamble every frame reads as a
+    # shape worth a look and the report becomes a stack trace nobody asked for.
+    from servediff import audit
+
+    crash = FIX / "vllm-crash-traceback.log"
+    text = crash.read_text(encoding="utf-8")
+    look, noise = audit.split(*audit.unread_samples(text))
+    assert not look, sorted(look)
+    assert sum(noise.values()) > 0
+    assert "nothing worth a look" in audit.report(crash, text)
+    # The exception itself is the one line that must not be buried: it is read by the
+    # startup.error rule, so it is not unread at all.
+    assert audit.shape('(EngineCore pid=3811) ERROR 10-28 11:26:34 [core.py:1346] '
+                       'RuntimeError: UVA is not available') not in audit.unread(text)
+
+    # Stripping must not swallow a real setting that happens to carry the same preamble.
+    assert audit.is_noise("(EngineCore pid=3811) Process EngineCore:")
+    assert audit.is_noise("(EngineCore pid=3811)   File \"/opt/vllm-env/x.py\", line 34, in __init__")
+    assert audit.is_noise("(APIServer pid=4080) INFO 10-28 11:30:34 [launcher.py:129] "
+                          "[shutdown] API server: shutdown triggered")
+    for setting in (
+        "(EngineCore pid=1) INFO 10-28 11:00:00 [cuda.py:118] Using AttentionBackendEnum.FLASHINFER backend.",
+        "(EngineCore pid=1) INFO 10-28 11:00:00 [scheduler.py:1] Chunked prefill is enabled with max_num_batched_tokens=2048.",
+        "(Worker_TP2 pid=9) INFO 10-28 11:00:00 [model_runner.py:399] Model loading took 1.2 GiB and 1.2 seconds",
+    ):
+        assert not audit.is_noise(setting), setting
+
+
 def test_audit_does_not_call_a_read_line_unread():
     # audit and parse() must agree: a line parse() records a value from (here the
     # graph-capture summary) may never be offered back to the user as ignored.

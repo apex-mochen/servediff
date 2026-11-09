@@ -1,0 +1,44 @@
+(EngineCore pid=3811) Process EngineCore:
+(EngineCore pid=3811) Traceback (most recent call last):
+(EngineCore pid=3811)   File "/usr/lib/python3.12/multiprocessing/process.py", line 314, in _bootstrap
+(EngineCore pid=3811)     self.run()
+(EngineCore pid=3811)   File "/usr/lib/python3.12/multiprocessing/process.py", line 108, in run
+(EngineCore pid=3811)     self._target(*self._args, **self._kwargs)
+(EngineCore pid=3811)   File "/opt/vllm-env/lib/python3.12/site-packages/vllm/v1/engine/core.py", line 1350, in run_engine_core
+(EngineCore pid=3811)     raise e
+(EngineCore pid=3811)   File "/opt/vllm-env/lib/python3.12/site-packages/vllm/v1/engine/core.py", line 1315, in run_engine_core
+(EngineCore pid=3811)     engine_core = EngineCoreProc(*args, engine_index=dp_rank, **kwargs)
+(EngineCore pid=3811)                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=3811)   File "/opt/vllm-env/lib/python3.12/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore pid=3811)     return func(*args, **kwargs)
+(EngineCore pid=3811)            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=3811)   File "/opt/vllm-env/lib/python3.12/site-packages/vllm/v1/engine/core.py", line 1073, in __init__
+(EngineCore pid=3811)     super().__init__(
+(EngineCore pid=3811) ERROR 10-28 11:26:34 [core.py:1346]   File "/opt/vllm-env/lib/python3.12/site-packages/vllm/v1/worker/gpu/model_runner.py", line 276, in __init__
+(EngineCore pid=3811) ERROR 10-28 11:26:34 [core.py:1346]     self.req_states = RequestState(
+(EngineCore pid=3811) ERROR 10-28 11:26:34 [core.py:1346]                       ^^^^^^^^^^^^^
+(EngineCore pid=3811) ERROR 10-28 11:26:34 [core.py:1346]   File "/opt/vllm-env/lib/python3.12/site-packages/vllm/v1/worker/gpu/states.py", line 34, in __init__
+(EngineCore pid=3811) ERROR 10-28 11:26:34 [core.py:1346]     self.all_token_ids = StagedWriteTensor(
+(EngineCore pid=3811) ERROR 10-28 11:26:34 [core.py:1346]                          ^^^^^^^^^^^^^^^^^^
+(EngineCore pid=3811) ERROR 10-28 11:26:34 [core.py:1346]   File "/opt/vllm-env/lib/python3.12/site-packages/vllm/v1/worker/gpu/buffer_utils.py", line 141, in __init__
+(EngineCore pid=3811) ERROR 10-28 11:26:34 [core.py:1346]     self._uva_buf = UvaBuffer(size, dtype)
+(EngineCore pid=3811) ERROR 10-28 11:26:34 [core.py:1346]                     ^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=3811) ERROR 10-28 11:26:34 [core.py:1346]   File "/opt/vllm-env/lib/python3.12/site-packages/vllm/v1/worker/gpu/buffer_utils.py", line 47, in __init__
+(EngineCore pid=3811) ERROR 10-28 11:26:34 [core.py:1346]     raise RuntimeError("UVA is not available")
+(EngineCore pid=3811) ERROR 10-28 11:26:34 [core.py:1346] RuntimeError: UVA is not available
+(EngineCore pid=3811) Process EngineCore:
+(APIServer pid=4080) INFO 10-28 11:30:34 [core_client.py:746] [shutdown] MPClient: stopping engine manager
+(EngineCore pid=4381) INFO 10-28 11:30:34 [core.py:1493] [shutdown] EngineCore: start mode=abort timeout=0s
+(EngineCore pid=4381) INFO 10-28 11:30:34 [core.py:1524] [shutdown] EngineCore: request processing complete; starting resource teardown
+(APIServer pid=4080) INFO 10-28 11:30:34 [utils.py:632] [shutdown] Process manager: send sigterm to process EngineCore
+(EngineCore pid=4381) INFO 10-28 11:30:34 [core.py:1355] [shutdown] EngineCore: exiting busy loop
+(APIServer pid=4080) WARNING 10-28 11:30:34 [utils.py:652] [shutdown] Process manager: force killing remaining processes count=1
+(EngineCore pid=4381) --- Logging error ---
+(APIServer pid=4080) WARNING 10-28 11:30:34 [utils.py:657] [shutdown] Process manager: force killing remaining process EngineCore pid 4381
+(EngineCore pid=4381) Traceback (most recent call last):
+(EngineCore pid=4381)   File "/opt/vllm-env/lib/python3.12/site-packages/vllm/v1/engine/core.py", line 1352, in run_engine_core
+(EngineCore pid=4381)     engine_core.run_busy_loop()
+(EngineCore pid=4381)   File "/opt/vllm-env/lib/python3.12/site-packages/vllm/v1/fault_tolerance/engine_core_sentinel.py", line 179, in run_with_fault_tolerance
+(EngineCore pid=4381)     busy_loop_func(self)
+(EngineCore pid=4381)   File "/opt/vllm-env/lib/python3.12/site-packages/vllm/v1/engine/core.py", line 1414, in run_busy_loop
+(EngineCore pid=4381)     raise SystemExit

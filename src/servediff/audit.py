@@ -22,6 +22,35 @@ from servediff.cli import ANSI, LINE_RULES, parse
 
 DIGITS = re.compile(r"\d+")
 
+# A real multi-process log prefixes every line with who printed it and from where:
+# ``(Worker_TP8 pid=123) INFO 11-06 12:00:00 [cuda.py:118] ...``. The noise patterns below
+# describe the *message*, so they are tested against the message too, not only against a
+# bare line — otherwise a whole traceback reads as "worth a look" just because each frame
+# carries a `(EngineCore pid=…) ERROR … [core.py:…]` prefix. Only a prefix is ever stripped;
+# the message itself is passed through untouched.
+_PREFIX = (
+    re.compile(r"\([^)]*pid=\d+\)\s*"),
+    re.compile(r"(?:DEBUG|INFO|WARNING|ERROR|CRITICAL|VERBOSE)\b[:\s-]*"),
+    # vLLM prints `INFO 10-28 11:26:34` — month-day, no year.
+    re.compile(r"(?:\d{4}-)?\d\d-\d\d[ T]\d\d:\d\d:\d\d(?:[,.]\d{3})?\s*"),
+    re.compile(r"^-+\s+"),
+    re.compile(r"^\[?[\w./]+\.py:\d+\]?\s*-?\s*"),
+)
+
+
+def message(line: str) -> str:
+    """The line with its process/time/module preamble removed."""
+    text = ANSI.sub("", line).strip()
+    for _ in range(12):
+        before = text
+        for pattern in _PREFIX:
+            if pattern.match(text):
+                text = pattern.sub("", text, count=1).strip()
+        if text == before:
+            break
+    return text
+
+
 # Lines whose content is never configuration. Each pattern must be narrow enough that a
 # real config line cannot match it: widening one of these silently hides a missed fact.
 # They are matched against the *raw* line, not the shape, because collapsing digits
@@ -41,10 +70,18 @@ NOISE = (
     re.compile(r"^Traceback \(most recent call last\)"),
     re.compile(r'^\s*File "[^"]*", line \d+'),
     re.compile(r"^\s*[\^~]{3,}\s*$"),
+    re.compile(r"^During handling of the above exception|^Process \w+:|^Call stack:"),
     # The source lines a traceback echoes; each is part of a call, not a setting.
-    re.compile(r"^\s*(self\.|return |raise )"),
-    re.compile(r"^\s*[\w.]+ ?= ?[\w.]*\([^)]*\)\s*$"),
-    re.compile(r"^\s*[\w.]+\([^)]*\)\s*$"),
+    re.compile(r"^\s*(self\.|return |raise |yield |assert |del |super\(\)|with |async with"
+               r"|await |next\(|import |from )"),
+    re.compile(r"^\s*[\w.]+ ?= ?[\w.]+ ?\(", ),  # `x = Y(` and `x = Y(args)` — a frame echo
+    re.compile(r"^\s*[\w.]+\([^()]*(?:\([^()]*\)[^()]*)*\)(?:\))?\s*$"),  # `uvloop.run(run_server(args))`
+    re.compile(r"^\s*[\w.]+\($"),  # a call split across lines: `super().__init__(`
+    # A logging failure's own dump: the traceback is about logging, not about the server.
+    re.compile(r"^(--- )?Logging error ---"),
+    re.compile(r"^Message: |^Arguments: "),
+    # Engine teardown, printed on every shutdown, with the settings of nothing.
+    re.compile(r"\[shutdown\]|\[shutdown\]|trigger received signal=SIGTERM"),
     # Phase markers: they say a step began, never with what settings it ran.
     re.compile(r"JIT kernel warmup starting\.|Starting torch\.compile$"),
     # A per-machine absolute path, so it can never be equal across two boxes and no
@@ -52,7 +89,27 @@ NOISE = (
     re.compile(r"Using cache directory: |saved AOT compiled function to "),
     # Serving telemetry, printed while the server runs: a metric, not a startup setting.
     re.compile(r"Avg prompt throughput"),
+    # Inter-process plumbing warnings and resource teardown.
+    re.compile(r"resource_tracker: There appear to be"),
+    re.compile(r"destroy_process_group\(\) was not called"),
+    re.compile(r"No available shared memory broadcast block found"),
+    re.compile(r"Guessing device ID based on global rank"),
+    re.compile(r"The client socket cannot be initialized to connect to"),
+    # The traceback's own terminator, which carries no message of its own.
+    re.compile(r"^(SystemExit|KeyboardInterrupt)$"),
+    # uvicorn's own shutdown narration.
+    re.compile(r"^(Shutting down|Waiting for application shutdown"
+               r"|Application shutdown complete|Started server process)\.?$"),
+    # Text pasted from a bug-report template rather than printed by the server.
+    re.compile(r"^#{2,} |^- \[[ x]\] "),
+    # Framework diagnostics that name their own source file before saying anything.
+    re.compile(r"^\S+\.py:\d+: (User)?Warning:"),
+    re.compile(r"^\[Autotuner\]: Autotuning process starts"),
 )
+
+# A line that is nothing but the prefix: `(EngineCore pid=3811)`.
+_BARE_PREFIX = re.compile(r"^\s*\([^)]*pid=\d+\)\s*$")
+_COMMENT = re.compile(r"\s+#\s.*$")
 
 
 def shape(line: str) -> str:
@@ -88,7 +145,17 @@ def unread_samples(text: str) -> tuple[Counter, dict[str, str]]:
 
 
 def is_noise(raw_line: str) -> bool:
-    return any(pattern.search(raw_line) for pattern in NOISE)
+    if _BARE_PREFIX.match(raw_line):
+        return True
+    if any(pattern.search(raw_line) for pattern in NOISE):
+        return True
+    # The message without its preamble, and again with a trailing `# comment` gone: a
+    # traceback echoes sources with comments in them (`_find_cuda_home()  # CUDA home`).
+    stripped = message(raw_line)
+    for candidate in (stripped, _COMMENT.sub("", stripped)):
+        if candidate and any(pattern.search(candidate) for pattern in NOISE):
+            return True
+    return False
 
 
 def split(counts: Counter, samples: dict[str, str]) -> tuple[Counter, Counter]:
