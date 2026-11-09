@@ -202,6 +202,29 @@ Two separate bugs, both invisible on excerpt fixtures:
   a look than you allow, so a pipeline fails on the upgrade that starts printing
   configuration the tool still cannot read.
 
+## A reproducer script is not a log
+
+The paste that finally showed where the report was wrong was not a log at all.
+sglang#49123 pastes a 195-line benchmark harness — `def run_marlin(...)`,
+`handles[f] = safe_open(...)`, a module docstring — and the audit called 38 of its lines
+"worth a look", every one of them the script itself. A reader who opens that report learns
+the tool cannot read a script: true, and useless.
+
+The rule that fixes it has to know that a log line *states* something — `name: value`, or a
+sentence. It never starts with `def`, never opens with a bare `"""`, never ends in a trailing
+comma. Seven conservative patterns on those shapes, plus one stateful pass over the prose
+between two `"""`, took that paste from 38 lines to 1; the one left is a lambda's
+continuation, which genuinely is a line no rule can read.
+
+The counter-example had to stay: a shell-style `MAX_MODEL_LEN=4096` inside the same paste is
+still read as `env.var.MAX_MODEL_LEN`. A script's code is noise; a script's *call* is not.
+
+One bug surfaced while measuring it. The keyword pattern was written
+`^\s*(?:if |elif |else |…)\b` — the space inside the alternative and `\b` after it, so
+`if "W4A4" in name:` failed the boundary test (a space followed by a quote is not a word
+boundary) and stayed in the report, while `if x:` did not. A pattern that is almost right is
+the quietest kind of wrong: it looks like it covers the class and covers all but one member.
+
 ## Limits of the claim
 
 These four logs are from one machine's WSL2 runs plus one posted TP=8 log.

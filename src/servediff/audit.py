@@ -199,8 +199,25 @@ NOISE = (
     # closing bracket. A log line states `name: value` or a sentence, never this.
     re.compile(r"^\+\s|^[)\]}]"),
     re.compile(r"^\s*[a-z_][\w.]*\s*="),
-    re.compile(r"^\s*(?:if |elif |else |else:|for |while |try|except)\b"),
+    # `\b` sits after the keyword, not after the space: a loop or branch whose condition is a
+    # quoted string (`if "W4A4" in name:`) put a non-word character right after the space, so
+    # the boundary test failed and the line stayed in the report.
+    re.compile(r"^\s*(?:if|elif|else|for|while|try|except)\b"),
     re.compile(r"^\.\.\.$"),
+    # A reproducer script pasted into an issue body, which is not a log at all: a function
+    # definition, a module-level tuple unpack, a subscripted assignment, a print. A log line
+    # states `name: value` or a sentence, and never starts with one of these.
+    re.compile(r"^(?:def|class)\s+[A-Za-z_]\w*[(:]"),
+    re.compile(r"^[A-Za-z_]\w*(?:\[[^\]]*\])?(?:, [A-Za-z_]\w*(?:\[[^\]]*\])?)+ (?:=|\+=) "),
+    re.compile(r"^[A-Za-z_]\w*\[[^\]]*\] (?:=|\+=|\() "),
+    re.compile(r"^\s*print\("),
+    # The rest of the same script: a section comment, a bare loop keyword, a string literal
+    # standing alone, and a call continued on the next line (a log line never ends in a comma).
+    re.compile(r"^#"),
+    re.compile(r"^(?:continue|pass|break)$"),
+    re.compile(r"^[A-Za-z_]\w*\s+\+= "),
+    re.compile(r"^\s*f?[\"']"),
+    re.compile(r"^\s*.*,\s*$"),
 )
 
 # A line that is nothing but the prefix: `(EngineCore pid=3811)`.
@@ -226,8 +243,18 @@ def unread_samples(text: str) -> tuple[Counter, dict[str, str]]:
     """(counts by shape, one raw line per shape), for classifying without losing digits."""
     counts: Counter = Counter()
     samples: dict[str, str] = {}
+    in_doc = False
     for raw in text.splitlines():
         line = BRACKET_TS.sub("", ANSI.sub("", raw))
+        stripped = line.strip()
+        # A docstring echoed by a pasted script: prose between two `"""`, which no log line
+        # ever carries, so it is noise rather than a setting this tool failed to read.
+        if in_doc:
+            in_doc = stripped.count('"""') % 2 == 0
+            continue
+        if stripped.startswith('"""') or stripped.endswith('"""'):
+            in_doc = stripped.count('"""') % 2 == 1
+            continue
         if not line.strip():
             continue
         if "non-default args:" in line or "server_args=" in line:

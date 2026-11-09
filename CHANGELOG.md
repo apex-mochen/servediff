@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.4.32 — 2026-11-09
+
+- A reproducer script pasted into an issue body is no longer reported as lines worth a look.
+  sglang#49123 pastes a 195-line benchmark harness, and the audit called 38 of its lines
+  "worth a look" — every one of them the script: `def run_marlin(...)`,
+  `handles[f] = safe_open(...)`, a module docstring. Those shapes (definition, tuple unpack,
+  subscripted assignment, bare `print(...)`, a line ending in a comma, the prose between two
+  `"""`) are noise now: that paste goes from 38 to 1, and the one left is a lambda's
+  continuation. A shell-style `MAX_MODEL_LEN=4096` in the same paste is still read as
+  `env.var.MAX_MODEL_LEN`: a script's code is noise, a script's call is not.
+- Fixed a keyword pattern that was almost right: `^\s*(?:if |elif |else |…)\b` failed on
+  `if "W4A4" in name:` because the space sat inside the alternative and `\b` tested a
+  space→quote boundary. Loop and branch lines whose condition is a quoted string stayed in
+  the report; now they do not.
+- The 20-log corpus and the six real startup logs still report `0 with shapes worth a look`.
+  82 tests.
+
 ## 0.4.31 — 2026-11-09
 
 - A numeric difference now prints its magnitude as well as the word: `changed  +45.0%`,

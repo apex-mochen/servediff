@@ -319,6 +319,45 @@ def test_a_text_change_has_no_magnitude(tmp_path, capsys):
     assert "%" not in out
 
 
+def test_a_reproducer_script_pasted_in_an_issue_is_noise(tmp_path):
+    # sglang#49123 pastes a 195-line benchmark script instead of a log. Read as log lines it
+    # produced 38 "worth a look" shapes, every one of them the script itself.
+    log = tmp_path / "script.log"
+    log.write_text(
+        '"""One MoE layer through two paths.\n'
+        "usage: marlin_vs_cutile.py <model dir> <layer> [tokens]\n"
+        '"""\n'
+        "import json\n"
+        "mm, L = sys.argv[1], int(sys.argv[2])\n"
+        "# ---- float32 reference\n"
+        "def deq(b, s, g):\n"
+        "    return v * (s / g)\n"
+        "    if \"W4A4\" in name:\n"
+        "handles[f] = safe_open(os.path.join(mm, f), \"pt\")\n"
+        "DQ[e] = (deq(t[\"w1\"][0][e], t[\"w1\"][1][e]),\n"
+        "print(f\"tokens {m} {name}\", flush=True)\n"
+        "MAX_MODEL_LEN=4096\n", encoding="utf-8")
+    text = log.read_text(encoding="utf-8")
+    counts, samples = servediff_audit.unread_samples(text)
+    look, _ = servediff_audit.split(counts, samples)
+    shapes = set(look.values())
+    assert "def deq(b, s, g):" not in shapes
+    assert "handles[f] = safe_open(os.path.join(mm, f), \"pt\")" not in shapes
+    assert "mm, L = sys.argv[1], int(sys.argv[2])" not in shapes
+    # A shell-style assignment is still read as a fact, so it is neither noise nor a
+    # "worth a look" -- the script rules must not swallow it.
+    assert "env.var.MAX_MODEL_LEN" in servediff.parse(text)["facts"]
+    assert sum(look.values()) == 0, "every line of the script is read as a fact or as noise"
+
+
+def test_a_loop_condition_with_a_quoted_string_is_noise(tmp_path):
+    log = tmp_path / "script.log"
+    log.write_text('  if "W4A4" in name:\n', encoding="utf-8")
+    text = log.read_text(encoding="utf-8")
+    look, _ = servediff_audit.split(*servediff_audit.unread_samples(text))
+    assert look == {}
+
+
 def test_skip_absent_keeps_only_rows_both_logs_printed(tmp_path, capsys):
     # A run that died leaves every later fact <absent>; those one-sided rows outnumber the
     # real differences and bury them. --skip-absent must hide them while still failing, and
