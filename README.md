@@ -513,7 +513,9 @@ Exit codes: `0` no differences, `1` differences, `2` nothing recognised.
   the message after stripping the `(EngineCore pid=…) ERROR … [core.py:…]` preamble, so
   frames, carets, `[shutdown]` chatter and logging-error dumps are counted as noise and
   that log reports **1** — the `Casting torch.bfloat16 to torch.float32` warning, which
-  really is a setting the parser does not read yet.
+  really is a setting the parser does not read yet. The measurements behind this
+  paragraph, on all four full logs (146 → 1, 66 → 5, 89 → 4, 190 → 0), are in
+  [writeups/audit-noise-real-logs.md](writeups/audit-noise-real-logs.md).
   `servediff audit --markdown run1.log` wraps it in a code fence sized around any
   backticks inside, so it can go straight into the issue form's third field.
   `servediff audit --max-shapes 20 run1.log` exits `1` when more than 20 shapes need a

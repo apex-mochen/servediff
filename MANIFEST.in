@@ -6,3 +6,6 @@ recursive-include examples *.log
 # tests/test_demo_svg.py, and without them the release fails at "Tests from the sdist".
 recursive-include tools *.py
 include assets/demo.svg
+# The writeups are linked from the README, which is both the PyPI description and the
+# sdist README; shipping them keeps those links valid inside the tarball.
+recursive-include writeups *.md

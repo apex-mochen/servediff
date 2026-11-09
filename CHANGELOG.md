@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.24 — 2026-11-09
+
+- New writeup [writeups/audit-noise-real-logs.md](writeups/audit-noise-real-logs.md): what
+  `servediff audit` is for, and the before/after counts on all four full real logs
+  (146 → 1, 66 → 5, 89 → 4, 190 → 0), with the two bugs that caused them — noise patterns
+  matched against the prefixed line instead of the message, and rules pinned to the newest
+  wording that silently dropped the older log's facts. Linked from both READMEs; `writeups/`
+  now ships in the sdist so the links hold inside the tarball.
+- No behaviour change.
+
 ## 0.4.23 — 2026-11-09
 
 - Read the configuration a real TP=8 startup log prints. On the vLLM 0.23.1 log from
