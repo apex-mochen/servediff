@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.27 — 2026-11-09
+
+- Docs only: the audit writeup now carries the ROCm measurement (vllm#65034: 175 shapes
+  worth a look → facts plus noise, nothing left over), and both READMEs name the covered
+  stack. No behaviour change — 0.4.26 is the release that reads those lines.
+
 ## 0.4.26 — 2026-11-09
 
 - ROCm support, found by auditing a log the tool had never seen: the `collect_env` block

@@ -46,12 +46,48 @@ traceback frame or a configuration line, and the configuration lines are now fac
 `sampling.topk_topp_backend`, `kernel.flashinfer_dtypes`, `nccl.version`,
 `parallel.dp_leader`, `kernel.cuda_error`, `startup: failed (worker died)`).
 
+## The log from a stack nobody had seen
+
+Everything above was measured on one machine's WSL2 runs — NVIDIA, CUDA, one GPU. So the
+first honest test of the claim came from a log nobody here produced: the `collect_env` block
+pasted into [vllm#65034](https://github.com/vllm-project/vllm/issues/65034), a ROCm box
+(AMD Radeon AI PRO R9700, torch 2.13.0+rocm10.1.0, vLLM 0.29.1.dev, Python 3.14). 176 lines.
+
+`audit` said **175 lines worth a look, 112 shapes** — essentially the whole block. Not a
+single rule in the tool matched a single line of it. That is the failure mode the section
+above says to expect, and it is also the strongest argument for the audit existing: a tool
+whose noise table only describes its author's stack is one stack wide.
+
+The fixes were both mechanical:
+
+- **What the block states as fact, read as fact.** `engine.version` + `engine.git_sha`
+  (`vLLM Version : 0.29.1.dev0+g98dff2a81.d20261002 (git sha: 98dff2a81, date: 20261002)`),
+  `env.torch`, `env.torch_rocm`, `env.rocm`, `env.hip`, `env.os`, `env.python`,
+  `gpu.model`, `env.pip.{torch,triton,transformers,numpy}`, and
+  `env.var.{TORCHINDUCTOR_CACHE_DIR,PYTORCH_ROCM_ARCH,MAX_JOBS,LD_LIBRARY_PATH,…}`. These
+  are the facts that decide which kernels a run can even choose: a torch built against a
+  different ROCm is a different server, whatever the flags say.
+- **What the block states as machine inventory, counted as noise.** The section rules
+  (`====`), the CPU model and mitigation list, the wrapped CPU flag dump (including lines
+  that start at column 0 with `3dnowprefetch` and carry digits), one
+  `[pip3] amd-torch-device-gfx*` wheel per GPU architecture (~40 identical lines), the
+  wrapped tail of `LD_LIBRARY_PATH`, `CMake version :`.
+
+Result: **158 unread lines, 95 shapes, nothing worth a look.** Two regressions the same run
+caught, both now pinned by tests:
+
+- the generic `version X.Y.Z` banner rule took `CMake version : version 3.31.10` as the
+  engine version, so `engine.version` held two values from two different tools;
+- a launch command pasted into a report (`vllm serve … \` + `--flag value \`) is the user's
+  shell history, not output — the server prints its args itself as "non-default args".
+
 ## What zero does and does not mean
 
 Zero here is a claim about **what these six logs print**, not about log space. The four above
 plus two fixtures (a crashed startup and a clean 170-line run) all report
-`nothing worth a look`; a log from a stack none of them covers — other engines, other
-parallelism layouts, another vendor's kernels — may well print shapes no rule knows. That is
+`nothing worth a look`; a log from a stack none of them covers may well print shapes no rule
+knows — and one did: the ROCm block below started at 175 and needed two rounds of work
+before it reached zero. That is
 precisely why the audit prints the second group at all, and why
 `servediff audit --max-shapes 20` exists as a gate: zero is measured per log, and the next
 unfamiliar log is expected to break it.
