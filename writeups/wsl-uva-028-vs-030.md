@@ -90,7 +90,7 @@ server.bind                      <absent>                                 http:/
 server.scale_out                 <absent>                                 disabled                                 only_candidate
 server.tasks                     <absent>                                 ['generate']                             only_candidate
 serving.chat_template_content_format <absent>                                 string                                   only_candidate
-startup                          failed                                   ready                                    changed
+startup                          failed                                   ["ready", "failed (output handler)"]     changed
 startup.error                    ["RuntimeError: UVA is not available"... <absent>                                 only_baseline
 uva_buffers                      <absent>                                 fallback: device memory                  only_candidate
 weights.available_ram_gib        <absent>                                 4.23                                     only_candidate
@@ -100,7 +100,7 @@ weights.filesystem               <absent>                                 EXT4  
 weights.load_s                   <absent>                                 10.49                                    only_candidate
 weights.prefetch                 <absent>                                 disabled (EXT4 is not a network FS)      only_candidate
 
-48 difference(s); 13 fact(s) identical. Absent means the log did not print it, not that it was off.
+48 difference(s); 14 fact(s) identical. Absent means the log did not print it, not that it was off.
 ```
 
 Exit code `1` here means "the two logs differ", not "the tool failed". `2` would mean it

@@ -20,20 +20,24 @@ startup that broke.
 Four full startup logs, all of them live-server output rather than excerpts. Counts are
 "shapes worth a look", the only group the report lists.
 
-| log | engine · version | before 0.4.22 | after 0.4.23 |
+| log | engine · version | before 0.4.22 | after 0.4.25 |
 |---|---|---|---|
-| `vllm-0.28.0.log` (died at startup, UVA unavailable) | vLLM 0.28.0, 1 GPU, WSL2 | 146 | **1** |
-| `vllm-0.28.0-v1runner.log` (same flags, V1 model runner) | vLLM 0.28.0 | 66 | **5** |
-| `vllm-0.30.0.log` (started, then killed) | vLLM 0.30.0 | 89 | **4** |
+| `vllm-0.28.0.log` (died at startup, UVA unavailable) | vLLM 0.28.0, 1 GPU, WSL2 | 146 | **0** |
+| `vllm-0.28.0-v1runner.log` (same flags, V1 model runner) | vLLM 0.28.0 | 66 | **0** |
+| `vllm-0.30.0.log` (started, then killed) | vLLM 0.30.0 | 89 | **0** |
 | `vllm-0.23.1-tp8.log` (from vllm#48591) | vLLM 0.23.1, 8 GPUs, DP+EP, Eagle3 | 190 | **0** |
 
-What is left is the honest remainder, and none of it is noise:
+The last three shapes standing after 0.4.23 were real conditions rather than noise, so they
+became facts in 0.4.25 instead of being classified away:
 
-- `Casting torch.bfloat16 to torch.float32` — a real setting, on all three vLLM logs.
-- `Module deep_gemm was found but failed to import` / `ImportError: libnvrtc.so.3` — an
-  optional kernel library missing, which changes which kernels a run can pick.
-- `AsyncLLM output_handler failed` + `EngineDeadError` — the server that started and then
-  died mid-request.
+| line | fact |
+|---|---|
+| `Casting torch.bfloat16 to torch.float32` | `model.cast` — the checkpoint dtype was coerced; nothing in the flags says so and every result changes |
+| `Module deep_gemm was found but failed to import` / `ImportError: libnvrtc.so.3` | `kernel.module_missing`, `kernel.missing_lib` — an optional kernel library is installed but unimportable, which changes the kernel set a run can choose |
+| `AsyncLLM output_handler failed` / `EngineDeadError` | `startup: failed (output handler)`, `startup.error` |
+
+A bare `AssertionError` under a failed import check stays noise: the detail is the line
+above, which is now read, so counting it again would double-report one condition.
 
 The TP=8 log reaching zero is the stricter result: every one of those 190 lines was either a
 traceback frame or a configuration line, and the configuration lines are now facts
@@ -41,6 +45,16 @@ traceback frame or a configuration line, and the configuration lines are now fac
 `cpu.torch_parallelism`, `spec_decode.eagle_layers`, `compile.cached_range`,
 `sampling.topk_topp_backend`, `kernel.flashinfer_dtypes`, `nccl.version`,
 `parallel.dp_leader`, `kernel.cuda_error`, `startup: failed (worker died)`).
+
+## What zero does and does not mean
+
+Zero here is a claim about **what these six logs print**, not about log space. The four above
+plus two fixtures (a crashed startup and a clean 170-line run) all report
+`nothing worth a look`; a log from a stack none of them covers — other engines, other
+parallelism layouts, another vendor's kernels — may well print shapes no rule knows. That is
+precisely why the audit prints the second group at all, and why
+`servediff audit --max-shapes 20` exists as a gate: zero is measured per log, and the next
+unfamiliar log is expected to break it.
 
 ## Why the first version got it wrong
 

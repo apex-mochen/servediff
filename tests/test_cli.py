@@ -634,6 +634,38 @@ def test_loading_phase_is_three_separate_steps():
     assert f["weights.load_s"].value == 3.13
 
 
+def test_the_shapes_left_in_a_crashed_log_are_read_not_ignored():
+    # After the crash traceback became noise, three shapes were still "worth a look" on the
+    # real 0.28.0 logs. None was noise: a coerced dtype, an unimportable optional kernel
+    # library, and an output handler that died. Classifying them away would have hidden real
+    # conditions, so they become facts instead.
+    text = (
+        "(APIServer pid=4080) WARNING 10-28 11:26:00 [model.py:1] Casting torch.bfloat16 to torch.float32.\n"
+        "(EngineCore pid=3811) WARNING 10-28 11:26:00 [import_utils.py:1] Module deep_gemm was found but failed to import\n"
+        "(EngineCore pid=3811) WARNING 10-28 11:26:00 [import_utils.py:1] ImportError: libnvrtc.so.3: cannot open shared object file: No such file or directory\n"
+        "(EngineCore pid=3811) WARNING 10-28 11:26:00 [import_utils.py:1] AssertionError\n"
+        "(APIServer pid=4080) ERROR 10-28 11:30:00 [async_llm.py:1] AsyncLLM output_handler failed.\n"
+        "(APIServer pid=4080) ERROR 10-28 11:30:00 [async_llm.py:1]     outputs = await engine_core.get_output_async()\n"
+        "(APIServer pid=4080) ERROR 10-28 11:30:00 [async_llm.py:1] vllm.v1.engine.exceptions.EngineDeadError: EngineCore encountered an issue. See stack trace (above)\n")
+    f = servediff.parse(text)["facts"]
+    assert f["model.cast"].value == "torch.bfloat16 -> torch.float32"
+    assert f["kernel.module_missing"].value == "deep_gemm"
+    assert f["kernel.missing_lib"].value == "libnvrtc.so.3"
+    # `startup` collects every verdict the log printed, and a startup.error also adds the
+    # bare "failed" — so membership, not equality.
+    assert "failed (output handler)" in f["startup"].value
+    assert "failed" in f["startup"].value
+    # The exception type arrives with its module path, which the rule must not require to be
+    # at line start.
+    assert f["startup.error"].value == ("EngineDeadError: EngineCore encountered an issue. "
+                                        "See stack trace (above)")
+    look, noise = servediff_audit.split(*servediff_audit.unread_samples(text))
+    assert not look, sorted(look)
+    # The bare AssertionError is the import check above it, already read: counting it again
+    # would report one condition twice.
+    assert servediff_audit.is_noise("    AssertionError")
+
+
 def test_the_tp8_report_log_leaves_nothing_unread_because_these_facts_are_read():
     # Every line below is a shape the audit named as "no rule reads them" on a real
     # vLLM 0.23.1 TP=8 startup log. They are the configuration that made that run

@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.4.25 — 2026-11-09
+
+- The last real shapes are facts now, so every full log in this repo audits clean: `Casting
+  torch.bfloat16 to torch.float32` → `model.cast` (a coercion no flag records, and it changes
+  every result), `AsyncLLM output_handler failed` → `startup: failed (output handler)`,
+  `EngineDeadError` (fully qualified as `vllm.v1.engine.exceptions.EngineDeadError`) →
+  `startup.error`, and an installed-but-unimportable optional kernel library (`Module …
+  was found but failed to import`, `ImportError: … cannot open shared object file`) →
+  `kernel.module_missing` / `kernel.missing_lib`.
+- Audit: `outputs = await engine_core.get_output_async()` is a frame echo and counts as
+  noise; a bare `AssertionError` under a failed import check does too, since the detail is
+  the line above that is now read — counting it again would double-report one condition.
+- All four full real logs (vLLM 0.28.0 crash, 0.28.0 V1 runner, 0.30.0 killed, 0.23.1 TP=8)
+  and both real-log fixtures report `nothing worth a look`. That is a claim about what those
+  logs print, not about every log: `writeups/audit-noise-real-logs.md` now says so.
+- 63 tests.
+
 ## 0.4.24 — 2026-11-09
 
 - New writeup [writeups/audit-noise-real-logs.md](writeups/audit-noise-real-logs.md): what

@@ -250,11 +250,25 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
     # two runs of the same flags can sample differently because of it.
     (re.compile(r"generation_config\.json[`'\":]+ ?(.+)$"),
      lambda m: [("sampling.overridden", m[1].strip().strip("`"))]),
+    # A silent numeric change: the checkpoint's dtype was coerced to something the GPU
+    # path wants. Nothing in the flags says so, and it changes every result.
+    (re.compile(r"Casting (torch\.\w+) to (torch\.\w+)"),
+     lambda m: [("model.cast", f"{m[1]} -> {m[2]}")]),
+    # An optional kernel library that is installed but not importable: the build silently
+    # falls back to a slower or less capable path, and nothing in the flags records it.
+    (re.compile(r"Module (\S+) was found but failed to import"),
+     lambda m: [("kernel.module_missing", m[1])]),
+    (re.compile(r"ImportError: (\S+): cannot open shared object file"),
+     lambda m: [("kernel.missing_lib", m[1])]),
     # Startup outcome. Without it, facts missing after a crash look like "not printed".
     (re.compile(r"Application startup complete"), lambda m: [("startup", "ready")]),
     (re.compile(r"EngineCore failed to start|Engine core initialization failed"),
      lambda m: [("startup", "failed")]),
-    (re.compile(r"^(?:\(\w+ pid=\d+\) )?(?:ERROR .*?\] )?((?:RuntimeError|ValueError|torch\.OutOfMemoryError|AssertionError|AttributeError|KeyError|TypeError): .+)$"),
+    (re.compile(r"AsyncLLM output_handler failed"),
+     lambda m: [("startup", "failed (output handler)")]),
+    # Exception classes arrive fully qualified in some versions
+    # (`vllm.v1.engine.exceptions.EngineDeadError: …`), so the type may be mid-line.
+    (re.compile(r"((?:RuntimeError|ValueError|torch\.OutOfMemoryError|AssertionError|AttributeError|KeyError|TypeError|EngineDeadError): .+)$"),
      lambda m: [("startup.error", m[1].strip())]),
     # SGLang.
     (re.compile(r"Disable prefill CUDA graph because"), lambda m: [("cuda_graph.prefill", "disabled")]),

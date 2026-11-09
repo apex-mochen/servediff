@@ -183,7 +183,7 @@ server.bind                      <absent>                                 http:/
 server.scale_out                 <absent>                                 disabled                                 only_candidate
 server.tasks                     <absent>                                 ['generate']                             only_candidate
 serving.chat_template_content_format <absent>                                 string                                   only_candidate
-startup                          failed                                   ready                                    changed
+startup                          failed                                   ["ready", "failed (output handler)"]     changed
 startup.error                    ["RuntimeError: UVA is not available"... <absent>                                 only_baseline
 uva_buffers                      <absent>                                 fallback: device memory                  only_candidate
 weights.available_ram_gib        <absent>                                 4.23                                     only_candidate
@@ -193,7 +193,7 @@ weights.filesystem               <absent>                                 EXT4  
 weights.load_s                   <absent>                                 10.49                                    only_candidate
 weights.prefetch                 <absent>                                 disabled (EXT4 is not a network FS)      only_candidate
 
-48 difference(s); 13 fact(s) identical. Absent means the log did not print it, not that it was off.
+48 difference(s); 14 fact(s) identical. Absent means the log did not print it, not that it was off.
 ```
 
 0.28.0 does not start on WSL2 with default settings; 0.30.0 does, because it falls
@@ -222,6 +222,8 @@ gpu.utilization_effective        0.4031                                   0.4151
 gpu.utilization_to_match_kv_cache 0.4969                                   0.4849                                   changed
 jit.warmup_s                     <absent>                                 0.0                                      only_candidate
 kernel.ir_op.gelu_and_mul_sparse <absent>                                 triton|native                            only_candidate
+kernel.missing_lib               libnvrtc.so.12                           <absent>                                 only_baseline
+kernel.module_missing            ["deep_gemm", "vllm.third_party.deep_... <absent>                                 only_baseline
 kv_cache.layout                  <absent>                                 LBNHC                                    only_candidate
 kv_cache.max_concurrency         60.52                                    69.3                                     changed
 kv_cache.memory_gib              1.42                                     1.62                                     changed
@@ -230,12 +232,13 @@ model_loading.seconds            13.191946                                19.122
 model_runner                     V1                                       V2                                       changed
 parallel.roles                   DP rank 0, PP rank 0, PCP rank 0, TP ... DP rank 0, PP rank 0, PCP rank 0, TP ... changed
 server.scale_out                 <absent>                                 disabled                                 only_candidate
+startup                          ready                                    ["ready", "failed (output handler)"]     changed
 uva_buffers                      <absent>                                 fallback: device memory                  only_candidate
 weights.available_ram_gib        4.94                                     4.23                                     changed
 weights.cache                    <absent>                                 miss (from scratch)                      only_candidate
 weights.load_s                   7.86                                     10.49                                    changed
 
-27 difference(s); 33 fact(s) identical. Absent means the log did not print it, not that it was off.
+30 difference(s); 33 fact(s) identical. Absent means the log did not print it, not that it was off.
 ```
 
 Rows of that kind are the reason this exists, and none of them shows up in a bug report.
@@ -267,9 +270,9 @@ note: 45 difference(s) hidden by --skip-absent: one side never printed those lin
 fact                             baseline                                 candidate                                status
 engine.version                   0.28.0                                   0.30.0                                   changed
 parallel.roles                   DP rank 0, PP rank 0, PCP rank 0, TP ... DP rank 0, PP rank 0, PCP rank 0, TP ... changed
-startup                          failed                                   ready                                    changed
+startup                          failed                                   ["ready", "failed (output handler)"]     changed
 
-3 difference(s); 13 fact(s) identical. 45 difference(s) skipped because one side never printed those lines (--skip-absent). Absent means the log did not print it, not that it was off.
+3 difference(s); 14 fact(s) identical. 45 difference(s) skipped because one side never printed those lines (--skip-absent). Absent means the log did not print it, not that it was off.
 ```
 
 The exit code is still 1: the inputs do differ. `--json` reports both counts
@@ -511,11 +514,13 @@ Exit codes: `0` no differences, `1` differences, `2` nothing recognised.
   different reason: every frame of the traceback is a line no rule reads, so a 151-line
   crashed startup came back as 146 "shapes worth a look". The noise classifier now matches
   the message after stripping the `(EngineCore pid=…) ERROR … [core.py:…]` preamble, so
-  frames, carets, `[shutdown]` chatter and logging-error dumps are counted as noise and
-  that log reports **1** — the `Casting torch.bfloat16 to torch.float32` warning, which
-  really is a setting the parser does not read yet. The measurements behind this
-  paragraph, on all four full logs (146 → 1, 66 → 5, 89 → 4, 190 → 0), are in
-  [writeups/audit-noise-real-logs.md](writeups/audit-noise-real-logs.md).
+  frames, carets, `[shutdown]` chatter and logging-error dumps are counted as noise, and
+  the last shapes that were left there are now read: the `Casting torch.bfloat16 to
+torch.float32` warning (`model.cast` — a silent numeric change no flag records), a failed
+output handler (`startup: failed (output handler)`), and an installed-but-unimportable
+optional kernel library (`kernel.module_missing`, `kernel.missing_lib`). All four full logs
+now report `nothing worth a look`; the measurements behind that, and what it does not
+prove, are in [writeups/audit-noise-real-logs.md](writeups/audit-noise-real-logs.md).
   `servediff audit --markdown run1.log` wraps it in a code fence sized around any
   backticks inside, so it can go straight into the issue form's third field.
   `servediff audit --max-shapes 20 run1.log` exits `1` when more than 20 shapes need a
@@ -524,7 +529,7 @@ Exit codes: `0` no differences, `1` differences, `2` nothing recognised.
   moment you want to know rather than three regressions later.
 - One worked example end to end: [writeups/wsl-uva-028-vs-030.md](writeups/wsl-uva-028-vs-030.md)
   — same flags on a laptop GPU under WSL2, 0.28.0 dies with `RuntimeError: UVA is not
-  available`, 0.30.0 starts; the startup-log diff is 48 differences and 13 identical facts,
+  available`, 0.30.0 starts; the startup-log diff is 48 differences and 14 identical facts,
   and the one line that explains it is the pinned-memory fallback from vllm#56908.
 
 ## License

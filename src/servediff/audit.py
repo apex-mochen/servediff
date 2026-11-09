@@ -74,7 +74,7 @@ NOISE = (
     # The source lines a traceback echoes; each is part of a call, not a setting.
     re.compile(r"^\s*(self\.|return |raise |yield |assert |del |super\(\)|with |async with"
                r"|await |next\(|import |from )"),
-    re.compile(r"^\s*(?:[\w.]+(?:,\s*[\w.]+)*|[\w.]+:\s*[\w.\[\]]+)\s*=\s*[\w.]+\s*\("),  # `x = Y(` frame echo
+    re.compile(r"^\s*(?:[\w.]+(?:,\s*[\w.]+)*|[\w.]+:\s*[\w.\[\]]+)\s*=\s*(?:await\s+)?[\w.]+\s*\("),  # `x = Y(` frame echo
     re.compile(r"^\s*[\w.]+\([^()]*(?:\([^()]*\)[^()]*)*\)(?:\))?\s*$"),  # `uvloop.run(run_server(args))`
     re.compile(r"^\s*[\w.]+\($"),  # a call split across lines: `super().__init__(`
     # A logging failure's own dump: the traceback is about logging, not about the server.
@@ -109,6 +109,9 @@ NOISE = (
     # prints which config it is running. Auditing those lines finds no rule that could
     # ever read them, because they are not vLLM log lines.
     re.compile(r"^>>> |^\[spec_bench\]|^!!! "),
+    # A bare `AssertionError` under a failed import check: the detail is the line above,
+    # which is read as `kernel.module_missing` / `kernel.missing_lib`.
+    re.compile(r"^AssertionError$"),
     re.compile(r"^I want to run inference of a \[specific model\]"),
 )
 
