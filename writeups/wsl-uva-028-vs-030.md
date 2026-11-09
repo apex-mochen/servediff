@@ -56,7 +56,12 @@ backend.flash_attn_version       <absent>                                 2     
 backend.sampling_flashinfer      <absent>                                 disabled                                 only_candidate
 compile.artifacts                <absent>                                 25 entries, 3 artifacts, 4996920 bytes   only_candidate
 compile.autotune_gemm            <absent>                                 disabled (not enough SMs)                only_candidate
+compile.dynamo_s                 <absent>                                 9.43                                     only_candidate
+compile.graph_s                  <absent>                                 13.12                                    only_candidate
+compile.range                    <absent>                                 1,2048                                   only_candidate
 compile.total_s                  <absent>                                 31.08                                    only_candidate
+compile.warmup_s                 <absent>                                 1.02                                     only_candidate
+cpu.torch_threads                <absent>                                 16 -> 1                                  only_candidate
 cuda_graph.capture_gib           <absent>                                 [0.25, 0.17]                             only_candidate
 cuda_graph.capture_s             <absent>                                 [9, 11]                                  only_candidate
 cuda_graph.captures              <absent>                                 ["PIECEWISE x51", "FULL x2", "FULL x35"] only_candidate
@@ -95,7 +100,7 @@ weights.filesystem               <absent>                                 EXT4  
 weights.load_s                   <absent>                                 10.49                                    only_candidate
 weights.prefetch                 <absent>                                 disabled (EXT4 is not a network FS)      only_candidate
 
-43 difference(s); 13 fact(s) identical. Absent means the log did not print it, not that it was off.
+48 difference(s); 13 fact(s) identical. Absent means the log did not print it, not that it was off.
 ```
 
 Exit code `1` here means "the two logs differ", not "the tool failed". `2` would mean it

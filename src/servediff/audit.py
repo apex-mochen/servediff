@@ -45,6 +45,13 @@ NOISE = (
     re.compile(r"^\s*(self\.|return |raise )"),
     re.compile(r"^\s*[\w.]+ ?= ?[\w.]*\([^)]*\)\s*$"),
     re.compile(r"^\s*[\w.]+\([^)]*\)\s*$"),
+    # Phase markers: they say a step began, never with what settings it ran.
+    re.compile(r"JIT kernel warmup starting\.|Starting torch\.compile$"),
+    # A per-machine absolute path, so it can never be equal across two boxes and no
+    # setting hides inside it.
+    re.compile(r"Using cache directory: |saved AOT compiled function to "),
+    # Serving telemetry, printed while the server runs: a metric, not a startup setting.
+    re.compile(r"Avg prompt throughput"),
 )
 
 

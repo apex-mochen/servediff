@@ -196,6 +196,20 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
      lambda m: [("jit.warmup_s", float(m[1]))]),
     (re.compile(r"monitored JIT compilations during inference will use mode=(\w+)"),
      lambda m: [("jit.monitor_mode", m[1])]),
+    # torch.compile on the backbone, split into the costs it actually spends time on: the
+    # bytecode transform, one graph per compile range, and a single profiling pass. An
+    # upgrade can add seconds here without changing a single flag, and one total would
+    # hide which of the three moved.
+    (re.compile(r"Dynamo bytecode transform time: ([\d.]+) s"),
+     lambda m: [("compile.dynamo_s", float(m[1]))]),
+    (re.compile(r"Compiling a graph for compile range \((\d+), (\d+)\) takes ([\d.]+) s"),
+     lambda m: [("compile.range", f"{m[1]},{m[2]}"), ("compile.graph_s", float(m[3]))]),
+    (re.compile(r"Initial profiling/warmup run took ([\d.]+) s"),
+     lambda m: [("compile.warmup_s", float(m[1]))]),
+    # Serving torch threads are cut to one by default; the pair matters, because "1" alone
+    # cannot say whether it was cut from 16 (a CPU-heavy box) or from 4.
+    (re.compile(r"Reducing Torch threads from (\d+) to (\d+) for serving"),
+     lambda m: [("cpu.torch_threads", f"{m[1]} -> {m[2]}")]),
     # Sampling defaults are silently taken from the model's generation_config.json;
     # two runs of the same flags can sample differently because of it.
     (re.compile(r"generation_config\.json[`'\":]+ ?(.+)$"),

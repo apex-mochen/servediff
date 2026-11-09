@@ -149,7 +149,12 @@ backend.flash_attn_version       <absent>                                 2     
 backend.sampling_flashinfer      <absent>                                 disabled                                 only_candidate
 compile.artifacts                <absent>                                 25 entries, 3 artifacts, 4996920 bytes   only_candidate
 compile.autotune_gemm            <absent>                                 disabled (not enough SMs)                only_candidate
+compile.dynamo_s                 <absent>                                 9.43                                     only_candidate
+compile.graph_s                  <absent>                                 13.12                                    only_candidate
+compile.range                    <absent>                                 1,2048                                   only_candidate
 compile.total_s                  <absent>                                 31.08                                    only_candidate
+compile.warmup_s                 <absent>                                 1.02                                     only_candidate
+cpu.torch_threads                <absent>                                 16 -> 1                                  only_candidate
 cuda_graph.capture_gib           <absent>                                 [0.25, 0.17]                             only_candidate
 cuda_graph.capture_s             <absent>                                 [9, 11]                                  only_candidate
 cuda_graph.captures              <absent>                                 ["PIECEWISE x51", "FULL x2", "FULL x35"] only_candidate
@@ -188,7 +193,7 @@ weights.filesystem               <absent>                                 EXT4  
 weights.load_s                   <absent>                                 10.49                                    only_candidate
 weights.prefetch                 <absent>                                 disabled (EXT4 is not a network FS)      only_candidate
 
-43 difference(s); 13 fact(s) identical. Absent means the log did not print it, not that it was off.
+48 difference(s); 13 fact(s) identical. Absent means the log did not print it, not that it was off.
 ```
 
 0.28.0 does not start on WSL2 with default settings; 0.30.0 does, because it falls
@@ -203,7 +208,10 @@ note: candidate: no all-reduce facts: world_size=1, so there is no all-reduce gr
 
 fact                             baseline                                 candidate                                status
 compile.artifacts                25 entries, 3 artifacts, 4997798 bytes   25 entries, 3 artifacts, 4996920 bytes   changed
+compile.dynamo_s                 8.29                                     9.43                                     changed
+compile.graph_s                  16.92                                    13.12                                    changed
 compile.total_s                  32.58                                    31.08                                    changed
+compile.warmup_s                 2.66                                     1.02                                     changed
 cuda_graph.capture_gib           0.36                                     [0.25, 0.17]                             changed
 cuda_graph.capture_s             12                                       [9, 11]                                  changed
 cuda_graph.captures              ["mixed prefill-decode, PIECEWISE x51... ["PIECEWISE x51", "FULL x2", "FULL x35"] changed
@@ -227,7 +235,7 @@ weights.available_ram_gib        4.94                                     4.23  
 weights.cache                    <absent>                                 miss (from scratch)                      only_candidate
 weights.load_s                   7.86                                     10.49                                    changed
 
-24 difference(s); 31 fact(s) identical. Absent means the log did not print it, not that it was off.
+27 difference(s); 33 fact(s) identical. Absent means the log did not print it, not that it was off.
 ```
 
 Rows of that kind are the reason this exists, and none of them shows up in a bug report.
@@ -246,7 +254,7 @@ filesystem it does not recognise as a network FS, and startup time changes with 
 
 The most common real pair is a run that crashed against the same flags that now work. The
 crash stops the log early, so every fact printed after it is `<absent>` on one side — on the
-0.28.0-vs-0.30.0 pair that is 40 of the 43 rows, and they bury the three that explain the
+0.28.0-vs-0.30.0 pair that is 45 of the 48 rows, and they bury the three that explain the
 outcome. `--skip-absent` keeps only the facts both logs printed, i.e. what changed on the
 same code path, and says how many it hid instead of quietly recounting them as identical:
 
@@ -254,14 +262,14 @@ same code path, and says how many it hid instead of quietly recounting them as i
 $ servediff diff vllm-0.28.0.log vllm-0.30.0.log --skip-absent
 warning: baseline server failed to start: RuntimeError: UVA is not available; facts after the failure are absent because startup stopped, not because they were off
 
-note: 40 difference(s) hidden by --skip-absent: one side never printed those lines, so they can only be listed, not compared
+note: 45 difference(s) hidden by --skip-absent: one side never printed those lines, so they can only be listed, not compared
 
 fact                             baseline                                 candidate                                status
 engine.version                   0.28.0                                   0.30.0                                   changed
 parallel.roles                   DP rank 0, PP rank 0, PCP rank 0, TP ... DP rank 0, PP rank 0, PCP rank 0, TP ... changed
 startup                          failed                                   ready                                    changed
 
-3 difference(s); 13 fact(s) identical. 40 difference(s) skipped because one side never printed those lines (--skip-absent). Absent means the log did not print it, not that it was off.
+3 difference(s); 13 fact(s) identical. 45 difference(s) skipped because one side never printed those lines (--skip-absent). Absent means the log did not print it, not that it was off.
 ```
 
 The exit code is still 1: the inputs do differ. `--json` reports both counts
@@ -398,6 +406,8 @@ contains `TOKEN`, `KEY`, `SECRET`, `PASSWORD`, `CREDENTIAL` or `AUTH` are replac
 | KV cache capacity | `Available KV cache memory: … GiB`, `GPU KV cache size: … tokens`, `Maximum concurrency for … tokens per request: …x` | — |
 | model identity | `Resolved architecture: …`, `Using max model len …` — the values the engine settled on, which can differ from the requested args | — |
 | engine init cost | `init engine (profile, create kv cache, warmup model) took … s` | — |
+| compile cost, split | `torch.compile took … s` and its parts: `Dynamo bytecode transform time: … s`, `Compiling a graph for compile range (1, 2048) takes … s` (with the range as its own fact), `Initial profiling/warmup run took … s` — one total cannot say which of the three moved | — |
+| CPU threads for serving | `Reducing Torch threads from 16 to 1 for serving` — the pair, because `1` alone cannot say what it was cut from | — |
 | loading cost, split | `Loading model from scratch`, `Initializing model took … s`, `Loading weights took … s`, `Model loading took … GiB memory and … seconds` — so a slower startup names its step | — |
 | weight source | `Filesystem type for checkpoints: … Checkpoint size: … Available RAM: …`, `Auto-prefetch is …` (prefetch is skipped on a filesystem the loader does not treat as a network FS) | — |
 | GPU memory headroom | free / total at startup, desired utilization, budgeted GiB, plus `CUDA graph memory profiling` mode and the effective utilization it leaves (`equivalent to --gpu-memory-utilization=…`, `increase … to …` to keep the old KV cache) | — |
@@ -489,9 +499,11 @@ Exit codes: `0` no differences, `1` differences, `2` nothing recognised.
   shows up as `<absent>`, never as a wrong value — please report it. Run
   `servediff audit run1.log` first: it prints the lines no rule reads yet, and that
   report is the useful half of a bug report. On a real 170-line vLLM startup log that
-  is 68 unread lines, of which 59 are noise (the route table, banner art, deprecation
-  warnings, progress bars, access logs) and 9 are shapes worth a look — the report
-  counts the noise and lists only the second group, so what you paste is short.
+  is 64 unread lines, all of them noise (the route table, banner art, deprecation
+  warnings, progress bars, access logs) — the report counts the noise and, when something
+  is worth a look, lists only that second group, so what you paste is short. On that log
+  nothing is left worth a look, and a test holds it that way: the day a version prints a
+  configuration line this parser does not read, the suite fails and names the shape.
   `servediff audit --markdown run1.log` wraps it in a code fence sized around any
   backticks inside, so it can go straight into the issue form's third field.
   `servediff audit --max-shapes 20 run1.log` exits `1` when more than 20 shapes need a
@@ -500,7 +512,7 @@ Exit codes: `0` no differences, `1` differences, `2` nothing recognised.
   moment you want to know rather than three regressions later.
 - One worked example end to end: [writeups/wsl-uva-028-vs-030.md](writeups/wsl-uva-028-vs-030.md)
   — same flags on a laptop GPU under WSL2, 0.28.0 dies with `RuntimeError: UVA is not
-  available`, 0.30.0 starts; the startup-log diff is 43 differences and 13 identical facts,
+  available`, 0.30.0 starts; the startup-log diff is 48 differences and 13 identical facts,
   and the one line that explains it is the pinned-memory fallback from vllm#56908.
 
 ## License

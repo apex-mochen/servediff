@@ -91,6 +91,16 @@ def test_real_server_log_from_033_is_parsed():
     assert f["jit.warmup_s"].value == 0.0
     assert f["jit.monitor_mode"].value == "warn"
     assert f["compile.autotune_gemm"].value == "disabled (not enough SMs)"
+    # torch.compile is one number in the summary line (9.82 s) and three parts here; an
+    # upgrade that doubles startup is usually one of these three moving, not all of them.
+    assert f["compile.total_s"].value == 9.82
+    assert f["compile.dynamo_s"].value == 3.61
+    assert f["compile.range"].value == "1,2048"
+    assert f["compile.graph_s"].value == 4.17
+    assert f["compile.warmup_s"].value == 0.13
+    # Serving torch threads are cut, and the pair is the setting: "1" alone would not say
+    # whether the cut came from 16 or from 4.
+    assert f["cpu.torch_threads"].value == "16 -> 1"
     # Sampling defaults came from the model, not from the flags.
     assert "repetition_penalty" in f["sampling.overridden"].value
     # One fact per op: the whole IrOpPriorityConfig line is too wide for the table and
@@ -519,24 +529,43 @@ def test_audit_names_the_lines_nothing_reads():
 
 def test_audit_separates_noise_from_shapes_worth_a_look():
     # A report that dumps 80 lines, 59 of them route tables and banner art, does not get
-    # read. Noise is counted apart, and --everything is the only way to see it.
+    # read. Noise is counted apart, and --everything is the only way to see it — except
+    # when nothing is worth a look, where the noise list is the only content there is.
     from servediff import audit
+
+    mixed = ("INFO 11-08 [backends.py:1] A setting no rule knows about: 42\n"
+             + 'INFO:     127.0.0.1:8000 - "GET /health HTTP/1.1" 200 OK\n')
+    text = audit.report(Path("mixed.log"), mixed)
+    assert "1 line(s) worth a look" in text
+    assert "no rule knows about" in text
+    assert "line(s) of noise" in text
+    assert "--everything to list them" in text
+    assert "Route: /" not in text and "GET /health" not in text
+    assert "GET /health" in audit.report(Path("mixed.log"), mixed, everything=True)
 
     real = (FIX / "vllm-0.33.0-real-rtx4060.log").read_text(encoding="utf-8")
     counts, samples = audit.unread_samples(real)
     look, noise = audit.split(counts, samples)
-    assert sum(look.values()) < sum(counts.values())
     assert sum(noise.values()) > 0
     default = audit.report(Path("real.log"), real)
-    assert "line(s) worth a look" in default
     assert "line(s) of noise" in default
-    assert "--everything to list them" in default
-    assert "Route: /" not in default
-    everything = audit.report(Path("real.log"), real, everything=True)
-    assert "Route: /" in everything
+    assert "Route: /" in default  # nothing worth a look, so the ignored lines are shown
     # Classifying on the shape alone loses the status code, so access logs would stay in
     # the "worth a look" list; they must be noise.
     assert audit.is_noise('INFO:     127.0.0.1:8000 - "GET /health HTTP/1.1" 200 OK')
+
+
+def test_the_one_real_log_has_nothing_left_worth_a_look():
+    # The fixture is a full live-server log, not an excerpt, so "every unread line is
+    # noise" is the standard this parser is held to on the only log it has that a stranger
+    # could also produce. This fails the day a version adds a configuration line the
+    # parser does not read — which is exactly the regression the audit exists to catch.
+    from servediff import audit
+
+    real = (FIX / "vllm-0.33.0-real-rtx4060.log").read_text(encoding="utf-8")
+    look, _ = audit.split(*audit.unread_samples(real))
+    assert not look, sorted(look)  # names the shapes, so the failure says what was missed
+    assert "nothing worth a look" in audit.report(Path("real.log"), real)
 
 
 def test_audit_does_not_call_a_read_line_unread():

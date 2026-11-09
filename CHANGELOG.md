@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.4.21 — 2026-11-09
+
+- Reads the last nine lines of the real vLLM 0.33.0 startup log that no rule matched. Four
+  carry configuration and now have rules:
+  `Reducing Torch threads from 16 to 1 for serving` → `cpu.torch_threads` (the pair, because
+  `1` alone cannot say what it was cut from); `Dynamo bytecode transform time: 9.43 s` →
+  `compile.dynamo_s`; `Compiling a graph for compile range (1, 2048) takes 13.12 s` →
+  `compile.range` + `compile.graph_s`; `Initial profiling/warmup run took 1.02 s` →
+  `compile.warmup_s`. `compile.total_s` is one number; an upgrade that doubles startup is
+  usually one of these three moving, and the split is what says which.
+- The other five are noise and are now classified as such instead of being offered back to
+  the reader: `[backbone] Starting torch.compile` and `JIT kernel warmup starting.` (phase
+  markers with no setting), `Using cache directory: …` and `saved AOT compiled function to …`
+  (per-machine absolute paths that can never be equal across two boxes), and
+  `Engine N: Avg prompt throughput …` (serving telemetry, not startup configuration).
+- `servediff audit` on that log is now clean — 64 unread lines, every one of them noise,
+  nothing worth a look — and a test holds the standard there: it fails, naming the shape, the
+  day a version prints configuration this parser cannot read.
+- README / write-up numbers recomputed from a fresh run, since the new facts change them:
+  0.28.0 vs 0.30.0 is now **48 differences / 13 identical** (`--skip-absent`: 3 visible,
+  45 hidden), and 0.28.0 with the V1 runner vs 0.30.0 is **27 / 33**. The fact table gained
+  rows for the compile split and for CPU threads.
+- 61 tests.
+
 ## 0.4.20 — 2026-11-08
 
 - `servediff audit --max-shapes N` exits `1` when more than N shapes need a look, so the
