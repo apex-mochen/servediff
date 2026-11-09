@@ -687,6 +687,86 @@ def test_a_rocm_collect_env_block_is_read_as_versions_not_as_180_settings():
     assert not look, sorted(look)
 
 
+def test_a_cuda_collect_env_block_is_read_as_facts_not_as_a_pip_inventory():
+    # A production-image report (vllm#63505): the same collect_env block on CUDA. The
+    # versions that decide kernels are facts; the ~35 `[pip3] nvidia-*==` lines are an
+    # inventory, and "Could not collect" is an absence rather than a value.
+    path = FIX / "vllm-0.32.0-cuda-collectenv.log"
+    f = servediff.parse(path.read_text(encoding="utf-8"))["facts"]
+    assert f["engine.version"].value == "0.32.0"
+    assert f["env.var.CUDA_VERSION"].value == "13.0.2"
+    assert f["env.var.TORCH_CUDA_ARCH_LIST"].value == "7.5 8.0 8.6 8.9 9.0 10.0 12.0"
+    assert f["env.var.VLLM_IMAGE_TAG"].value.startswith("vllm/vllm-openai:v5df63a72")
+    assert f["env.var.VLLM_USAGE_SOURCE"].value == "production-docker-image"
+    # A CUDA box printed `ROCM Version : Could not collect`, which used to become
+    # env.rocm = "Could" and then compare equal to another CUDA box.
+    assert "env.rocm" not in f
+    assert "env.hip" not in f
+    assert not [k for k in f if k.startswith("env.pip.") and k.count("-") > 1]
+    counts, samples = servediff_audit.unread_samples(path.read_text(encoding="utf-8"))
+    look, _ = servediff_audit.split(counts, samples)
+    assert not look, sorted(look)
+
+
+def test_an_eight_gpu_rocm_log_reads_its_topology_tables_as_noise():
+    # vllm#65611: eight MI355X cards, so `collect_env` ends with the rocm-smi weight / hops /
+    # link-type matrices and the GPU topology grid. Those print the machine, not the run.
+    path = FIX / "vllm-0.33.0rc1-rocm-mi355x.log"
+    f = servediff.parse(path.read_text(encoding="utf-8"))["facts"]
+    assert f["engine.version"].value == "0.33.0rc1.dev490+gade358752"
+    assert f["gpu.model"].value == "AMD Instinct MI355X (gfx950:sramecc+:xnack-)"
+    assert f["env.var.PYTORCH_ROCM_ARCH"].value == "gfx90a;gfx942;gfx950"
+    assert f["env.torch_rocm"].value == "7.15.26333"
+    counts, samples = servediff_audit.unread_samples(path.read_text(encoding="utf-8"))
+    look, _ = servediff_audit.split(counts, samples)
+    assert not look, sorted(look)
+
+
+def test_a_sglang_environment_dump_is_read_as_versions_not_as_a_package_list():
+    # sgl-project/sglang#41654: SGLang prints `name: value` per line for ~35 packages. The
+    # ones that decide which kernels load are facts; the rest is inventory.
+    path = FIX / "sglang-0.5.20-env-dump.log"
+    f = servediff.parse(path.read_text(encoding="utf-8"))["facts"]
+    assert f["engine.version"].value == "0.5.20"
+    assert f["env.torch"].value == "2.13.0+cu130"
+    assert f["env.pip.sglang-kernel"].value == "0.4.7"
+    assert f["env.pip.flashinfer-python"].value == "0.6.18"
+    assert f["env.var.CUDA_HOME"].value == "/usr/local/cuda"
+    assert f["env.cuda_driver"].value == "580.126.09"
+    assert f["env.ulimit.soft"].value == 1048576
+    counts, samples = servediff_audit.unread_samples(path.read_text(encoding="utf-8"))
+    look, _ = servediff_audit.split(counts, samples)
+    assert not look, sorted(look)
+
+
+def test_a_bracketed_sglang_timestamp_is_a_prefix_not_content():
+    # sgl-project/sglang#42684: `[2026-10-06 00:15:19] NIXL KVManager initialized with
+    # backend: UCX` — a scheduler that died at startup, on a line whose prefix used to
+    # swallow the message. None of it is in `server_args`.
+    path = FIX / "sglang-0.5-nixl-startup-failure.log"
+    f = servediff.parse(path.read_text(encoding="utf-8"))["facts"]
+    assert f["transfer.nixl_backend"].value == "UCX"
+    assert f["cache.radix"].value.startswith("source=default impl=UnifiedRadixCache")
+    started = f["startup"].value
+    assert "failed (scheduler)" in (started if isinstance(started, list) else [started])
+    assert f["startup.error"].value.startswith("TypeError: NixlKVManager")
+    counts, samples = servediff_audit.unread_samples(path.read_text(encoding="utf-8"))
+    look, _ = servediff_audit.split(counts, samples)
+    assert not look, sorted(look)
+
+
+def test_a_per_request_crash_reads_its_indexerror_as_the_cause():
+    # sgl-project/sglang#48502: the server starts, then every request raises
+    # `IndexError: index is out of bounds for dimension with size 0`.
+    path = FIX / "sglang-0.5-indexerror-per-request.log"
+    f = servediff.parse(path.read_text(encoding="utf-8"))["facts"]
+    assert f["startup"].value == "failed"
+    assert f["startup.error"].value.startswith("IndexError: index is out of bounds")
+    counts, samples = servediff_audit.unread_samples(path.read_text(encoding="utf-8"))
+    look, _ = servediff_audit.split(counts, samples)
+    assert not look, sorted(look)
+
+
 def test_the_tp8_report_log_leaves_nothing_unread_because_these_facts_are_read():
     # Every line below is a shape the audit named as "no rule reads them" on a real
     # vLLM 0.23.1 TP=8 startup log. They are the configuration that made that run

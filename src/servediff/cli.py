@@ -32,6 +32,19 @@ from pathlib import Path
 from servediff import env as envsnap
 
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
+# SGLang wraps its timestamp in brackets: `[2026-10-06 00:15:19] Tree cache …`.
+BRACKET_TS = re.compile(r"^\[(?:\d{4}-)?\d\d-\d\d \d\d:\d\d:\d\d\]\s*")
+
+# `Could not collect`, `N/A` and `Not Set` are absences, not values: read literally they
+# produced a fact like env.rocm = "Could" on a CUDA box, which then matched itself.
+_ABSENT = ("n/a", "not set", "unknown")
+
+
+def _env(key, value):
+    text = str(value).strip()
+    if text.lower() in _ABSENT or text.lower().startswith("could not collect"):
+        return []
+    return [(key, text)]
 
 
 @dataclass
@@ -135,17 +148,42 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
     # against a different ROCm changes every kernel a run can pick.
     (re.compile(r"^vLLM Version\s+:\s*(\S+)(?: \(git sha: (\w+), date: (\w+)\))?"),
      lambda m: [("engine.version", m[1]), ("engine.git_sha", m[2])] if m[2] else [("engine.version", m[1])]),
-    (re.compile(r"^PyTorch version\s+:\s*(\S+)"), lambda m: [("env.torch", m[1])]),
-    (re.compile(r"^ROCM used to build PyTorch\s+:\s*(\S+)"), lambda m: [("env.torch_rocm", m[1])]),
-    (re.compile(r"^ROCM Version\s+:\s*(\S+)"), lambda m: [("env.rocm", m[1])]),
-    (re.compile(r"^HIP runtime version\s+:\s*(\S+)"), lambda m: [("env.hip", m[1])]),
+    (re.compile(r"^PyTorch version\s+:\s*(\S+)"), lambda m: _env("env.torch", m[1])),
+    (re.compile(r"^ROCM used to build PyTorch\s+:\s*(\S+)"), lambda m: _env("env.torch_rocm", m[1])),
+    (re.compile(r"^ROCM Version\s+:\s*(.+)$"), lambda m: _env("env.rocm", m[1])),
+    (re.compile(r"^HIP runtime version\s+:\s*(.+)$"), lambda m: _env("env.hip", m[1])),
     (re.compile(r"^OS\s+:\s*(.+)$"), lambda m: [("env.os", m[1].strip())]),
     (re.compile(r"^Python version\s+:\s*(\S+)"), lambda m: [("env.python", m[1])]),
-    (re.compile(r"^GPU models and configuration\s+:\s*(.+)$"), lambda m: [("gpu.model", m[1].strip())]),
-    (re.compile(r"^\[pip3\] (torch|triton|transformers|numpy)==(\S+)"),
+    (re.compile(r"^GPU models and configuration\s+:\s*(.+)$"), lambda m: _env("gpu.model", m[1])),
+    (re.compile(r"^\[pip3\] (torch|triton|transformers|numpy|flashinfer-python)==(\S+)\b"),
      lambda m: [(f"env.pip.{m[1]}", m[2])]),
-    (re.compile(r"^(TORCHINDUCTOR_CACHE_DIR|PYTORCH_ROCM_ARCH|MAX_JOBS|LD_LIBRARY_PATH|PYTORCH_NVML_BASED_CUDA_CHECK|TORCHINDUCTOR_COMPILE_THREADS)=(.+)$"),
+    # collect_env ends with the environment the engine ran in. Any NAME=value there is a
+    # setting, so the list is general — minus device selection and per-host cache paths,
+    # which differ between two boxes started with the same flags and must not read as a
+    # difference.
+    (re.compile(r"^(?!(?:CUDA_VISIBLE_DEVICES|NVIDIA_VISIBLE_DEVICES|VLLM_CACHE_ROOT)=)"
+                r"([A-Z][A-Z0-9_]{2,})=(.+)$"),
      lambda m: [(f"env.var.{m[1]}", m[2].strip())]),
+    # SGLang prints its own environment dump, `name: value` one per line, half of which is
+    # package inventory. The versions below decide which kernels load.
+    (re.compile(r"^Python: (\S+)"), lambda m: _env("env.python", m[1])),
+    (re.compile(r"^PyTorch: (\S+)"), lambda m: _env("env.torch", m[1])),
+    (re.compile(r"^sglang: (\S+)"), lambda m: _env("engine.version", m[1])),
+    (re.compile(r"^sglang-kernel: (\S+)"), lambda m: _env("env.pip.sglang-kernel", m[1])),
+    (re.compile(r"^flashinfer_python: (\S+)"), lambda m: _env("env.pip.flashinfer-python", m[1])),
+    (re.compile(r"^triton: (\S+)"), lambda m: _env("env.pip.triton", m[1])),
+    (re.compile(r"^transformers: (\S+)"), lambda m: _env("env.pip.transformers", m[1])),
+    (re.compile(r"^numpy: (\S+)"), lambda m: _env("env.pip.numpy", m[1])),
+    (re.compile(r"^CUDA_HOME: (\S+)"), lambda m: _env("env.var.CUDA_HOME", m[1])),
+    (re.compile(r"^NVCC: (.+)$"), lambda m: _env("env.nvcc", m[1])),
+    (re.compile(r"^CUDA Driver Version: (\S+)"), lambda m: _env("env.cuda_driver", m[1])),
+    # SGLang runtime: the radix cache it built, the transfer backend it chose, and a
+    # scheduler that died before serving — none of it appears in `server_args`.
+    (re.compile(r"^Tree cache initialized: (.+)$"), lambda m: [("cache.radix", m[1].strip())]),
+    (re.compile(r"^NIXL KVManager initialized with backend: (\S+)"),
+     lambda m: [("transfer.nixl_backend", m[1])]),
+    (re.compile(r"^Scheduler hit an exception"), lambda m: [("startup", "failed (scheduler)")]),
+    (re.compile(r"^ulimit (soft|hard): (\d+)"), lambda m: [(f"env.ulimit.{m[1]}", int(m[2]))]),
     # Model loading cost: memory footprint and wall time. Both V1 (gpu_model_runner)
     # and V2 (model_runner) print the same message, and 0.23 printed it without the
     # word `memory` — a rule pinned to the newer wording silently lost the older log.
@@ -285,7 +323,7 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
      lambda m: [("startup", "failed (output handler)")]),
     # Exception classes arrive fully qualified in some versions
     # (`vllm.v1.engine.exceptions.EngineDeadError: …`), so the type may be mid-line.
-    (re.compile(r"((?:RuntimeError|ValueError|torch\.OutOfMemoryError|AssertionError|AttributeError|KeyError|TypeError|EngineDeadError): .+)$"),
+    (re.compile(r"((?:RuntimeError|ValueError|IndexError|torch\.OutOfMemoryError|AssertionError|AttributeError|KeyError|TypeError|EngineDeadError): .+)$"),
      lambda m: [("startup.error", m[1].strip())]),
     # SGLang.
     (re.compile(r"Disable prefill CUDA graph because"), lambda m: [("cuda_graph.prefill", "disabled")]),
@@ -424,7 +462,7 @@ def parse(text: str) -> dict:
         facts.setdefault(key, Fact()).add(value, lineno, line)
 
     for lineno, raw in enumerate(text.splitlines(), 1):
-        line = ANSI.sub("", raw)
+        line = BRACKET_TS.sub("", ANSI.sub("", raw))
         if "non-default args:" in line:
             engine = engine or "vllm"
             parsed = _literal_dict(line.split("non-default args:", 1)[1].strip())

@@ -81,13 +81,66 @@ caught, both now pinned by tests:
 - a launch command pasted into a report (`vllm serve … \` + `--flag value \`) is the user's
   shell history, not output — the server prints its args itself as "non-default args".
 
+## Eleven more logs, and a second engine
+
+One unfamiliar log proves the failure mode; it does not show its size. So the next pass was
+twelve more report pastes, picked from issue searches rather than from anything this machine
+ran: six vLLM and six SGLang.
+
+| log | what it is | worth a look, before | after |
+|---|---|---|---|
+| vllm#65611 | eight MI355X cards, vLLM 0.33.0rc1 | 61 | 0 |
+| vllm#65250 | gVisor, vLLM 0.30.0 | 51 | 0 |
+| vllm#63505 | production image, vLLM 0.32.0, CUDA 13.0 | 45 | 0 |
+| vllm#63536 | RTX PRO 5000, prose pasted between the logs | 44 | 0 |
+| sglang#41654 | SGLang 0.5.20 environment dump | 39 | 0 |
+| sglang#42684 | NIXL backend, scheduler dies at startup | 12 | 0 |
+| sglang#43741 / #49206 / #48502 / #46756 | four shorter SGLang reports | 11 / 3 / 2 / 0 | 0 |
+
+Three classes of miss, none of which is a single bad regex:
+
+- **An inventory read as a setting.** A CUDA container prints ~35 `[pip3] nvidia-*==` lines;
+  only a few wheels decide which kernels load. The rule now reads `flashinfer-python` too and
+  the rest of the inventory is noise. The same problem one level up: the block ends with the
+  environment, and the tool had whitelisted six variables out of it, so `CUDA_VERSION`,
+  `TORCH_CUDA_ARCH_LIST`, `VLLM_BUILD_COMMIT`, `VLLM_IMAGE_TAG` all read as "unread". It is a
+  general `NAME=value` rule now — minus `CUDA_VISIBLE_DEVICES`, `NVIDIA_VISIBLE_DEVICES` and
+  `VLLM_CACHE_ROOT`, which differ between two boxes started with identical flags and would
+  otherwise read as differences.
+- **An absence read as a value.** `ROCM Version : Could not collect` matched a rule that
+  captured one token, so a CUDA box reported `env.rocm = "Could"`. Worse than noise: two
+  CUDA boxes agreed on a value neither had, and `diff` could never show it. `Could not
+  collect`, `N/A`, `Not Set` and `unknown` now produce no fact at all.
+- **Another engine's prefix.** SGLang prints `[2026-10-06 00:15:19] NIXL KVManager
+  initialized with backend: UCX`, and its own `name: value` dump. The brackets were not
+  stripped, so every message behind them was content, and the dump was package inventory.
+  Both now go through the same normalisation `parse` uses — the audit had been re-implementing
+  the prefix handling on its own, which is how the two drifted apart.
+
+The machine-inventory half is the same idea as the ROCm block: an eight-card `rocm-smi`
+weight / hops / link-type matrix, the GPU topology grid with its `Legend:`, `GPU N:` headers
+and Hypervisor lines describe the box, not the run.
+
+Two useful side effects on the way:
+
+- `diff vllm-65250.log vllm-63505.log` — a gVisor run against a production image — reports
+  **23 differences / 5 identical**, and the differences are the ones that decide what the
+  server can do: `TORCH_CUDA_ARCH_LIST`, `VLLM_BUILD_COMMIT`, `VLLM_IMAGE_TAG`, `CUDA_HOME`,
+  `NVIDIA_REQUIRE_CUDA`, plus `OMP_NUM_THREADS` / `MKL_NUM_THREADS` /
+  `VLLM_USE_FLASHINFER_SAMPLER` that only one side printed.
+- `diff sg-41654.log sg-42684.log` reports **16 differences / 0 identical**, including
+  `startup: failed (scheduler)` and `TypeError: NixlKVManager.set_kv_buffer_tensors() got an
+  unexpected keyword argument 'slot_layer_ids'` — a startup failure that no `server_args`
+  records.
+
 ## What zero does and does not mean
 
-Zero here is a claim about **what these six logs print**, not about log space. The four above
-plus two fixtures (a crashed startup and a clean 170-line run) all report
-`nothing worth a look`; a log from a stack none of them covers may well print shapes no rule
-knows — and one did: the ROCm block below started at 175 and needed two rounds of work
-before it reached zero. That is
+Zero here is a claim about **what these eighteen logs print**, not about log space. The four
+full logs above, two fixtures (a crashed startup and a clean 170-line run) and the twelve
+issue pastes all report `nothing worth a look`; a log from a stack none of them covers may
+well print shapes no rule knows — and one did: the ROCm block started at 175 and needed two
+rounds of work before it reached zero, and the twelve pastes after it added three more
+classes of miss before they did. That is
 precisely why the audit prints the second group at all, and why
 `servediff audit --max-shapes 20` exists as a gate: zero is measured per log, and the next
 unfamiliar log is expected to break it.

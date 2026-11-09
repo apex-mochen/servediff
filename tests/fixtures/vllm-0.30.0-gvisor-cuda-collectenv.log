@@ -1,0 +1,140 @@
+Collecting environment information...
+uv is set
+==============================
+        System Info
+==============================
+OS                           : Debian GNU/Linux 12 (bookworm) (x86_64)
+GCC version                  : (Debian 12.2.0-14+deb12u1) 12.2.0
+Clang version                : Could not collect
+CMake version                : Could not collect
+Libc version                 : glibc-2.36
+
+==============================
+       PyTorch Info
+==============================
+PyTorch version              : 2.13.0+cu130
+Is debug build               : False
+CUDA used to build PyTorch   : 13.0
+ROCM used to build PyTorch   : N/A
+XPU used to build PyTorch    : N/A
+
+==============================
+      Python Environment
+==============================
+Python version               : 3.12.14 (main, Sep 19 2026, 01:05:48) [GCC 12.2.0] (64-bit runtime)
+Python platform              : Linux-4.19.0-gvisor-x86_64-with-glibc2.36
+
+==============================
+       CUDA / GPU Info
+==============================
+Is CUDA available            : True
+CUDA runtime version         : Could not collect
+CUDA_MODULE_LOADING set to   : 
+GPU models and configuration : GPU 0: NVIDIA L4
+Nvidia driver version        : Could not collect
+cuDNN version                : Could not collect
+HIP runtime version          : N/A
+MIOpen runtime version       : N/A
+Is XNNPACK available         : False
+
+==============================
+          CPU Info
+==============================
+Architecture:        x86_64
+CPU op-mode(s):      32-bit, 64-bit
+Address sizes:       46 bits physical, 48 bits virtual
+Byte Order:          Little Endian
+CPU(s):              20
+On-line CPU(s) list: 0-19
+Vendor ID:           GenuineIntel
+Model name:          unknown
+CPU family:          6
+Model:               85
+Thread(s) per core:  1
+Core(s) per socket:  20
+Socket(s):           1
+Stepping:            unknown
+BogoMIPS:            2200.19
+Flags:               fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ss ht syscall nx pdpe1gb rdtscp lm pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch fsgsbase tsc_adjust bmi1 hle avx2 smep bmi2 erms invpcid rtm mpx avx512f avx512dq rdseed adx smap clwb avx512cd avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves avx512_vnni md_clear arch_capabilities
+Hypervisor vendor:   KVM
+Virtualization type: full
+NUMA node(s):        1
+NUMA node0 CPU(s):   0-19
+
+==============================
+Versions of relevant libraries
+==============================
+[pip3] flashinfer-python==0.6.18.post1
+[pip3] nccl4py==0.6.0
+[pip3] numpy==2.3.5
+[pip3] nvidia-cublas==13.1.1.3
+[pip3] nvidia-cuda-cccl==13.3.4.3.1
+[pip3] nvidia-cuda-crt==13.4.92
+[pip3] nvidia-cuda-cupti==13.0.85
+[pip3] nvidia-cuda-nvcc==13.4.92
+[pip3] nvidia-cuda-nvdisasm==13.4.92
+[pip3] nvidia-cuda-nvrtc==13.0.88
+[pip3] nvidia-cuda-runtime==13.0.96
+[pip3] nvidia-cudnn-cu13==9.20.0.48
+[pip3] nvidia-cudnn-frontend==1.30.0
+[pip3] nvidia-cufft==12.0.0.61
+[pip3] nvidia-cufile==1.15.1.6
+[pip3] nvidia-curand==10.4.0.35
+[pip3] nvidia-cusolver==12.0.4.66
+[pip3] nvidia-cusparse==12.6.3.3
+[pip3] nvidia-cusparselt-cu13==0.8.1
+[pip3] nvidia-cutlass-dsl==4.7.1
+[pip3] nvidia-cutlass-dsl-libs-base==4.7.1
+[pip3] nvidia-cutlass-dsl-libs-core==4.7.1
+[pip3] nvidia-cutlass-dsl-libs-cu12==4.7.1
+[pip3] nvidia-cutlass-dsl-libs-cu13==4.7.1
+[pip3] nvidia-ml-py==13.615.71
+[pip3] nvidia-nccl-cu13==2.29.7
+[pip3] nvidia-nvjitlink==13.4.92
+[pip3] nvidia-nvshmem-cu13==3.4.5
+[pip3] nvidia-nvtx==13.0.85
+[pip3] nvidia-nvvm==13.4.92
+[pip3] pyzmq==27.2.0
+[pip3] tokenspeed-triton==3.8.10.post20260920
+[pip3] torch==2.13.0
+[pip3] torch-c-dlpack-ext==0.1.5
+[pip3] torchaudio==2.11.0
+[pip3] torchcodec==0.17.0
+[pip3] torchvision==0.28.0
+[pip3] transformers==5.18.0
+[pip3] triton==3.7.1
+[conda] Could not collect
+
+==============================
+         vLLM Info
+==============================
+ROCM Version                 : Could not collect
+vLLM Version                 : 0.30.0
+vLLM Build Flags:
+  CUDA Archs: Not Set; ROCm: Disabled; XPU: Disabled
+GPU Topology:
+  	GPU0	CPU Affinity	NUMA Affinity	GPU NUMA ID
+GPU0	 X 				N/A
+
+Legend:
+
+  X    = Self
+  SYS  = Connection traversing PCIe as well as the SMP interconnect between NUMA nodes (e.g., QPI/UPI)
+  NODE = Connection traversing PCIe as well as the interconnect between PCIe Host Bridges within a NUMA node
+  PHB  = Connection traversing PCIe as well as a PCIe Host Bridge (typically the CPU)
+  PXB  = Connection traversing multiple PCIe bridges (without traversing the PCIe Host Bridge)
+  PIX  = Connection traversing at most a single PCIe bridge
+  NV#  = Connection traversing a bonded set of # NVLinks
+
+==============================
+     Environment Variables
+==============================
+NVIDIA_VISIBLE_DEVICES=GPU-<redacted>
+OMP_NUM_THREADS=4
+NVIDIA_DRIVER_CAPABILITIES=all
+MKL_NUM_THREADS=4
+VLLM_CACHE_ROOT=<redacted>
+VLLM_USE_FLASHINFER_SAMPLER=0
+PYTORCH_NVML_BASED_CUDA_CHECK=1
+TORCHINDUCTOR_COMPILE_THREADS=1
+TORCHINDUCTOR_CACHE_DIR=/tmp/torchinductor_root

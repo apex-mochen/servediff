@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.4.28 — 2026-11-09
+
+- The second class of misses, found the same way: twelve logs from issues the tool had never
+  seen — six vLLM (a production image, an eight-card MI355X node, a gVisor run, three short
+  excerpts) and six SGLang. Before: 61 / 45 / 44 / 51 "shapes worth a look" on the four full
+  vLLM logs and 39 / 12 / 11 / 3 / 2 on SGLang. After: nothing worth a look on all twelve.
+- Facts: the `[pip3]` rule now covers `flashinfer-python` (it decides kernels; the rest of
+  the pip inventory does not). Every `NAME=value` the `collect_env` block ends with becomes
+  `env.var.NAME` — the six-entry whitelist became a general rule — minus `CUDA_VISIBLE_DEVICES`,
+  `NVIDIA_VISIBLE_DEVICES` and `VLLM_CACHE_ROOT`, which differ between two boxes started with
+  the same flags.
+- `Could not collect`, `N/A`, `Not Set` and `unknown` are absences, not values. A CUDA box
+  was reporting `env.rocm = "Could"` because the rule captured one token of
+  `ROCM Version : Could not collect`, so two CUDA boxes compared equal on a value neither had.
+- SGLang: its own `name: value` environment dump (`sglang:`, `PyTorch:`, `sglang-kernel:`,
+  `flashinfer_python:`, `triton:`, `CUDA_HOME:`, `NVCC:`, `CUDA Driver Version:`,
+  `ulimit soft:`), the brackets around its timestamp (`[2026-10-06 00:15:19] …`, stripped as
+  a prefix by `parse`, `audit.message` and the noise table alike), `cache.radix` from
+  `Tree cache initialized: …`, `transfer.nixl_backend` from `NIXL KVManager initialized
+  with backend: UCX`, `startup: failed (scheduler)`, and `IndexError` as a startup cause.
+- Audit noise: the pip inventory, GPU topology grid / rocm-smi weight-hops-link matrices /
+  `Legend:` / Hypervisor lines, `GPU N:` and `GPU[N] (Topology)` headers, variables printed
+  with a name but no value, prose pasted between the logs (Markdown bullets, bold sentences,
+  issue-template headings), and source echoed around a traceback (Triton patch diffs,
+  frame assignments, bare closing brackets).
+- Six new fixtures (`vllm-0.32.0-cuda-collectenv.log`, `vllm-0.33.0rc1-rocm-mi355x.log`,
+  `vllm-0.30.0-gvisor-cuda-collectenv.log`, `sglang-0.5.20-env-dump.log`,
+  `sglang-0.5-nixl-startup-failure.log`, `sglang-0.5-indexerror-per-request.log`), five new
+  tests. 70 tests.
+- `diff vllm-65250.log vllm-63505.log` now reports 23 differences / 5 identical and names
+  the ones that matter between a gVisor run and a production image: `TORCH_CUDA_ARCH_LIST`,
+  `VLLM_BUILD_COMMIT`, `VLLM_IMAGE_TAG`, `CUDA_HOME`, plus the threads and FlashInfer-sampler
+  settings only one side printed.
+
 ## 0.4.27 — 2026-11-09
 
 - Docs only: the audit writeup now carries the ROCm measurement (vllm#65034: 175 shapes

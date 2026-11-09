@@ -18,7 +18,7 @@ import re
 from collections import Counter
 from pathlib import Path
 
-from servediff.cli import ANSI, LINE_RULES, parse
+from servediff.cli import ANSI, BRACKET_TS, LINE_RULES, parse
 
 DIGITS = re.compile(r"\d+")
 
@@ -40,7 +40,7 @@ _PREFIX = (
 
 def message(line: str) -> str:
     """The line with its process/time/module preamble removed."""
-    text = ANSI.sub("", line).strip()
+    text = BRACKET_TS.sub("", ANSI.sub("", line)).strip()
     for _ in range(12):
         before = text
         for pattern in _PREFIX:
@@ -155,6 +155,44 @@ NOISE = (
     re.compile(r"^(?:vllm|python3?|sglang) [^\n]*\\$"),
     # The tail of a wrapped LD_LIBRARY_PATH value, which the env-var rule already reads.
     re.compile(r"^[a-z0-9_.-]+/(?:lib|site-packages)"),
+    # The pip inventory: one line per installed wheel. A CUDA container lists ~35 of them
+    # and only a few decide kernels, which the [pip3] rule already reads.
+    re.compile(r"^\[pip3\] \S+=="),
+    re.compile(r"^=+[^=]*=+$"),
+    # GPU topology and rocm-smi print the machine, not the run: the grid, its legend, the
+    # Numa Nodes table, and the weight / hops / link-type matrices an 8-GPU box emits.
+    re.compile(r"^GPU\d+[\t ]"),
+    re.compile(r"^GPU\[\d+\]\s*.{0,3}:\s*\(Topology\)"),
+    re.compile(r"^GPU \d+: "),
+    re.compile(r"^Legend:"),
+    re.compile(r"^[A-Z#]{1,4}\s+=\s"),
+    re.compile(r"^(?:Hypervisor vendor|Virtualization type|Hypervisor)\s*:"),
+    re.compile(r"^uv is set$"),
+    # A variable printed with its name but no value: present, unset.
+    re.compile(r"^[A-Z][A-Z0-9_]{2,}=$"),
+    re.compile(r"^(?:CUDA_VISIBLE_DEVICES|NVIDIA_VISIBLE_DEVICES|VLLM_CACHE_ROOT)="),
+    # A report written around the logs: Markdown bullets, bold sentences, and the wrapper
+    # lines that never appear in engine output.
+    re.compile(r"^-\s+\S|\*\*"),
+    re.compile(r"^`"),
+    re.compile(r"^(?:I have tried|I tried|Steps to reproduce|Expected behavior"
+               r"|Actual behavior|Additional context|Environment)\s*:"),
+    re.compile(r"^[A-Z][a-z']+\s[^:=]{40,}[.]$"),
+    # SGLang's own housekeeping: package inventory lines (`name: Module Not Found`), per-NIC
+    # staging buffers with their addresses, NIXL agent chatter, and the kill sequence.
+    re.compile(r"^[a-z][a-z0-9_.+-]*: (?:Module Not Found|\d)"),
+    re.compile(r"^StagingBuffer allocated: |^Staging buffer using cudaMalloc"),
+    re.compile(r"^NIXL INFO|^Initialized NIXL agent|^Backend UCX was instantiated"),
+    re.compile(r"^Received sigquit from a child process|^kill_process_tree called"),
+    re.compile(r"^CUDA available: (True|False)"),
+    re.compile(r"^GPU \d+ Compute Capability: "),
+    re.compile(r"^NVIDIA Topology:|^\t"),
+    # Source code echoed around the logs: a Triton patch diff, a frame's assignment, a bare
+    # closing bracket. A log line states `name: value` or a sentence, never this.
+    re.compile(r"^\+\s|^[)\]}]"),
+    re.compile(r"^\s*[a-z_][\w.]*\s*="),
+    re.compile(r"^\s*(?:if |elif |else |else:|for |while |try|except)\b"),
+    re.compile(r"^\.\.\.$"),
 )
 
 # A line that is nothing but the prefix: `(EngineCore pid=3811)`.
@@ -164,7 +202,7 @@ _COMMENT = re.compile(r"\s+#\s.*$")
 
 def shape(line: str) -> str:
     """The line with numbers collapsed, so progress bars and ports group together."""
-    return DIGITS.sub("N", ANSI.sub("", line).strip())
+    return DIGITS.sub("N", BRACKET_TS.sub("", ANSI.sub("", line)).strip())
 
 
 def unread(text: str) -> Counter:
@@ -181,7 +219,7 @@ def unread_samples(text: str) -> tuple[Counter, dict[str, str]]:
     counts: Counter = Counter()
     samples: dict[str, str] = {}
     for raw in text.splitlines():
-        line = ANSI.sub("", raw)
+        line = BRACKET_TS.sub("", ANSI.sub("", raw))
         if not line.strip():
             continue
         if "non-default args:" in line or "server_args=" in line:

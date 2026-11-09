@@ -1,0 +1,54 @@
+Python: 3.12.7+gc (main, Jan 10 2025, 17:28:43) [GCC 13.3.0]
+CUDA available: True
+GPU 0: NVIDIA RTX PRO 5000 72GB Blackwell
+GPU 0 Compute Capability: 12.0
+CUDA_HOME: /usr/local/cuda
+NVCC: Cuda compilation tools, release 13.0, V13.0.88
+CUDA Driver Version: 580.126.09
+PyTorch: 2.13.0+cu130
+sglang: 0.5.20
+sglang-kernel: 0.4.7
+flashinfer_python: 0.6.18
+flashinfer_cubin: Module Not Found
+flashinfer_jit_cache: Module Not Found
+triton: 3.7.1
+transformers: 5.12.1
+torchao: 0.9.0
+numpy: 2.3.5
+aiohttp: 3.13.3
+fastapi: 0.141.1
+huggingface_hub: 1.32.0
+interegular: 0.3.3
+modelscope: 1.33.0
+orjson: 3.11.5
+outlines: 0.1.11
+packaging: 25.0
+psutil: 7.2.1
+pydantic: 2.12.5
+python-multipart: 0.0.21
+pyzmq: 27.1.0
+uvicorn: 0.53.0
+uvloop: 0.22.1
+vllm: Module Not Found
+xgrammar: 0.2.1
+openai: 2.6.1
+tiktoken: 0.12.0
+anthropic: 0.76.0
+litellm: Module Not Found
+torchcodec: 0.15.0
+NVIDIA Topology:
+	GPU0	CPU Affinity	NUMA Affinity	GPU NUMA ID
+GPU0	 X 	0-19	0		N/A
+
+Legend:
+
+  X    = Self
+  SYS  = Connection traversing PCIe as well as the SMP interconnect between NUMA nodes (e.g., QPI/UPI)
+  NODE = Connection traversing PCIe as well as the interconnect between PCIe Host Bridges within a NUMA node
+  PHB  = Connection traversing PCIe as well as a PCIe Host Bridge (typically the CPU)
+  PXB  = Connection traversing multiple PCIe bridges (without traversing the PCIe Host Bridge)
+  PIX  = Connection traversing at most a single PCIe bridge
+  NV#  = Connection traversing a bonded set of # NVLinks
+
+Hypervisor vendor:: KVM
+ulimit soft: 1048576

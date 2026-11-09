@@ -1,0 +1,10 @@
+File ".../sglang/srt/model_executor/runner/eager_runner.py", line 361, in _execute_extend
+    ret = model_runner.model.forward(
+File ".../sglang/srt/models/deepseek_v4.py", line 4860, in forward
+    output = self.logits_processor(
+File ".../torch/nn/modules/module.py", line 1790, in _call
+File ".../sglang/srt/layers/logits_processor.py", line 584, in forward
+File ".../sglang/srt/layers/logits_processor.py", line 692, in _get_pruned_states
+    last_index = torch.cumsum(logits_metadata.extend_seq_lens, dim=0) - 1
+    pruned_states = hidden_states[last_index]
+IndexError: index is out of bounds for dimension with size 0
