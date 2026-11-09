@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.31 — 2026-11-09
+
+- A numeric difference now prints its magnitude as well as the word: `changed  +45.0%`,
+  `changed  -4.6%`. `changed` alone reads the same whether torch.compile moved 4% or 400%,
+  and the magnitude is what a reader decides on. Text values keep the bare status.
+- A per-worker measurement is one fact again. On an 8-GPU box every worker logs
+  `Model loading took 1.14 GiB and 36.3 seconds` with its own jitter, so one log held eight
+  different values — and two runs of the same box could never agree. `model_loading.seconds`,
+  `model_loading.gib`, `weights.load_s` and `weights.available_ram_gib` are now read from the
+  lowest rank present, with the other ranks kept in the evidence line. Two *different*
+  measurements from the same rank (TP0 loading a backbone and a draft head) are still kept
+  apart.
+- 80 tests. The two README comparisons still report 48 / 14 and 30 / 33 unchanged: the
+  magnitude is added after the status, it does not move the counts.
+
 ## 0.4.30 — 2026-11-09
 
 - `servediff audit` takes a directory (or several paths) and answers for the whole corpus:

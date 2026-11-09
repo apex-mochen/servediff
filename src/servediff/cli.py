@@ -458,6 +458,26 @@ def _call_kwargs(text: str) -> dict | None:
     return value if isinstance(value, dict) else None
 
 
+# Facts that every worker measures and prints for itself. Eight TP ranks each log
+# "Model loading took 1.14 GiB and 36.3 seconds", so one box produced eight different
+# values and two runs of the same box could never agree. These are read from the lowest
+# rank instead, so the fact stays one measurement.
+PER_WORKER_MEASUREMENTS = (
+    "model_loading.seconds",
+    "model_loading.gib",
+    "weights.load_s",
+    "weights.available_ram_gib",
+)
+
+_RANK = re.compile(r"\b(?:Worker[_-]|Rank[ _]?|rank[ _]?)(?:TP)?(\d+)")
+
+
+def _rank_of(line: str):
+    """The worker rank a log line came from, or None when every process shares the line."""
+    match = _RANK.search(line)
+    return int(match[1]) if match else None
+
+
 def parse(text: str) -> dict:
     facts: dict[str, Fact] = {}
     args: dict = {}
@@ -496,6 +516,21 @@ def parse(text: str) -> dict:
                             put("startup", "failed", lineno, line)
                     put(key, value, lineno, line)
 
+    for key in PER_WORKER_MEASUREMENTS:
+        fact = facts.get(key)
+        if fact is None or len(fact.values) < 2:
+            continue
+        ranks = [_rank_of(text) for _, text in fact.evidence]
+        seen = [rank for rank in ranks if rank is not None]
+        if len(set(seen)) < 2:
+            continue  # one rank printed several different measurements: keep them all
+        lowest = min(seen)
+        keep = seen.index(lowest)
+        others = [value for i, value in enumerate(fact.values) if i != keep]
+        fact.values = [fact.values[keep]]
+        fact.evidence = [fact.evidence[keep],
+                         (fact.evidence[keep][0],
+                          f"(rank {lowest} of {len(seen)} workers read; other workers: {others})")]
     card = facts.pop("gpu.card", None)
     if card is not None and "gpu.model" not in facts:
         facts["gpu.model"] = card
@@ -513,6 +548,10 @@ def parse(text: str) -> dict:
     return {"engine": engine, "facts": facts, "args": args}
 
 
+def _is_number(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
 def _shown(fact: Fact | None):
     return "<absent>" if fact is None else fact.value
 
@@ -526,7 +565,16 @@ def diff(a: dict, b: dict, raw_args: bool = False) -> list[dict]:
             status = "only_baseline" if fb is None else "only_candidate"
         else:
             status = "same" if va == vb else "changed"
+        delta = ""
+        # A number that moved is worth a magnitude, not just a word: "changed" on
+        # compile time at 4% and at 400% read the same otherwise.
+        if (status == "changed" and _is_number(va) and _is_number(vb)
+                and va != 0):
+            delta = f"{(vb - va) / va * 100:+.1f}%"
+        elif status == "changed" and _is_number(va) and _is_number(vb):
+            delta = f"{vb - va:+g}"
         rows.append({"key": key, "baseline": va, "candidate": vb, "status": status,
+                     "delta": delta,
                      "evidence": {"baseline": fa.evidence if fa else [],
                                   "candidate": fb.evidence if fb else []}})
     if raw_args and a["engine"] == b["engine"]:
@@ -636,7 +684,9 @@ def _render_markdown(*, path_a: str, path_b: str, engine_a, engine_b,
         lines.append("")
     lines += ["| Fact | Baseline | Candidate | Status |", "|---|---|---|---|"]
     for r in rows:
-        lines.append(f"| `{r['key']}` | {_md_cell(r['baseline'])} | {_md_cell(r['candidate'])} | {r['status']} |")
+        lines.append(f"| `{r['key']}` | {_md_cell(r['baseline'])} | "
+                     f"{_md_cell(r['candidate'])} | {r['status']}"
+                     f"{' ' + r['delta'] if r.get('delta') else ''} |")
     lines.append("")
     lines.append(f"**{differing} difference(s); {identical} fact(s) identical.** "
                  "Absent means the log did not print it, not that it was off."
@@ -1038,7 +1088,8 @@ def main(argv=None) -> int:
             print(f"{'fact':32s} {'baseline':40s} {'candidate':40s} status")
             for r in shown:
                 print(f"{r['key']:32s} {_short(_fmt(r['baseline']), 40):40s}"
-                      f" {_short(_fmt(r['candidate']), 40):40s} {r['status']}")
+                      f" {_short(_fmt(r['candidate']), 40):40s} {r['status']}"
+                      f"{('  ' + r['delta']) if r.get('delta') else ''}")
             print(f"\n{len(key)} difference(s) in Python, GPU, inference packages and engine env vars;"
                   f" {len(rows) - len(key)} in other packages{'' if args.all else ' (--all to list them)'}.")
         return 1 if rows else 0
@@ -1109,7 +1160,8 @@ def main(argv=None) -> int:
             # Mark truncation instead of cutting a value mid-word: a cell that ends
             # in `TP ran` reads like the value itself, not like a clipped column.
             print(f"{r['key']:32s} {_short(_fmt(r['baseline']), 40):40s}"
-                  f" {_short(_fmt(r['candidate']), 40):40s} {r['status']}")
+                  f" {_short(_fmt(r['candidate']), 40):40s} {r['status']}"
+                  f"{('  ' + r['delta']) if r.get('delta') else ''}")
         line = f"\n{len(differing)} difference(s); {identical} fact(s) identical."
         if hidden_absent:
             line += (f" {len(hidden_absent)} difference(s) skipped because one side never printed"

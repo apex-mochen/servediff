@@ -88,6 +88,12 @@ Marlin excerpt happened to quote the concurrency line, the other one did not, so
 shows up as present-on-one-side rather than as a backend change. Read it as "one of
 these two logs tells you this, the other stays silent" — not as "the value changed".
 
+Two conventions keep timings from turning into noise. A numeric change carries its
+magnitude, `changed  +45.0%`, because "changed" on its own reads the same at 4% and at 400%.
+And a measurement every worker repeats is read once, from the lowest rank — on an 8-GPU box
+`Model loading took …` is printed eight times with eight slightly different numbers, and
+those differences are per-rank jitter, not a change between your two runs.
+
 ## Recording your own two logs
 
 Most people meet this with one log and a question, not two ready files. `capture` runs the

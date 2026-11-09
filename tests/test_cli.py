@@ -265,6 +265,60 @@ def test_a_gb10_box_reads_its_model_and_its_dependency_list_as_noise():
     assert not look, sorted(look)
 
 
+def test_a_per_worker_measurement_is_one_number_from_the_lowest_rank(tmp_path):
+    # Eight TP workers each log the same measurement with their own jitter. One box should
+    # read as one number, taken from the lowest rank, so two runs of the same box can agree.
+    ranks = [(2, "36.339381"), (3, "36.384071"), (7, "36.395200"), (0, "36.312437")]
+    lines = [f"(Worker_TP{rank} pid=2717{rank}) INFO 07-14 16:41:00 [model_runner.py:302]"
+             f" Model loading took 1.14 GiB and {sec} seconds" for rank, sec in ranks]
+    log = tmp_path / "tp.log"
+    log.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    f = servediff.parse(log.read_text(encoding="utf-8"))["facts"]
+    assert f["model_loading.seconds"].value == 36.312437
+    assert f["model_loading.gib"].value == 1.14
+
+
+def test_two_measurements_from_the_same_rank_are_both_kept(tmp_path):
+    # TP0 loading a backbone and a draft head prints twice; that is two measurements,
+    # not two workers, and collapsing them to one would hide the second.
+    log = tmp_path / "two-loads.log"
+    log.write_text(
+        "(Worker_TP0 pid=2717792) INFO 07-14 16:40:53 [default_loader.py:430]"
+        " Loading weights took 28.64 seconds\n"
+        "(Worker_TP0 pid=2717792) INFO 07-14 16:40:59 [default_loader.py:430]"
+        " Loading weights took 5.66 seconds\n", encoding="utf-8")
+    f = servediff.parse(log.read_text(encoding="utf-8"))["facts"]
+    assert f["weights.load_s"].value == [28.64, 5.66]
+
+
+def test_a_numeric_change_reports_its_magnitude(tmp_path, capsys):
+    # "changed" alone reads the same at 4% and at 400%; the magnitude is what a reader
+    # decides on.
+    a = tmp_path / "a.log"
+    a.write_text("(EngineCore pid=1) INFO 10-28 11:36:31 [monitor.py:53]"
+                 " torch.compile took 32.58 s in total\n", encoding="utf-8")
+    b = tmp_path / "b.log"
+    b.write_text("(EngineCore pid=1) INFO 10-28 11:29:11 [monitor.py:53]"
+                 " torch.compile took 31.08 s in total\n", encoding="utf-8")
+    assert servediff.main(["diff", str(a), str(b)]) == 1
+    out = capsys.readouterr().out
+    assert "compile.total_s" in out
+    assert "changed  -4.6%" in out
+    rows = servediff.diff(servediff.parse(a.read_text()), servediff.parse(b.read_text()))
+    assert [r["status"] for r in rows if r["key"] == "compile.total_s"] == ["changed"]
+
+
+def test_a_text_change_has_no_magnitude(tmp_path, capsys):
+    a = tmp_path / "a.log"
+    a.write_text("Initializing a V1 LLM engine (v0.28.0) with config\n", encoding="utf-8")
+    b = tmp_path / "b.log"
+    b.write_text("Initializing a V1 LLM engine (v0.30.0) with config\n", encoding="utf-8")
+    servediff.main(["diff", str(a), str(b)])
+    out = capsys.readouterr().out
+    assert "engine.version" in out
+    assert "%" not in out
+
+
 def test_skip_absent_keeps_only_rows_both_logs_printed(tmp_path, capsys):
     # A run that died leaves every later fact <absent>; those one-sided rows outnumber the
     # real differences and bury them. --skip-absent must hide them while still failing, and
