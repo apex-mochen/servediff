@@ -130,8 +130,9 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
     (re.compile(r"init engine .*? took ([\d.]+) s"), lambda m: [("engine.init_s", float(m[1]))]),
     (re.compile(r"Starting vLLM server on (http://\S+)"), lambda m: [("server.bind", m[1])]),
     # Model loading cost: memory footprint and wall time. Both V1 (gpu_model_runner)
-    # and V2 (model_runner) print the same message.
-    (re.compile(r"Model loading took ([\d.]+) GiB memory and ([\d.]+) seconds"),
+    # and V2 (model_runner) print the same message, and 0.23 printed it without the
+    # word `memory` — a rule pinned to the newer wording silently lost the older log.
+    (re.compile(r"Model loading took ([\d.]+) GiB(?: memory)? and ([\d.]+) seconds"),
      lambda m: [("model_loading.gib", float(m[1])), ("model_loading.seconds", float(m[2]))]),
     # The loading phase splits into three timed steps. Comparing "startup is slower"
     # between two versions is meaningless until you know which step grew: constructing
@@ -171,11 +172,11 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
     # Where the weights came from and whether the loader could prefetch them. On a slow
     # filesystem this is the difference between a 10 s and a 100 s startup, and the
     # checkpoint size line is the only place the loader states what it measured.
-    (re.compile(r"Filesystem type for checkpoints: (\w+)\. Checkpoint size: ([\d.]+) GiB\. Available RAM: ([\d.]+) GiB"),
+    (re.compile(r"Filesystem type for checkpoints: ([\w.]+)\. Checkpoint size: ([\d.]+) GiB\. Available RAM: ([\d.]+) GiB"),
      lambda m: [("weights.filesystem", m[1]),
                 ("weights.checkpoint_gib", float(m[2])),
                 ("weights.available_ram_gib", float(m[3]))]),
-    (re.compile(r"Auto-prefetch is (disabled) because the filesystem \((\w+)\) is not a recognized network FS"),
+    (re.compile(r"Auto-prefetch is (disabled) because the filesystem \(([\w.]+)\) is not a recognized network FS"),
      lambda m: [("weights.prefetch", f"{m[1]} ({m[2]} is not a network FS)")]),
     # What the server will actually serve, and whether it is allowed to fan out.
     (re.compile(r"Supported tasks: (.+)"), lambda m: [("server.tasks", m[1].strip())]),
@@ -210,6 +211,41 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
     # cannot say whether it was cut from 16 (a CPU-heavy box) or from 4.
     (re.compile(r"Reducing Torch threads from (\d+) to (\d+) for serving"),
      lambda m: [("cpu.torch_threads", f"{m[1]} -> {m[2]}")]),
+    # The same cut applied to intra-op parallelism, and the multiprocessing start method
+    # the workers were forced onto: both change timing without changing a flag.
+    (re.compile(r"Reducing Torch parallelism from (\d+) threads to (\d+)"),
+     lambda m: [("cpu.torch_parallelism", f"{m[1]} -> {m[2]}")]),
+    (re.compile(r"We must use the `spawn` multiprocessing start method"),
+     lambda m: [("worker.mp_method", "spawn")]),
+    # Which attention backend the platform actually picked. A flag asks for one; this
+    # line says what was chosen after the check, and FlashInfer vs FlashAttention is a
+    # different kernel set for the same command line.
+    (re.compile(r"Using (AttentionBackendEnum\.\w+) backend"), lambda m: [("attn.backend", m[1].split(".")[-1])]),
+    (re.compile(r"Using (Eagle\d*) auxiliary layers from config: (.+)$"),
+     lambda m: [("spec_decode.eagle_layers", f"{m[1]}: {m[2].strip()}")]),
+    # Batching and scheduling decisions that decide the shape of every forward pass.
+    (re.compile(r"Chunked prefill is (enabled|disabled)(?: with max_num_batched_tokens=(\d+))?"),
+     lambda m: [("scheduler.chunked_prefill",
+                 m[1] if not m[2] else f"{m[1]} (max_num_batched_tokens={m[2]})")]),
+    (re.compile(r"Asynchronous scheduling is (enabled|disabled)"), lambda m: [("scheduler.async", m[1])]),
+    # A compiled graph reused across compile ranges is a real startup saving, and its
+    # range is what a later recompile is compared against.
+    (re.compile(r"Cache the graph of compile range \((\d+), (\d+)\) for later use"),
+     lambda m: [("compile.cached_range", f"{m[1]},{m[2]}")]),
+    # Kernel-level failures that do not stop startup but do change what runs: a wrong
+    # kernel here is degraded output or a slower path, not a crash, so it is easy to miss.
+    (re.compile(r"CUDA error \((.+?)\): (.+)$"), lambda m: [("kernel.cuda_error", f"{m[2].strip()} ({m[1].strip()})")]),
+    (re.compile(r"vLLM is using nccl==([\d.]+)"), lambda m: [("nccl.version", m[1])]),
+    (re.compile(r"Using FlashInfer for top-p & top-k sampling"),
+     lambda m: [("sampling.topk_topp_backend", "flashinfer")]),
+    (re.compile(r"FlashInfer resolved query dtypes: (.+)$"),
+     lambda m: [("kernel.flashinfer_dtypes", m[1].strip().rstrip(","))]),
+    # Data-parallel topology, as the engine laid it out rather than as requested.
+    (re.compile(r"DP group leader: node_rank=(\d+), node_rank_within_dp=(\d+)"),
+     lambda m: [("parallel.dp_leader", f"node {m[1]} / dp {m[2]}")]),
+    # A worker dying is a startup failure even when the API server keeps printing.
+    (re.compile(r"Worker proc .+? died unexpectedly"),
+     lambda m: [("startup", "failed (worker died)")]),
     # Sampling defaults are silently taken from the model's generation_config.json;
     # two runs of the same flags can sample differently because of it.
     (re.compile(r"generation_config\.json[`'\":]+ ?(.+)$"),

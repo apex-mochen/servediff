@@ -396,7 +396,7 @@ contains `TOKEN`, `KEY`, `SECRET`, `PASSWORD`, `CREDENTIAL` or `AUTH` are replac
 |---|---|---|
 | version | banner / engine init | — (not printed) |
 | arguments | `non-default args` | `server_args` (all args) |
-| attention backend | `Using X attention backend` | `attention_backend` arg |
+| attention backend | `Using X attention backend`; and the backend actually chosen after the check, `Using AttentionBackendEnum.FLASHINFER backend.` — a flag asks for one, this line says which won | `attention_backend` arg |
 | MoE backend | three log formats seen in 0.23–0.30, plus the full candidate list when the build prints it separately | `moe_runner_backend` arg |
 | CUDA graph | eager mode, `cudagraph_mode`, capture sets, capture time and memory, pool size | prefill CUDA graph disabled |
 | model runner, UVA fallback | `Using V2 Model Runner`; V1 runner detected via `gpu_model_runner.py` module; pinned-memory fallback | — |
@@ -407,7 +407,10 @@ contains `TOKEN`, `KEY`, `SECRET`, `PASSWORD`, `CREDENTIAL` or `AUTH` are replac
 | model identity | `Resolved architecture: …`, `Using max model len …` — the values the engine settled on, which can differ from the requested args | — |
 | engine init cost | `init engine (profile, create kv cache, warmup model) took … s` | — |
 | compile cost, split | `torch.compile took … s` and its parts: `Dynamo bytecode transform time: … s`, `Compiling a graph for compile range (1, 2048) takes … s` (with the range as its own fact), `Initial profiling/warmup run took … s` — one total cannot say which of the three moved | — |
-| CPU threads for serving | `Reducing Torch threads from 16 to 1 for serving` — the pair, because `1` alone cannot say what it was cut from | — |
+| CPU threads for serving | `Reducing Torch threads from 16 to 1 for serving`, `Reducing Torch parallelism from 96 threads to 1` — the pair, because `1` alone cannot say what it was cut from; plus the forced worker start method (`We must use the spawn multiprocessing start method`) | — |
+| batching and scheduling | `Chunked prefill is enabled with max_num_batched_tokens=16384.`, `Asynchronous scheduling is enabled.` — these decide the shape of every forward pass without appearing in the flags | — |
+| speculative decoding | `Using Eagle3 auxiliary layers from config: (2, 10, 18, 26, 34)` | — |
+| kernel errors and picks | `CUDA error (…flash_api.cpp): invalid configuration argument` (degraded, not fatal), `Using FlashInfer for top-p & top-k sampling.`, `FlashInfer resolved query dtypes: …`, `vLLM is using nccl==…` | — |
 | loading cost, split | `Loading model from scratch`, `Initializing model took … s`, `Loading weights took … s`, `Model loading took … GiB memory and … seconds` — so a slower startup names its step | — |
 | weight source | `Filesystem type for checkpoints: … Checkpoint size: … Available RAM: …`, `Auto-prefetch is …` (prefetch is skipped on a filesystem the loader does not treat as a network FS) | — |
 | GPU memory headroom | free / total at startup, desired utilization, budgeted GiB, plus `CUDA graph memory profiling` mode and the effective utilization it leaves (`equivalent to --gpu-memory-utilization=…`, `increase … to …` to keep the old KV cache) | — |

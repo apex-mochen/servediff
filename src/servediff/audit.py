@@ -74,7 +74,7 @@ NOISE = (
     # The source lines a traceback echoes; each is part of a call, not a setting.
     re.compile(r"^\s*(self\.|return |raise |yield |assert |del |super\(\)|with |async with"
                r"|await |next\(|import |from )"),
-    re.compile(r"^\s*[\w.]+ ?= ?[\w.]+ ?\(", ),  # `x = Y(` and `x = Y(args)` — a frame echo
+    re.compile(r"^\s*(?:[\w.]+(?:,\s*[\w.]+)*|[\w.]+:\s*[\w.\[\]]+)\s*=\s*[\w.]+\s*\("),  # `x = Y(` frame echo
     re.compile(r"^\s*[\w.]+\([^()]*(?:\([^()]*\)[^()]*)*\)(?:\))?\s*$"),  # `uvloop.run(run_server(args))`
     re.compile(r"^\s*[\w.]+\($"),  # a call split across lines: `super().__init__(`
     # A logging failure's own dump: the traceback is about logging, not about the server.
@@ -104,7 +104,12 @@ NOISE = (
     re.compile(r"^#{2,} |^- \[[ x]\] "),
     # Framework diagnostics that name their own source file before saying anything.
     re.compile(r"^\S+\.py:\d+: (User)?Warning:"),
-    re.compile(r"^\[Autotuner\]: Autotuning process starts"),
+    re.compile(r"\[Autotuner\]: Autotuning process starts"),
+    # A wrapper script's own output, not the server's: the benchmark that launched vLLM
+    # prints which config it is running. Auditing those lines finds no rule that could
+    # ever read them, because they are not vLLM log lines.
+    re.compile(r"^>>> |^\[spec_bench\]|^!!! "),
+    re.compile(r"^I want to run inference of a \[specific model\]"),
 )
 
 # A line that is nothing but the prefix: `(EngineCore pid=3811)`.

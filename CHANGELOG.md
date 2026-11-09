@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.4.23 — 2026-11-09
+
+- Read the configuration a real TP=8 startup log prints. On the vLLM 0.23.1 log from
+  vllm#48591, `servediff audit` went from **70 shapes worth a look to zero**: new facts for
+  `Using AttentionBackendEnum.FLASHINFER backend.`, `Chunked prefill is enabled with
+  max_num_batched_tokens=…`, `Asynchronous scheduling is enabled.`, the forced worker start
+  method, `Reducing Torch parallelism from 96 threads to 1`, `Using Eagle3 auxiliary layers
+  from config: (…)`, `Cache the graph of compile range (…)`, `Using FlashInfer for top-p &
+  top-k sampling.`, `FlashInfer resolved query dtypes: …`, `vLLM is using nccl==…`, and the
+  DP group leader's ranks.
+- Two rules were quietly missing older logs rather than reporting them as absent:
+  `Model loading took 1.14 GiB and 36.34 seconds` (0.23 prints no `memory`) and
+  `Filesystem type for checkpoints: FUSE.OFS.` (`\w+` stopped at the dot, taking the
+  checkpoint size and available RAM down with it). Both now read on 0.23 and 0.30.
+- Recorded outcomes that degrade a run instead of stopping it: `CUDA error
+  (…flash_api.cpp): invalid configuration argument` as `kernel.cuda_error`, and a worker
+  that dies while the API server keeps printing as `startup: failed (worker died)`.
+- Audit noise: a wrapper script's own output (`>>> …`, `[spec_bench] …`, `!!! …`) is noise —
+  it is not a vLLM line and no rule could ever read it — along with annotated and
+  tuple-assignment frame echoes (`compilation_times: list[…] = self.collective_rpc(`,
+  `status, result = mq.dequeue(…)`), `[Autotuner]: Autotuning process starts`, and the
+  `I want to run inference of a [specific model]` line from the issue template.
+- 63 tests; the new test asserts every one of those lines becomes a fact **and** that the
+  audit reports none of them as unread, so the two cannot drift apart again.
+
 ## 0.4.22 — 2026-11-09
 
 - `servediff audit` now reads a crashed log. Every line of a real multi-process log carries

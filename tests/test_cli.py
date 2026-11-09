@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 from servediff import cli as servediff
+from servediff import audit as servediff_audit
 
 FIX = Path(__file__).with_name("fixtures")
 
@@ -631,6 +632,55 @@ def test_loading_phase_is_three_separate_steps():
     assert f["weights.cache"].value == "miss (from scratch)"
     assert abs(f["model_init.seconds"].value - 2.732282) < 1e-9
     assert f["weights.load_s"].value == 3.13
+
+
+def test_the_tp8_report_log_leaves_nothing_unread_because_these_facts_are_read():
+    # Every line below is a shape the audit named as "no rule reads them" on a real
+    # vLLM 0.23.1 TP=8 startup log. They are the configuration that made that run
+    # different, so each one has to become a fact rather than stay in a list of
+    # sixty shapes nobody acts on.
+    text = (
+        "(EngineCore pid=1) INFO 11-07 09:12:01 [vllm.py:13] Asynchronous scheduling is enabled.\n"
+        "(EngineCore pid=1) INFO 11-07 09:12:01 [scheduler.py:12] Chunked prefill is enabled with max_num_batched_tokens=16384.\n"
+        "(EngineCore pid=1) INFO 11-07 09:12:02 [multiproc_executor.py:16] We must use the `spawn` multiprocessing start method. Overriding VLLM_WORKER_MULTIPROC_METHOD to 'spawn'.\n"
+        "(EngineCore pid=1) INFO 11-07 09:12:02 [multiproc_executor.py:18] Reducing Torch parallelism from 96 threads to 1 to avoid unnecessary CPU contention.\n"
+        "(Worker_TP0 pid=7) INFO 11-07 09:12:05 [cuda.py:76] Using AttentionBackendEnum.FLASHINFER backend.\n"
+        "(Worker_TP0 pid=7) INFO 11-07 09:12:05 [eagle3_utils.py:55] Using Eagle3 auxiliary layers from config: (2, 10, 18, 26, 34)\n"
+        "(Worker_TP0 pid=7) INFO 11-07 09:12:40 [model_runner.py:91] Model loading took 1.14 GiB and 36.34 seconds\n"
+        "(Worker_TP0 pid=7) INFO 11-07 09:12:44 [weight_utils.py:50] Filesystem type for checkpoints: FUSE.OFS. Checkpoint size: 7.49 GiB. Available RAM: 1411.31 GiB.\n"
+        "(Worker_TP0 pid=7) INFO 11-07 09:12:44 [weight_utils.py:51] Auto-prefetch is disabled because the filesystem (FUSE.OFS) is not a recognized network FS (NFS/Lustre/etc).\n"
+        "(Worker_TP0 pid=7) INFO 11-07 09:12:50 [backends.py:110] Cache the graph of compile range (1, 102) for later use\n"
+        "(Worker_TP0 pid=7) INFO 11-07 09:12:51 [topk_topp_sampler.py:95] Using FlashInfer for top-p & top-k sampling.\n"
+        "(Worker_TP0 pid=7) INFO 11-07 09:12:51 [flashinfer.py:128] FlashInfer resolved query dtypes: prefill=torch.bfloat16, decode=torch.bfloat16, decode_backend=xqa,\n"
+        "(Worker_TP0 pid=7) INFO 11-07 09:12:52 [pynccl.py:36] vLLM is using nccl==2.28.9\n"
+        "(EngineCore pid=1) INFO 11-07 09:12:02 [multiproc_executor.py:19] DP group leader: node_rank=0, node_rank_within_dp=0, master_addr=10.0.0.1, mq_connect_ip=10.0.0.1\n"
+        "CUDA error (/workspace/.deps/vllm-flash-attn-src/hopper/flash_api.cpp:1): invalid configuration argument\n"
+        "(EngineCore pid=1) ERROR 11-07 09:20:01 [multiproc_executor.py:1] Worker proc VllmWorker-0 died unexpectedly (exit code: None), shutting down executor.\n")
+    f = servediff.parse(text)["facts"]
+    assert f["scheduler.async"].value == "enabled"
+    assert f["scheduler.chunked_prefill"].value == "enabled (max_num_batched_tokens=16384)"
+    assert f["worker.mp_method"].value == "spawn"
+    assert f["cpu.torch_parallelism"].value == "96 -> 1"
+    assert f["attn.backend"].value == "FLASHINFER"
+    assert f["spec_decode.eagle_layers"].value.startswith("Eagle3: (2, 10, 18, 26, 34)")
+    # 0.23 printed this line without the word `memory`; a rule pinned to the newer
+    # wording lost the whole fact on the older log instead of reporting it as absent.
+    assert f["model_loading.gib"].value == 1.14
+    assert f["model_loading.seconds"].value == 36.34
+    # FUSE.OFS has a dot; `\w+` stopped at `FUSE` and the rest of the line stopped matching.
+    assert f["weights.filesystem"].value == "FUSE.OFS"
+    assert f["weights.prefetch"].value == "disabled (FUSE.OFS is not a network FS)"
+    assert f["compile.cached_range"].value == "1,102"
+    assert f["sampling.topk_topp_backend"].value == "flashinfer"
+    assert "decode_backend=xqa" in f["kernel.flashinfer_dtypes"].value
+    assert f["nccl.version"].value == "2.28.9"
+    assert f["parallel.dp_leader"].value == "node 0 / dp 0"
+    # A kernel error and a dead worker are outcomes, not settings to be ignored.
+    assert f["kernel.cuda_error"].value.startswith("invalid configuration argument")
+    assert f["startup"].value == "failed (worker died)"
+    # And nothing here may be offered back to the user as an unread line.
+    look, _ = servediff_audit.split(*servediff_audit.unread_samples(text))
+    assert not look, sorted(look)
 
 
 def test_audit_markdown_wraps_one_pasteable_block(tmp_path, capsys):
