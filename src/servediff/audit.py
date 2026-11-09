@@ -113,6 +113,48 @@ NOISE = (
     # which is read as `kernel.module_missing` / `kernel.missing_lib`.
     re.compile(r"^AssertionError$"),
     re.compile(r"^I want to run inference of a \[specific model\]"),
+    # `collect_env`, the block every bug report pastes. On ROCm it is ~180 lines and every
+    # one of them reads like a setting, so it drowned the report. The version lines inside
+    # it are facts (`env.*`); its scaffolding and machine inventory are not.
+    re.compile(r"^Collecting environment information\.\.\.$"),
+    re.compile(r"^=+$"),
+    re.compile(r"^\s*(System Info|PyTorch Info|Python Environment|CUDA / GPU Info"
+               r"|CPU Info|Versions of relevant libraries|vLLM Info|Environment Variables)\s*$"),
+    re.compile(r"^Vulnerability .+:"),  # CPU mitigations: per-host, not a setting
+    re.compile(r"^Flags:"),
+    re.compile(r"^\s+(?:[a-z0-9_.+-]+ ){3,}"),  # the CPU flag dump wrapping onto more lines
+    # The same dump continued at column 0: nothing but lowercase CPU-feature tokens. A real
+    # setting line always carries a separator or a value after a colon.
+    re.compile(r"^(?:[a-z0-9][a-z0-9_.+-]* ){4,}[a-z0-9_.+-]*$"),
+    re.compile(r"^(?:GCC|Clang|Libc|Python platform)\s+version\s*:"
+               r"|^Python platform\s*:"),
+    re.compile(r"^(?:GCC|Clang|Libc) version\s*:"),
+    re.compile(r"^CMake version\s*:"),
+    re.compile(r"^(?:CUDA|MIOpen) runtime version\s*:"),
+    re.compile(r"^vLLM Build Flags:"),
+    re.compile(r"^\s*CUDA Archs: "),
+    re.compile(r"^Could not collect$"),
+    re.compile(r"^\[pip3\] (?:conch-triton-kernels|onnx|onnx-ir|onnxscript|onnxslim|pyzmq"
+               r"|torchaudio|torchvision|onnxruntime)=="),
+    re.compile(r"^(?:Architecture|CPU op-mode\(s\)|Address sizes|Byte Order|CPU\(s\)"
+               r"|On-line CPU\(s\) list|Vendor ID|Model name|CPU family|Model|Thread\(s\) per core"
+               r"|Core\(s\) per socket|Socket\(s\)|Stepping|Frequency boost|CPU\(s\) scaling MHz"
+               r"|CPU max MHz|CPU min MHz|BogoMIPS|Virtualization|NUMA node\(s\)"
+               r"|NUMA node\d+ CPU\(s\)|L1d cache|L1i cache|L2 cache|L3 cache)\s*:"),
+    re.compile(r"^(?:Is debug build|CUDA used to build PyTorch|XPU used to build PyTorch"
+               r"|CUDA_MODULE_LOADING set to|Nvidia driver version|cuDNN version|MIOpen runtime"
+               r"|Is XNNPACK available|Is CUDA available|GPU Topology)\s*:"),
+    re.compile(r"^\s+(?:Could not collect|CUDA Archs:)"),
+    # One wheel per GPU architecture, so this list is a build artifact, not a setting; on a
+    # ROCm box it is ~40 identical lines.
+    re.compile(r"^\[pip3\] amd-(?:torch|torchvision)-device-"),
+    re.compile(r"^\[conda\] Could not collect"),
+    # The launch command pasted into a bug report, wrapped with `\` continuations. It is the
+    # user's shell history, not output: the server prints its own args as "non-default args".
+    re.compile(r"^\s*--\S+(?: \S+)* ?\\?$"),
+    re.compile(r"^(?:vllm|python3?|sglang) [^\n]*\\$"),
+    # The tail of a wrapped LD_LIBRARY_PATH value, which the env-var rule already reads.
+    re.compile(r"^[a-z0-9_.-]+/(?:lib|site-packages)"),
 )
 
 # A line that is nothing but the prefix: `(EngineCore pid=3811)`.

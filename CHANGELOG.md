@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.4.26 — 2026-11-09
+
+- ROCm support, found by auditing a log the tool had never seen: the `collect_env` block
+  pasted into vllm#65034 is ~180 lines and each one reads like a setting, so `audit`
+  reported 175 "shapes worth a look". It now yields facts — `engine.version` +
+  `engine.git_sha`, `env.torch`, `env.torch_rocm`, `env.rocm`, `env.hip`, `env.os`,
+  `env.python`, `gpu.model`, `env.pip.{torch,triton,transformers,numpy}` and
+  `env.var.{TORCHINDUCTOR_CACHE_DIR,PYTORCH_ROCM_ARCH,MAX_JOBS,LD_LIBRARY_PATH,…}` — and
+  the block's scaffolding (section rules, CPU inventory, the flag dump, per-arch
+  `amd-torch-device-gfx*` wheels, the wrapped `LD_LIBRARY_PATH` tail) is counted as noise.
+  That log now reports nothing worth a look.
+- The generic `version X.Y.Z` banner rule no longer takes `CMake version : version 3.31.10`
+  as the engine version.
+- A launch command pasted into a report (`vllm serve …` plus `--flag value \` lines) is
+  noise: the server prints its own args as "non-default args".
+- New fixture `tests/fixtures/vllm-0.29.1-rocm-collectenv.log` (176 lines, vllm#65034).
+  65 tests.
+
 ## 0.4.25 — 2026-11-09
 
 - The last real shapes are facts now, so every full log in this repo audits clean: `Casting

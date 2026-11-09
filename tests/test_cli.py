@@ -666,6 +666,27 @@ def test_the_shapes_left_in_a_crashed_log_are_read_not_ignored():
     assert servediff_audit.is_noise("    AssertionError")
 
 
+def test_a_rocm_collect_env_block_is_read_as_versions_not_as_180_settings():
+    # A public ROCm bug report (vllm#65034): the pasted `collect_env` block is ~180 lines and
+    # every one of them reads like a setting, so the audit called all of them worth a look.
+    # The version lines are facts; the machine inventory inside the same block is not.
+    path = FIX / "vllm-0.29.1-rocm-collectenv.log"
+    f = servediff.parse(path.read_text(encoding="utf-8"))["facts"]
+    assert f["engine.version"].value == "0.29.1.dev0+g98dff2a81.d20261002"
+    assert f["engine.git_sha"].value == "98dff2a81"
+    assert f["env.torch"].value == "2.13.0+rocm10.1.0"
+    assert f["env.rocm"].value == "7.16.26385-0000000"
+    assert f["env.hip"].value == "7.16.26385"
+    assert f["env.pip.triton"].value == "3.8.0+git669b31ac.rocm10.1.0"
+    assert f["gpu.model"].value == "AMD Radeon AI PRO R9700 (gfx1201)"
+    assert f["env.var.PYTORCH_ROCM_ARCH"].value.startswith("gfx90a;gfx942")
+    # `CMake version : version 3.31.10` must not be mistaken for the engine version.
+    assert "3.31.10" not in f["engine.version"].value
+    counts, samples = servediff_audit.unread_samples(path.read_text(encoding="utf-8"))
+    look, _ = servediff_audit.split(counts, samples)
+    assert not look, sorted(look)
+
+
 def test_the_tp8_report_log_leaves_nothing_unread_because_these_facts_are_read():
     # Every line below is a shape the audit named as "no rule reads them" on a real
     # vLLM 0.23.1 TP=8 startup log. They are the configuration that made that run

@@ -413,7 +413,9 @@ contains `TOKEN`, `KEY`, `SECRET`, `PASSWORD`, `CREDENTIAL` or `AUTH` are replac
 | CPU threads for serving | `Reducing Torch threads from 16 to 1 for serving`, `Reducing Torch parallelism from 96 threads to 1` — the pair, because `1` alone cannot say what it was cut from; plus the forced worker start method (`We must use the spawn multiprocessing start method`) | — |
 | batching and scheduling | `Chunked prefill is enabled with max_num_batched_tokens=16384.`, `Asynchronous scheduling is enabled.` — these decide the shape of every forward pass without appearing in the flags | — |
 | speculative decoding | `Using Eagle3 auxiliary layers from config: (2, 10, 18, 26, 34)` | — |
-| kernel errors and picks | `CUDA error (…flash_api.cpp): invalid configuration argument` (degraded, not fatal), `Using FlashInfer for top-p & top-k sampling.`, `FlashInfer resolved query dtypes: …`, `vLLM is using nccl==…` | — |
+| kernel errors and picks | `CUDA error (…flash_api.cpp): invalid configuration argument` (degraded, not fatal), `Using FlashInfer for top-p & top-k sampling.`, `FlashInfer resolved query dtypes: …`, `vLLM is using nccl==…`, an installed-but-unimportable optional kernel library (`Module deep_gemm was found but failed to import`, `ImportError: libnvrtc.so.3`) | — |
+| runtime environment | the `collect_env` block every bug report pastes: `vLLM Version … (git sha …)`, `PyTorch version`, `ROCM used to build PyTorch`, `ROCM Version`, `HIP runtime version`, `OS`, `Python version`, `GPU models and configuration`, `[pip3] torch/triton/transformers/numpy==…`, and the `TORCHINDUCTOR_*` / `PYTORCH_ROCM_ARCH` / `MAX_JOBS` / `LD_LIBRARY_PATH` variables — on ROCm this block is ~180 lines and every line reads like a setting | — |
+| dtype coercion | `Casting torch.bfloat16 to torch.float32` — a numeric change no flag records | — |
 | loading cost, split | `Loading model from scratch`, `Initializing model took … s`, `Loading weights took … s`, `Model loading took … GiB memory and … seconds` — so a slower startup names its step | — |
 | weight source | `Filesystem type for checkpoints: … Checkpoint size: … Available RAM: …`, `Auto-prefetch is …` (prefetch is skipped on a filesystem the loader does not treat as a network FS) | — |
 | GPU memory headroom | free / total at startup, desired utilization, budgeted GiB, plus `CUDA graph memory profiling` mode and the effective utilization it leaves (`equivalent to --gpu-memory-utilization=…`, `increase … to …` to keep the old KV cache) | — |
@@ -498,9 +500,13 @@ Exit codes: `0` no differences, `1` differences, `2` nothing recognised.
   live server run rather than an excerpt: vLLM 0.33.0 on a single RTX 4060 Laptop (8 GB)
   under WSL2, Qwen2.5-0.5B, written by `capture` — the server answered `/health` and a
   completion, Ctrl-C exited `130` and kept the log, and the two env snapshots of that run
-  diff down to the two variables that separated a crash from a start. The parallel-config
+  diff down to the two variables that separated a crash from a start. A ROCm setup is
+  covered too: a public `collect_env` dump from vllm#65034 (vLLM 0.29.1.dev, AMD Radeon
+  AI PRO R9700, torch 2.13+rocm10.1) is a fixture, and its 180-line environment block
+  yields the version facts instead of 175 "shapes worth a look". The parallel-config
   and all-reduce rules are checked against real TP>1 logs; MoE models in
-  full logs, SGLang versions other than 0.4.4 and other engines are not yet verified.
+  full logs, SGLang versions other than 0.4.4, Intel GPUs and other engines are not yet
+  verified.
 - Parsing is regex-based on log text, which changes between versions. A missed line
   shows up as `<absent>`, never as a wrong value — please report it. Run
   `servediff audit run1.log` first: it prints the lines no rule reads yet, and that

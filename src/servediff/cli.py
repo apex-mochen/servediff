@@ -52,7 +52,7 @@ class Fact:
 # Patterns over one log line. Each yields (fact key, value) pairs.
 LINE_RULES: list[tuple[re.Pattern, callable]] = [
     # vLLM banner and engine init.
-    (re.compile(r"\bversion (\d+\.\d+\.\d+\S*)"), lambda m: [("engine.version", m[1])]),
+    (re.compile(r"^(?!CMake)\W?[^\n]*\bversion (\d+\.\d+\.\d+\S*)"), lambda m: [("engine.version", m[1])]),
     (re.compile(r"Initializing a V1 LLM engine \(v([^)]+)\)"), lambda m: [("engine.version", m[1])]),
     # vLLM: "Using FLASH_ATTN attention backend out of potential backends: [...]".
     (re.compile(r"Using (\S+) attention backend"), lambda m: [("backend.attention", m[1])]),
@@ -129,6 +129,23 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
     # part is torch.compile alone, recorded separately as compile.total_s.
     (re.compile(r"init engine .*? took ([\d.]+) s"), lambda m: [("engine.init_s", float(m[1]))]),
     (re.compile(r"Starting vLLM server on (http://\S+)"), lambda m: [("server.bind", m[1])]),
+    # `collect_env` — the block vLLM asks every bug report to paste. On ROCm it is
+    # hundreds of lines, and each one reads like a setting, so the audit used to call all of
+    # them "worth a look". The version lines are the facts that matter: a torch built
+    # against a different ROCm changes every kernel a run can pick.
+    (re.compile(r"^vLLM Version\s+:\s*(\S+)(?: \(git sha: (\w+), date: (\w+)\))?"),
+     lambda m: [("engine.version", m[1]), ("engine.git_sha", m[2])] if m[2] else [("engine.version", m[1])]),
+    (re.compile(r"^PyTorch version\s+:\s*(\S+)"), lambda m: [("env.torch", m[1])]),
+    (re.compile(r"^ROCM used to build PyTorch\s+:\s*(\S+)"), lambda m: [("env.torch_rocm", m[1])]),
+    (re.compile(r"^ROCM Version\s+:\s*(\S+)"), lambda m: [("env.rocm", m[1])]),
+    (re.compile(r"^HIP runtime version\s+:\s*(\S+)"), lambda m: [("env.hip", m[1])]),
+    (re.compile(r"^OS\s+:\s*(.+)$"), lambda m: [("env.os", m[1].strip())]),
+    (re.compile(r"^Python version\s+:\s*(\S+)"), lambda m: [("env.python", m[1])]),
+    (re.compile(r"^GPU models and configuration\s+:\s*(.+)$"), lambda m: [("gpu.model", m[1].strip())]),
+    (re.compile(r"^\[pip3\] (torch|triton|transformers|numpy)==(\S+)"),
+     lambda m: [(f"env.pip.{m[1]}", m[2])]),
+    (re.compile(r"^(TORCHINDUCTOR_CACHE_DIR|PYTORCH_ROCM_ARCH|MAX_JOBS|LD_LIBRARY_PATH|PYTORCH_NVML_BASED_CUDA_CHECK|TORCHINDUCTOR_COMPILE_THREADS)=(.+)$"),
+     lambda m: [(f"env.var.{m[1]}", m[2].strip())]),
     # Model loading cost: memory footprint and wall time. Both V1 (gpu_model_runner)
     # and V2 (model_runner) print the same message, and 0.23 printed it without the
     # word `memory` — a rule pinned to the newer wording silently lost the older log.
