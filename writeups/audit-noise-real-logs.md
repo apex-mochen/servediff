@@ -225,9 +225,44 @@ One bug surfaced while measuring it. The keyword pattern was written
 boundary) and stayed in the report, while `if x:` did not. A pattern that is almost right is
 the quietest kind of wrong: it looks like it covers the class and covers all but one member.
 
+## A held-out corpus found a rule that only matched the reformatted copy
+
+Everything above was measured on the fixtures this repo already carried, which is a closed
+loop: they were hand-copied from issue bodies, and a copy can carry the copyist's formatting.
+So eleven pastes were pulled fresh from vLLM and SGLang issues created after 2026-10-20, and
+audited blind.
+
+Eight of eleven came back with lines worth a look. Two of those were script pastes covered
+above; the rest were real. The biggest one was not noise at all:
+
+```
+PyTorch version: 2.10.0+cpu          <- worth a look, and it is a fact
+OS: Debian GNU/Linux 12 (bookworm) (x86_64)
+Python version: 3.12.15 (...) [GCC 12.2.0] (64-bit runtime)
+HIP runtime version: N/A
+```
+
+Every `collect_env` rule was written `^PyTorch version\s+:\s*(\S+)` — requiring whitespace
+before the colon. ROCm's own dump aligns its colons with spaces, so the rule worked on that,
+and vLLM's real `collect_env` prints `PyTorch version: 2.10.0+cpu` with none, so the rule was
+dead on the output every bug report actually pastes. The audit reporting "worth a look" was
+correct: the tool could not read the torch version on a CPU-only box.
+
+That is the failure mode this whole writeup is about, one level up: a rule pinned to the
+one copy of the wording its author happened to see. `\s*` on eight rules fixed it, and the
+same eleven-log corpus now returns two files worth a look, both script pastes, four lines.
+
+The rest were inventory shapes the table had never seen: SGLang's macOS report (`MPS
+available`, `Apple Silicon`, `Metal Support`, `Unified Memory`, `CPU Cores (…)`), a
+multi-GPU row written `GPU 0,1,2,3: NVIDIA H20`, the container runtime's `brand=…driver>=…`
+capability list, a topology header row, a reporter's parenthetical note, and a plugin source
+paste (`WTYPE = …`, `tensor.offset`, `(Path(…) / "config.json").write_text(`). None of those
+can be a log line, so each got one narrow pattern.
+
 ## Limits of the claim
 
-These four logs are from one machine's WSL2 runs plus one posted TP=8 log.
+These four logs are from one machine's WSL2 runs plus one posted TP=8 log, plus eleven pastes
+taken fresh from vLLM and SGLang issues in October 2026.
 `nvcc`, other engines, and other parallelism layouts are unmeasured, and a log from a
 different stack may well print shapes none of these rules know. That is what the audit is
 for: run it on your own log, and paste the report into

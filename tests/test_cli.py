@@ -358,6 +358,62 @@ def test_a_loop_condition_with_a_quoted_string_is_noise(tmp_path):
     assert look == {}
 
 
+def test_a_collect_env_block_is_read_with_or_without_padding(tmp_path, capsys):
+    # vLLM's own `collect_env` prints `PyTorch version: …` with no padding; the ROCm dump
+    # aligns the colons with spaces. The rules required the spaces, so they were dead on the
+    # real output -- found by auditing a fresh CPU-only issue paste.
+    plain = tmp_path / "plain.log"
+    plain.write_text(
+        "PyTorch version: 2.10.0+cpu\n"
+        "OS: Debian GNU/Linux 12 (bookworm) (x86_64)\n"
+        "Python version: 3.12.15 (main, Oct 21 2026, 01:08:07) [GCC 12.2.0] (64-bit runtime)\n"
+        "HIP runtime version: N/A\n"
+        "Caching allocator config: N/A\n"
+        "GPU models and configuration: No CUDA\n", encoding="utf-8")
+    facts = servediff.parse(plain.read_text(encoding="utf-8"))["facts"]
+    assert facts["env.torch"].values == ["2.10.0+cpu"]
+    assert facts["env.os"].values == ["Debian GNU/Linux 12 (bookworm) (x86_64)"]
+    assert facts["env.python"].values == ["3.12.15"]
+    # `N/A` is absent, not a value: it must not become a fact that reads as a difference.
+    assert "env.hip" not in facts
+    assert "env.allocator" not in facts
+    # `No CUDA` is a statement, not an absent value: a CPU box says so, and two CPU boxes
+    # agree on it.
+    assert facts["gpu.model"].values == ["No CUDA"]
+
+    padded = tmp_path / "padded.log"
+    padded.write_text(
+        "PyTorch version              : 2.13.0+rocm10.1.0\n"
+        "OS                           : Ubuntu 24.04.5 LTS (x86_64)\n", encoding="utf-8")
+    facts = servediff.parse(padded.read_text(encoding="utf-8"))["facts"]
+    assert facts["env.torch"].values == ["2.13.0+rocm10.1.0"]
+    assert facts["env.os"].values == ["Ubuntu 24.04.5 LTS (x86_64)"]
+
+
+def test_a_macos_environment_report_is_the_machine_not_the_run(tmp_path):
+    log = tmp_path / "mac.log"
+    log.write_text(
+        "MPS available: True\n"
+        "macOS Version: 26.7\n"
+        "macOS Build: 25G229\n"
+        "Apple Silicon: Apple M5\n"
+        "Unified Memory: 16.0 GB\n"
+        "CPU Cores (Total): 10\n"
+        "CPU Cores (Performance): 4\n"
+        "Metal Support: Metal 4\n"
+        "GPU Cores: 10\n"
+        "GPU 0,1,2,3,4,5,6,7: NVIDIA H20-Ne\n"
+        "CPU Affinity\tNUMA Affinity\tGPU NUMA ID\n"
+        "(16-NIC topology matrix omitted; single GPU, not relevant to this bug)\n"
+        "WTYPE = scalar_types.uint8b128\n"
+        "tensor.offset\n"
+        "{\n"
+        "(Path(folder) / \"config.json\").write_text(\n", encoding="utf-8")
+    text = log.read_text(encoding="utf-8")
+    look, _ = servediff_audit.split(*servediff_audit.unread_samples(text))
+    assert look == {}, look
+
+
 def test_skip_absent_keeps_only_rows_both_logs_printed(tmp_path, capsys):
     # A run that died leaves every later fact <absent>; those one-sided rows outnumber the
     # real differences and bury them. --skip-absent must hide them while still failing, and

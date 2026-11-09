@@ -146,15 +146,19 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
     # hundreds of lines, and each one reads like a setting, so the audit used to call all of
     # them "worth a look". The version lines are the facts that matter: a torch built
     # against a different ROCm changes every kernel a run can pick.
-    (re.compile(r"^vLLM Version\s+:\s*(\S+)(?: \(git sha: (\w+), date: (\w+)\))?"),
+    (re.compile(r"^vLLM Version\s*:\s*(\S+)(?: \(git sha: (\w+), date: (\w+)\))?"),
      lambda m: [("engine.version", m[1]), ("engine.git_sha", m[2])] if m[2] else [("engine.version", m[1])]),
-    (re.compile(r"^PyTorch version\s+:\s*(\S+)"), lambda m: _env("env.torch", m[1])),
-    (re.compile(r"^ROCM used to build PyTorch\s+:\s*(\S+)"), lambda m: _env("env.torch_rocm", m[1])),
-    (re.compile(r"^ROCM Version\s+:\s*(.+)$"), lambda m: _env("env.rocm", m[1])),
-    (re.compile(r"^HIP runtime version\s+:\s*(.+)$"), lambda m: _env("env.hip", m[1])),
-    (re.compile(r"^OS\s+:\s*(.+)$"), lambda m: [("env.os", m[1].strip())]),
-    (re.compile(r"^Python version\s+:\s*(\S+)"), lambda m: [("env.python", m[1])]),
-    (re.compile(r"^GPU models and configuration\s+:\s*(?:(?:GPU|NIC) \d+: )?(.+)$"),
+    # `collect_env` prints `PyTorch version: 2.10.0+cpu` with no padding; ROCm's own dump
+    # aligns the colons with spaces. These rules required the spaces, so they were dead on
+    # vLLM's real output and only worked on reformatted copies of it.
+    (re.compile(r"^PyTorch version\s*:\s*(\S+)"), lambda m: _env("env.torch", m[1])),
+    (re.compile(r"^ROCM used to build PyTorch\s*:\s*(\S+)"), lambda m: _env("env.torch_rocm", m[1])),
+    (re.compile(r"^ROCM Version\s*:\s*(.+)$"), lambda m: _env("env.rocm", m[1])),
+    (re.compile(r"^HIP runtime version\s*:\s*(.+)$"), lambda m: _env("env.hip", m[1])),
+    (re.compile(r"^OS\s*:\s*(.+)$"), lambda m: [("env.os", m[1].strip())]),
+    (re.compile(r"^Python version\s*:\s*(\S+)"), lambda m: [("env.python", m[1])]),
+    (re.compile(r"^Caching allocator config\s*:\s*(.+)$"), lambda m: _env("env.allocator", m[1])),
+    (re.compile(r"^GPU models and configuration\s*:\s*(?:(?:GPU|NIC) \d+: )?(.+)$"),
      lambda m: _env("gpu.model", m[1])),
     # Multi-node boxes print the aggregate empty and then one `GPU 0: NVIDIA GB200`
     # per card; the post-pass below promotes that to gpu.model only when nothing

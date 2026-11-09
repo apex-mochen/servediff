@@ -127,13 +127,17 @@ NOISE = (
     re.compile(r"^Collecting environment information\.\.\.$"),
     re.compile(r"^=+$"),
     re.compile(r"^\s*(System Info|PyTorch Info|Python Environment|CUDA / GPU Info"
-               r"|CPU Info|Versions of relevant libraries|vLLM Info|Environment Variables)\s*$"),
+               r"|CPU Info|Versions of relevant libraries|vLLM Info|Environment Variables"
+               r"|CPU)\s*:?\s*$"),
     re.compile(r"^Vulnerability .+:"),  # CPU mitigations: per-host, not a setting
     re.compile(r"^Flags:"),
     re.compile(r"^\s+(?:[a-z0-9_.+-]+ ){3,}"),  # the CPU flag dump wrapping onto more lines
     # The same dump continued at column 0: nothing but lowercase CPU-feature tokens. A real
     # setting line always carries a separator or a value after a colon.
-    re.compile(r"^(?:[a-z0-9][a-z0-9_.+-]* ){4,}[a-z0-9_.+-]*$"),
+    re.compile(r"^(?:[a-z0-9_][a-z0-9_.+-]* ){4,}[a-z0-9_.+-]*$"),
+    # A container runtime's device-capability list: `brand=tesla,driver>=470` repeated across
+    # wrapped lines. It describes the driver's defaults, not the run.
+    re.compile(r"^(?=.*brand=).*driver"),
     re.compile(r"^(?:GCC|Clang|Libc|Python platform)\s+version\s*:"
                r"|^Python platform\s*:"),
     re.compile(r"^(?:GCC|Clang|Libc) version\s*:"),
@@ -151,7 +155,7 @@ NOISE = (
                r"|NUMA node\d+ CPU\(s\)|L1d cache|L1i cache|L2 cache|L3 cache)\s*:"),
     re.compile(r"^(?:Is debug build|CUDA used to build PyTorch|XPU used to build PyTorch"
                r"|CUDA_MODULE_LOADING set to|Nvidia driver version|cuDNN version|MIOpen runtime"
-               r"|Is XNNPACK available|Is CUDA available|GPU Topology)\s*:"),
+               r"|Is XNNPACK available|Is CUDA available|Is XPU available|GPU Topology)\s*:"),
     re.compile(r"^\s+(?:Could not collect|CUDA Archs:)"),
     # One wheel per GPU architecture, so this list is a build artifact, not a setting; on a
     # ROCm box it is ~40 identical lines.
@@ -172,6 +176,13 @@ NOISE = (
     re.compile(r"^GPU\d+[\t ]"),
     re.compile(r"^GPU\[\d+\]\s*.{0,3}:\s*\(Topology\)"),
     re.compile(r"^GPU \d+: "),
+    # A multi-GPU box lists them on one line, `GPU 0,1,2,3,4,5,6,7: NVIDIA H20`, and its
+    # capability row the same way.
+    re.compile(r"^GPU [\d,]+: |^GPU [\d,]+ Compute Capability: "),
+    # The topology matrix header: tab-separated column names, never a run's output.
+    re.compile(r"^(?=.*CPU Affinity).*\t"),
+    # A reporter's note inserted into the paste, the whole line one parenthetical.
+    re.compile(r"^\([^()]*\)$"),
     re.compile(r"^Legend:"),
     re.compile(r"^[A-Z#]{1,4}\s+=\s"),
     re.compile(r"^(?:Hypervisor vendor|Virtualization type|Hypervisor)\s*:"),
@@ -195,10 +206,20 @@ NOISE = (
     re.compile(r"^CUDA available: (True|False)"),
     re.compile(r"^GPU \d+ Compute Capability: "),
     re.compile(r"^NVIDIA Topology:|^\t"),
+    # SGLang's macOS report: the machine, not the run. An M-series box decides kernels by its
+    # chip and Metal version, which are properties of the box, like the CPU flag dump.
+    re.compile(r"^(?:MPS available|macOS Version|macOS Build|Apple Silicon|Unified Memory"
+               r"|CPU Cores \([^)]*\)|Metal Support|GPU Cores)\s*:"),
     # Source code echoed around the logs: a Triton patch diff, a frame's assignment, a bare
     # closing bracket. A log line states `name: value` or a sentence, never this.
-    re.compile(r"^\+\s|^[)\]}]"),
+    re.compile(r"^\+\s|^[)\]}{]"),
     re.compile(r"^\s*[a-z_][\w.]*\s*="),
+    # A bare attribute expression (`tensor.offset`), a frame echo whose name is upper case
+    # (`WTYPE = scalar_types.uint8b128`), and a call left open across lines. A log line never
+    # ends in `(` and never states an expression with nothing to say about it.
+    re.compile(r"^[a-z_][\w]*(?:\.[A-Za-z_]\w*)+$"),
+    re.compile(r"^[A-Z][A-Z0-9_]+ (?:=|\+=) "),
+    re.compile(r"^\s*\S.*\($"),
     # `\b` sits after the keyword, not after the space: a loop or branch whose condition is a
     # quoted string (`if "W4A4" in name:`) put a non-word character right after the space, so
     # the boundary test failed and the line stayed in the report.
@@ -209,7 +230,7 @@ NOISE = (
     # states `name: value` or a sentence, and never starts with one of these.
     re.compile(r"^(?:def|class)\s+[A-Za-z_]\w*[(:]"),
     re.compile(r"^[A-Za-z_]\w*(?:\[[^\]]*\])?(?:, [A-Za-z_]\w*(?:\[[^\]]*\])?)+ (?:=|\+=) "),
-    re.compile(r"^[A-Za-z_]\w*\[[^\]]*\] (?:=|\+=|\() "),
+    re.compile(r"^[A-Za-z_][\w.]*\[[^\]]*\] (?:=|\+=|\() "),
     re.compile(r"^\s*print\("),
     # The rest of the same script: a section comment, a bare loop keyword, a string literal
     # standing alone, and a call continued on the next line (a log line never ends in a comma).

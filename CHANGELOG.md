@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.4.33 — 2026-11-09
+
+- **Every `collect_env` rule was pinned to the padded colon.** They were written
+  `^PyTorch version\s+:\s*(\S+)`, which requires whitespace before the colon; ROCm's own dump
+  aligns its colons with spaces, and vLLM's real `collect_env` prints
+  `PyTorch version: 2.10.0+cpu` with none. So on the output every bug report actually pastes,
+  `env.torch`, `env.torch_rocm`, `env.hip`, `env.os`, `env.python` and `engine.version` were
+  never read. `\s*` on those rules; `env.allocator` reads `Caching allocator config`.
+  Found by auditing eleven issue pastes taken fresh from vLLM and SGLang (created after
+  2026-10-20) instead of the repo's own fixtures — 8 of 11 came back with lines worth a look.
+  After this version: 2 of 11, both script pastes, four lines.
+- Noise, same corpus: SGLang's macOS report (`MPS available`, `macOS Version`, `Apple
+  Silicon`, `Metal Support`, `Unified Memory`, `CPU Cores (…)`, `GPU Cores`), a multi-GPU row
+  written `GPU 0,1,2,3: NVIDIA H20`, a container runtime's `brand=…driver>=…` capability
+  list, a topology-matrix header row, a reporter's parenthetical note, `Is XPU available`,
+  `CPU:` / `Versions of relevant libraries:` headers with a colon, and a plugin source paste
+  (`WTYPE = …`, `tensor.offset`, `{`, `sys.modules[…] = …`, `(Path(…) / "x").write_text(`).
+- `MAX_MODEL_LEN=4096` inside a pasted script is still a fact (`env.var.MAX_MODEL_LEN`), and
+  `GPU models and configuration: No CUDA` is still a fact (`gpu.model`): a script's code is
+  noise, a script's call is not, and a CPU box saying it has no GPU is a statement.
+- README numbers unchanged: 48/14, `--skip-absent` 3/14/45, 30/33, `--skip-absent` 22/33/8.
+  The 20-log corpus and the six real startup logs still report `0 with shapes worth a look`.
+  84 tests.
+
 ## 0.4.32 — 2026-11-09
 
 - A reproducer script pasted into an issue body is no longer reported as lines worth a look.
