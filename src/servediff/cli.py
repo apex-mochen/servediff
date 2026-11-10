@@ -841,6 +841,9 @@ def main(argv=None) -> int:
     a.add_argument("--everything", action="store_true", help="also list the noise shapes")
     a.add_argument("--markdown", action="store_true",
                    help="wrap the report in a code fence, ready to paste into an issue")
+    a.add_argument("--json", action="store_true",
+                   help="emit one JSON object: per log the counts and the shapes worth a look,"
+                        " so a pipeline does not have to parse the report text")
     a.add_argument("--max-shapes", type=int, default=None, metavar="N",
                    help="exit 1 when the number of shapes worth a look is above N, so a"
                         " pipeline can fail when a log format grows past the parser")
@@ -869,12 +872,40 @@ def main(argv=None) -> int:
             shapes_worth_a_look += len(look)
             blocks.append(auditmod.report(Path(_label(path)), text,
                                           limit=args.top, everything=args.everything))
-            summary.append((Path(_label(path)).name, sum(counts.values()), len(counts), look))
-        if len(logs) > 1 and not args.markdown:
+            summary.append((_label(path), sum(counts.values()), len(counts), look))
+        if args.json:
+            # Same numbers the text report prints, counted while the loop runs, so a CI gate
+            # reads fields instead of scraping a human layout. `shapes_worth_a_look` is the
+            # count --max-shapes gates on; `logs_with_shapes_worth_a_look` is the corpus
+            # question ("which of these has a shape no rule reads").
+            if args.markdown:
+                print("audit: --json and --markdown are two different outputs; pick one",
+                      file=sys.stderr)
+                return 2
+            payload = {
+                "logs": [
+                    {
+                        "path": str(Path(path_label)),
+                        "unread": unread,
+                        "shapes": shapes,
+                        "shapes_worth_a_look": [
+                            {"line": line, "count": count}
+                            for line, count in look.most_common(args.top or None)
+                        ],
+                    }
+                    for path_label, unread, shapes, look in summary
+                ],
+                "shapes_worth_a_look": shapes_worth_a_look,
+                "logs_with_shapes_worth_a_look": sum(1 for item in summary if item[3]),
+            }
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+            return _audit_gate(args.max_shapes, shapes_worth_a_look)
+        if len(logs) > 1 and not args.markdown and not args.json:
             # A corpus asks a different question from one log: which of these still
             # has a shape no rule reads. One line each, then only the rows that matter.
             out = []
             for name, unread, shapes, look in summary:
+                name = Path(name).name
                 verdict = (f"{len(look)} shape(s) worth a look" if look
                            else "nothing worth a look")
                 out.append(f"{name:<42} {unread:>6} unread  {shapes:>4} shape(s)  {verdict}")

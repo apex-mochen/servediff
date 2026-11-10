@@ -256,6 +256,41 @@ def test_the_second_half_of_a_call_is_noise_but_an_env_var_is_not():
     assert not servediff_audit.is_noise("NVIDIA_DRIVER_CAPABILITIES=compute,utility")
 
 
+def test_audit_json_is_the_same_count_as_the_report(tmp_path, capsys):
+    # A CI gate should read fields, not scrape a human layout. The numbers must be the ones
+    # the report prints: the same pass counts them.
+    log = tmp_path / "run.log"
+    log.write_text("Router gate chose expert 3 for every token on this run\n",
+                   encoding="utf-8")
+    assert servediff.main(["audit", str(log), "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["logs_with_shapes_worth_a_look"] == 1
+    assert payload["shapes_worth_a_look"] == 1
+    entry = payload["logs"][0]
+    # The shape, not the line: digits fold to N, because two runs of the same message with
+    # different ids are one shape and that is how the report counts them too.
+    assert entry["shapes_worth_a_look"] == [
+        {"line": "Router gate chose expert N for every token on this run", "count": 1}]
+    assert entry["unread"] == 1
+
+
+def test_audit_json_and_markdown_do_not_mix(tmp_path, capsys):
+    log = tmp_path / "run.log"
+    log.write_text("Router gate chose expert 3 for every token on this run\n",
+                   encoding="utf-8")
+    assert servediff.main(["audit", str(log), "--json", "--markdown"]) == 2
+    err = capsys.readouterr().err
+    assert "pick one" in err
+
+
+def test_audit_json_still_honours_the_gate(tmp_path):
+    # The exit code is the part a pipeline acts on, so --json must not change it.
+    log = tmp_path / "run.log"
+    log.write_text("Router gate chose expert 3 for every token on this run\n",
+                   encoding="utf-8")
+    assert servediff.main(["audit", str(log), "--json", "--max-shapes", "0"]) == 1
+
+
 def test_a_second_month_of_pastes_finds_nothing_either(capsys):
     # The batch collected one month after the first, so this is what tests whether the noise
     # table learned October or learned logs. At 0.4.36 one line survived here: the conditional

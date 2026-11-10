@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.38 — 2026-11-10
+
+- **`servediff audit --json`.** The audit prints a table for a person; a CI gate should read
+  fields. `--json` emits one object with, per log, `path`, `unread`, `shapes` and the
+  `shapes_worth_a_look` entries (shape and count), plus `shapes_worth_a_look` (the number
+  `--max-shapes` gates on) and `logs_with_shapes_worth_a_look`. The counts come from the
+  same pass that renders the text, so the two cannot disagree.
+- `--json` changes the format, not the exit code: `--max-shapes` still decides it. Passing
+  `--json` with `--markdown` is an error (exit 2) rather than one silently winning.
+- Internally the audit's summary now carries the full log label and shortens it only for the
+  table, so the JSON path is the path that was read.
+- 92 tests.
+
 ## 0.4.37 — 2026-11-10
 
 - **A second held-out batch, a month later, to test whether the rules learned logs or learned
