@@ -31,7 +31,7 @@ servediff diff examples/issue-excerpts/vllm-47047-v0.23-default.log examples/iss
 
 差异落在 MoE backend：从 `VLLM_CUTLASS (NvFp4)` 变为 `MARLIN (NvFp4)`。这正是 [vllm#47047](https://github.com/vllm-project/vllm/issues/47047) 的报告者在 v0.21 → v0.23 吞吐下降后，靠人工找出来的差异。
 
-这个项目所依赖的那个测量结果——二十份从公开 bug 报告里粘下来的日志，没有一行是解析器读不了的——在仓库里是一条命令，每份日志一行结论：
+这个项目所依赖的那个测量结果——二十一份从公开 bug 报告里粘下来的日志，没有一行是解析器读不了的——在仓库里是一条命令，每份日志一行结论：
 
 ```bash
 servediff audit tests/fixtures      # 给目录就审计里面所有 *.log

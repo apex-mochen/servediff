@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.34 — 2026-11-10
+
+- **The log that caught the padded-colon bug is now fixture 21.** `vllm-66525` is a real
+  `collect_env` pasted into a vLLM issue from a Debian 12 box with no GPU: unpadded version
+  lines, `torch 2.10.0+cpu`, `HIP runtime version: N/A`, `GPU models and configuration: No
+  CUDA`. Every fixture the repo carried was a hand copy that had kept the padded colons, so
+  the 0.4.33 bug was invisible here; this one pins it down against the real form, and adds the
+  first corpus entry from a machine with no accelerator at all.
+- A test now asserts that log reads `env.torch`, `env.os`, `env.python` and `gpu.model`, and
+  that it contributes nothing to "worth a look" — so a future rule regression fails in the
+  suite instead of in someone's issue.
+- Corpus count in README, README.zh-CN and the writeup: twenty → twenty-one. 85 tests.
+
 ## 0.4.33 — 2026-11-09
 
 - **Every `collect_env` rule was pinned to the padded colon.** They were written

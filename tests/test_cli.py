@@ -221,6 +221,21 @@ def test_audit_gate_fails_only_when_the_parser_is_behind(tmp_path, capsys):
     assert servediff.main(["audit", str(noisy), "--max-shapes", "0"]) == 0
 
 
+def test_a_cpu_only_collect_env_from_a_real_issue_is_read_and_looks_clean():
+    # vllm#66525: a real `collect_env` pasted into an issue, from a box with no GPU at all.
+    # Its version lines are unpadded -- the form every bug report actually carries -- and
+    # they were unread for five releases because the rules required whitespace before the
+    # colon. A hand-copied fixture never showed it.
+    f = facts("vllm-66525-cpu-collectenv.log")
+    assert f["env.torch"].values == ["2.10.0+cpu"]
+    assert f["env.os"].values == ["Debian GNU/Linux 12 (bookworm) (x86_64)"]
+    assert f["env.python"].values == ["3.12.15"]
+    assert f["gpu.model"].values == ["No CUDA"]
+    text = (FIX / "vllm-66525-cpu-collectenv.log").read_text(encoding="utf-8")
+    look, _ = servediff_audit.split(*servediff_audit.unread_samples(text))
+    assert look == {}, look
+
+
 def test_a_directory_is_audited_as_one_corpus_with_a_line_per_log(capsys):
     # The claim "twenty logs from public reports, nothing worth a look" should be
     # checkable in one command rather than twenty.

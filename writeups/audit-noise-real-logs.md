@@ -148,7 +148,7 @@ Two useful side effects on the way:
 
 ## What zero does and does not mean
 
-Zero here is a claim about **what these twenty logs print**, not about log space. The four
+Zero here is a claim about **what these twenty-one logs print**, not about log space. The four
 full logs above, two fixtures (a crashed startup and a clean 170-line run) and the fourteen
 issue pastes all report `nothing worth a look`; a log from a stack none of them covers may
 well print shapes no rule knows — and one did: the ROCm block started at 175 and needed two

@@ -60,7 +60,7 @@ servediff diff examples/issue-excerpts/vllm-47047-v0.23-default.log examples/iss
 Install from PyPI. A different, unrelated tool also uses the name `servediff` in a
 third-party Homebrew tap; the `pip install servediff` package is this one.
 
-The measurement this project is built on — twenty logs pasted into public bug reports,
+The measurement this project is built on — twenty-one logs pasted into public bug reports,
 nothing the parser cannot read — is one command in a checkout, and it answers for every log
 with one line each:
 
