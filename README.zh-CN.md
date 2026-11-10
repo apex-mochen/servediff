@@ -71,7 +71,7 @@ Ctrl-C 会停掉 server、保留日志、退出码 `130`；server 自己结束�
 | 子命令 | 读什么 | 退出码 |
 |---|---|---|
 | `servediff show <log>` | 一份启动日志（`-` 表示读 stdin），输出它打印出来的每条 fact 及其行号；`--json` | `0` 读到了；`2` 路径读不了，或一行都认不出来 |
-| `servediff diff <a> <b>` | 两份启动日志，或两份 `servediff env` 快照；`--json` / `--markdown` / `--all` / `--raw-args` / `--skip-absent` | `0` 一致；`1` 至少有一处不同；`2` 用法错误、路径读不了，或一份日志配一份快照 |
+| `servediff diff <a> <b>` | 两份启动日志，或两份 `servediff env` 快照；`--json` / `--markdown` / `--all` / `--raw-args` / `--skip-absent` / `--only PREFIX`（可重复）；`servediff diff <log> --against facts.json` 用 `show --json` 记下的事实当作基线 | `0` 一致；`1` 至少有一处不同；`2` 用法错误、路径读不了、那个文件不是 facts 基线、某个 `--only` 前缀一条事实都没匹配到，或一份日志配一份快照 |
 | `servediff series <a> <b> <c> ...` | 三份及以上日志，按你给的顺序排列成列，每条 fact 一行；`--json` / `--markdown` / `--all` / `--raw-args` | `0` 各份全同；`1` 有 fact 不同；`2` 少于三份 |
 | `servediff env [--python P] [-o snap.json]` | 该解释器的包、GPU 信息，以及名字以 `VLLM_` / `SGLANG_` / `SGL_` / `CUDA_` / `NCCL_` / `TORCH_` / `PYTORCH_` / `FLASHINFER_` / `TRITON_` 开头的环境变量和 `HF_HUB_OFFLINE` / `TRANSFORMERS_OFFLINE`；看起来像密钥的名字一律写成 `<redacted>` | `0` 已写出；`2` 快照失败 |
 | `servediff capture [-o run.log] -- <启动命令>` | 跑起 server、把日志同时输出到终端和文件，并在启动**之前**写出 `<out>.env.json`。命令里自带 python 启动器时（`capture -- python -m vllm...`），快照的就是那个解释器；否则用 `--python` 指到 server 所在的环境 | server 自己的退出码 |
@@ -81,6 +81,26 @@ Ctrl-C 会停掉 server、保留日志、退出码 `130`；server 自己结束�
 `1` 只表示「输入不同」，不表示「出错」，所以 `servediff diff old.log new.log` 可以直接当 CI 门禁。`-` 至多出现一次：stdin 只能读一遍。
 
 最常见的真实场景是「一次崩了、一次同样的参数能起来」。崩掉的那份日志提前结束，之后每条 fact 在它那侧都是 `<absent>`——0.28.0 对 0.30.0 这一对里 48 行差异有 45 行都是这一类，正好把解释结果的那三行埋掉。`servediff diff a.log b.log --skip-absent` 只保留两份日志都打印过的事实，也就是同一条代码路径上真正变了的东西，并明确报出它隐藏了多少行，而不是把它们悄悄算成「相同」（真实的 0.28/0.30 一对：48 差异 → 3 行 + 「45 行被隐藏」）。退出码仍是 `1`，`--json` 里 `differences` 和 `compared_both_sides` 两个数字都在。
+
+## 只要一份日志就能守
+
+`diff` 要两份日志，但「上周验收时那份日志」没人会留在仓库里。`show --json` 已经把事实落到一个小文件（19 条事实 5 190 B），缺的只是拿它当基线的入口：
+
+```bash
+servediff show accepted.log --json > facts.json          # 一次，提交进仓库
+servediff diff run.log --against facts.json --skip-absent # 每次 CI，只要今天的日志
+```
+
+`--against` 的行、`<absent>` 语义、退出码都和两份日志的 diff 一样：`0` 没变，`1` 同一条代码路径上的事实变了，`2` 基线读不了——那是坏门禁，不是发现。facts 那一侧不会输出 absence note（事实文件说不出「这行为什么从没打印」），改成报「基线里有 N 条事实」。`show --json` 同时输出 `values`（无损列表），因为 `value` 在单值/多值之间会塌成标量或列表。
+
+每行都红的门禁迟早被关掉：包版本每周都在动，而一次升级真正改变的是启动决策。`--only` 按前缀收窄到你自己负责的那几项，并在输出里报出漏掉了多少条：
+
+```bash
+servediff diff run.log --against facts.json --skip-absent \
+  --only backend. --only cuda_graph. --only parallel.
+# 0：这几项没变，env.pip.* 怎么动都无所谓
+# 2：某个前缀一条事实都没匹配到——守着一个空集合不算通过
+```
 
 ## 真实案例：参数相同，vLLM 0.28.0 对 0.30.0
 
