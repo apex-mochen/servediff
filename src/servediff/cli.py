@@ -845,6 +845,65 @@ def _audit_gate(max_shapes: int | None, shapes: int) -> int:
     return 0
 
 
+def _gate_corpus(args) -> int:
+    """`diff <dir> --against facts.json`: one line per log, then one exit code.
+
+    A CI matrix produces one startup log per row; asking "did any of these change the
+    backend" is one command with one exit code, not six diffs whose tables bury the
+    answer. Same filters as single-log mode, so `--only backend.` narrows every row.
+    """
+    facts = _facts_from_json(args.against)
+    if facts is None:
+        return 2
+    logs = _expand_logs([args.baseline])
+    if not logs:
+        print(f"diff: {args.baseline}: no *.log inside", file=sys.stderr)
+        return 2
+    results = []
+    for path in logs:
+        try:
+            text = _read_log(path)
+        except InputError as exc:
+            print(f"diff: {exc}", file=sys.stderr)
+            return 2
+        parsed = parse(text)
+        if not parsed["facts"]:
+            # An empty or truncated artifact would otherwise pass as "no differences".
+            print(f"{path}: no vLLM or SGLang configuration lines recognised", file=sys.stderr)
+            return 2
+        rows = diff({"facts": facts}, parsed)
+        if not args.all:
+            rows = [r for r in rows if not r["key"].startswith("after_ready.")]
+        if args.only is not None:
+            kept = [r for r in rows if any(r["key"].startswith(p) for p in args.only)]
+            if not kept:
+                print(f"diff: --only {', '.join(args.only)} matched no fact in either input;"
+                      " a gate on nothing is not a pass", file=sys.stderr)
+                return 2
+            rows = kept
+        differing = [r for r in rows if r["status"] != "same"]
+        if args.skip_absent:
+            differing = [r for r in differing if r["status"] == "changed"]
+        results.append({"log": str(path), "differences": len(differing),
+                        "identical": len(rows) - len(differing),
+                        "changed": [r["key"] for r in differing]})
+
+    changed_logs = sum(1 for r in results if r["differences"])
+    if args.json:
+        print(json.dumps({"against": str(args.against), "facts": len(facts),
+                          "logs": results, "logs_differing": changed_logs},
+                         indent=2, ensure_ascii=False))
+    else:
+        for r in results:
+            shown = ", ".join(r["changed"][:4]) + (" …" if len(r["changed"]) > 4 else "")
+            print(f"{r['log']:60s} {r['differences']} difference(s);"
+                  f" {r['identical']} fact(s) identical"
+                  f"{('  [' + shown + ']') if shown else ''}")
+        print(f"\n{len(results)} log(s): {changed_logs} differ from {args.against},"
+              f" {len(results) - changed_logs} unchanged")
+    return 1 if changed_logs else 0
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--version", action="version", version=f"servediff {_version()}")
@@ -1208,6 +1267,11 @@ def main(argv=None) -> int:
     if str(args.baseline) == "-" and args.candidate is not None and str(args.candidate) == "-":
         print("diff: stdin can be read once, so only one side may be '-'", file=sys.stderr)
         return 2
+
+    if args.against is not None and args.baseline.is_dir():
+        # A CI matrix writes one startup log per configuration, so the useful question is
+        # "did any of these six runs change the backend?" rather than one diff per file.
+        return _gate_corpus(args)
 
     if args.against is not None:
         # The older log does not have to ship: a facts file is a few hundred bytes and

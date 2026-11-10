@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.45 — 2026-11-10
+
+- **`diff <dir> --against facts.json`: gate a whole corpus in one command.** A CI matrix
+  writes one startup log per row; six diffs bury the answer in six tables. Give `diff` the
+  directory and it prints one line per log — `N difference(s); M fact(s) identical` plus the
+  first changed keys — then one summary line and one exit code. `--only` / `--skip-absent` /
+  `--all` narrow every row the same way they narrow a single diff, and `--json` returns
+  `{against, facts, logs, logs_differing}` for a machine.
+- **A blank or truncated artifact in that directory exits 2.** A log nothing can be read
+  from is a broken gate input, not a run that happened to match; an empty directory is
+  likewise "no *.log inside", not a clean pass.
+- 4 new tests (111 total): per-log lines and one exit code, `--only` narrowing the corpus,
+  the empty directory, and the blank artifact.
+
 ## 0.4.44 — 2026-11-10
 
 - **`diff --only PREFIX` (repeatable): a gate on the decisions you own.** Package pins move

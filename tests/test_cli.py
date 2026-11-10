@@ -1519,3 +1519,64 @@ def test_only_is_rejected_on_env_snapshots(tmp_path, capsys):
     b.write_text(json.dumps({**snap, "packages": {"vllm": "0.31.0"}}), encoding="utf-8")
     assert servediff.main(["diff", str(a), str(b), "--only", "pkg.vllm"]) == 2
     assert "env snapshots are compared whole" in capsys.readouterr().err
+
+
+CORPUS_BASE = ("INFO [core.py:122] Initializing a V1 LLM engine (v0.29.0) with config: model='m'\n"
+               "Using FLASH_ATTN attention backend out of potential backends: ['FLASH_ATTN']\n"
+               "[pip3] numpy==2.4.6\n")
+CORPUS_SAME = CORPUS_BASE.replace("numpy==2.4.6", "numpy==2.4.7")
+CORPUS_BAD = ("INFO [core.py:122] Initializing a V1 LLM engine (v0.31.0) with config: model='m'\n"
+              "Using TRITON_ATTN attention backend out of potential backends: ['TRITON_ATTN']\n"
+              "[pip3] numpy==2.4.6\n")
+
+
+def _corpus(tmp_path, capsys):
+    """A CI matrix: one log per configuration, plus the facts recorded from the accepted one."""
+    d = tmp_path / "runs"
+    d.mkdir()
+    (d / "base.log").write_text(CORPUS_BASE, encoding="utf-8")
+    (d / "same.log").write_text(CORPUS_SAME, encoding="utf-8")
+    (d / "bad.log").write_text(CORPUS_BAD, encoding="utf-8")
+    assert servediff.main(["show", str(d / "base.log"), "--json"]) == 0
+    facts_path = tmp_path / "facts.json"
+    facts_path.write_text(capsys.readouterr().out, encoding="utf-8")
+    return d, facts_path
+
+
+def test_a_directory_gates_every_log_and_reports_one_exit_code(tmp_path, capsys):
+    # Six matrix rows should not need six diffs: one command, one line per log, one exit
+    # code, and the failing row named without reading a table.
+    d, facts_path = _corpus(tmp_path, capsys)
+    assert servediff.main(["diff", str(d), "--against", str(facts_path)]) == 1
+    out = capsys.readouterr().out
+    assert "bad.log" in out and "backend.attention, engine.version" in out
+    assert "base.log" in out and "0 difference(s); 3 fact(s) identical" in out
+    assert "3 log(s): 2 differ from" in out and "1 unchanged" in out
+
+
+def test_a_directory_respects_only_so_one_row_fails(tmp_path, capsys):
+    d, facts_path = _corpus(tmp_path, capsys)
+    assert servediff.main(["diff", str(d), "--against", str(facts_path), "--only", "backend."]) == 1
+    out = capsys.readouterr().out
+    assert "1 differ from" in out and "2 unchanged" in out
+    assert "[backend.attention]" in out, out
+
+
+def test_a_directory_without_logs_is_an_input_error(tmp_path, capsys):
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    base = tmp_path / "base.log"
+    base.write_text(CORPUS_BASE, encoding="utf-8")
+    assert servediff.main(["show", str(base), "--json"]) == 0
+    facts_path = tmp_path / "facts.json"
+    facts_path.write_text(capsys.readouterr().out, encoding="utf-8")
+    assert servediff.main(["diff", str(empty), "--against", str(facts_path)]) == 2
+    assert "no *.log inside" in capsys.readouterr().err
+
+
+def test_a_blank_artifact_in_the_directory_fails_the_gate(tmp_path, capsys):
+    # A truncated matrix artifact is a broken gate input, not a run that happened to match.
+    d, facts_path = _corpus(tmp_path, capsys)
+    (d / "blank.log").write_text("", encoding="utf-8")
+    assert servediff.main(["diff", str(d), "--against", str(facts_path)]) == 2
+    assert "no vLLM or SGLang configuration lines recognised" in capsys.readouterr().err

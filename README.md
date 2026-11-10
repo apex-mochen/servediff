@@ -125,7 +125,7 @@ names a python launcher, that interpreter is the one snapshotted; for entry poin
 | Command | What it reads | Exit codes |
 |---|---|---|
 | `servediff show <log>` | one startup log (or `-` for stdin) → the facts it printed, each with its line number; `--json` | `0` read something; `2` unreadable path or no line recognised |
-| `servediff diff <a> <b>` | two startup logs, or two `servediff env` snapshots; `--json`, `--markdown`, `--all`, `--raw-args`, `--skip-absent`, `--only PREFIX` (repeatable); `servediff diff <log> --against facts.json` diffs one log with facts recorded by `show --json` | `0` identical; `1` at least one difference; `2` usage error, unreadable path, a facts file that is not one, a `--only` prefix that matched nothing, or one log mixed with one snapshot |
+| `servediff diff <a> <b>` | two startup logs, or two `servediff env` snapshots; `--json`, `--markdown`, `--all`, `--raw-args`, `--skip-absent`, `--only PREFIX` (repeatable); `servediff diff <log> --against facts.json` diffs one log with facts recorded by `show --json`; give it a directory instead of a log to gate every `*.log` inside (one line each) | `0` identical; `1` at least one difference; `2` usage error, unreadable path, a facts file that is not one, a `--only` prefix that matched nothing, or one log mixed with one snapshot |
 | `servediff series <a> <b> <c> ...` | three or more startup logs, in the column order you give → one fact per row; `--json`, `--markdown`, `--all`, `--raw-args` | `0` same across every log; `1` at least one fact differs; `2` fewer than three inputs |
 | `servediff env [--python P] [-o snap.json]` | that interpreter's packages, GPU info, and env vars whose names start with `VLLM_` / `SGLANG_` / `SGL_` / `CUDA_` / `NCCL_` / `TORCH_` / `PYTORCH_` / `FLASHINFER_` / `TRITON_` or are `HF_HUB_OFFLINE` / `TRANSFORMERS_OFFLINE`; secret-looking names become `<redacted>` | `0` written; `2` snapshot failed |
 | `servediff capture [-o run.log] -- <server command>` | runs the server, tees its log to stdout and to the file, and writes `<out>.env.json` **before** launch. If the command names a python launcher (`capture -- python -m vllm...`), that interpreter is the one snapshotted; otherwise pass `--python` to point at the server's venv | the server's own exit code |
@@ -201,6 +201,19 @@ servediff diff run.log --against facts.json --skip-absent \
 # exit 0: none of those changed, whatever moved in env.pip.*
 # exit 2: a prefix matched no fact at all — a gate on nothing is not a pass
 ```
+
+A CI matrix writes one log per row, so give `diff` the directory instead of running it six
+times — one line per log, one exit code, and the failing row named:
+
+```bash
+servediff diff logs/ --against facts.json --skip-absent --only backend.
+# logs/a.log   1 difference(s); 0 fact(s) identical  [backend.attention]
+# logs/b.log   0 difference(s); 1 fact(s) identical
+# 2 log(s): 1 differ from facts.json, 1 unchanged
+```
+
+An empty or truncated artifact in that directory exits 2 rather than passing as "no
+differences": a gate input that nothing could be read from is broken, not clean.
 
 ## Real example: same flags, vLLM 0.28.0 vs 0.30.0
 
