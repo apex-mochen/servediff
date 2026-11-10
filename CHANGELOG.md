@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.46 — 2026-11-10
+
+- **`diff` with one log now explains itself instead of raising.** `candidate` became optional
+  in 0.4.42 only because `--against` supplies the other side; without either, the code reached
+  `_read_log(None)` and a newcomer's very first command — `servediff diff startup.log` — died
+  with `AttributeError: 'NoneType' object has no attribute 'read_text'`. It now exits `2` with
+  `diff: one log is not a comparison -- pass the second log, or '--against facts.json'
+  (record it from a log you kept: servediff show --json <log> > facts.json)`.
+- Found by walking the README as a stranger would: fresh venv, `pip install servediff`,
+  `servediff demo`, then "diff the one log I have". No code path was changed beyond that
+  branch; every other exit code stays as it was.
+- 1 new test (112 total): one log without `--against` is exit `2`, names both routes, and
+  asserts `Traceback` is not in stderr.
+
 ## 0.4.45 — 2026-11-10
 
 - **`diff <dir> --against facts.json`: gate a whole corpus in one command.** A CI matrix

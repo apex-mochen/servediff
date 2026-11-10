@@ -1273,6 +1273,14 @@ def main(argv=None) -> int:
         # "did any of these six runs change the backend?" rather than one diff per file.
         return _gate_corpus(args)
 
+    if args.against is None and args.candidate is None:
+        # One log plus "diff" is the first thing most people try, and until now it left a
+        # traceback: candidate is optional only once --against supplies the other side.
+        print("diff: one log is not a comparison -- pass the second log, or "
+              "'--against facts.json' (record it from a log you kept: "
+              "servediff show --json <log> > facts.json)", file=sys.stderr)
+        return 2
+
     if args.against is not None:
         # The older log does not have to ship: a facts file is a few hundred bytes and
         # diffs against the same extractor, so a CI job can gate on what the server

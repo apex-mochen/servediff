@@ -1580,3 +1580,15 @@ def test_a_blank_artifact_in_the_directory_fails_the_gate(tmp_path, capsys):
     (d / "blank.log").write_text("", encoding="utf-8")
     assert servediff.main(["diff", str(d), "--against", str(facts_path)]) == 2
     assert "no vLLM or SGLang configuration lines recognised" in capsys.readouterr().err
+
+
+def test_one_log_without_against_is_an_input_error(tmp_path, capsys):
+    # A newcomer's first move is "diff the one log I have". Say so in a sentence, and never
+    # let it come out as a traceback on the tool's main command.
+    log = tmp_path / "startup.log"
+    log.write_text(CORPUS_BASE, encoding="utf-8")
+    assert servediff.main(["diff", str(log)]) == 2
+    err = capsys.readouterr().err
+    assert "one log is not a comparison" in err
+    assert "--against" in err
+    assert "Traceback" not in err
