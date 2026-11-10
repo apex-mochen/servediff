@@ -866,6 +866,9 @@ def main(argv=None) -> int:
     d.add_argument("--skip-absent", action="store_true",
                    help="hide facts one side never printed, so a failed run's tail does not"
                         " bury the rows that both logs can be compared on")
+    d.add_argument("--only", action="append", metavar="PREFIX", default=None,
+                   help="compare only facts whose key starts with PREFIX (repeatable), so a gate"
+                        " can watch the startup decisions while package versions drift")
     s = sub.add_parser("series", help="compare three or more server logs in one table")
     s.add_argument("logs", type=Path, nargs="+", help="server logs, in the column order you want; - reads stdin")
     s.add_argument("--raw-args", action="store_true", help="also compare every raw argument (same engine only)")
@@ -1239,6 +1242,10 @@ def main(argv=None) -> int:
             if not all(snaps):
                 print("diff: give two server logs or two `servediff env` snapshots, not one of each", file=sys.stderr)
                 return 2
+            if args.only is not None:
+                print("diff: --only narrows server-log facts; env snapshots are compared whole",
+                      file=sys.stderr)
+                return 2
             rows = envsnap.ranked(envsnap.diff(json.loads(text_a), json.loads(text_b)))
             key = [r for r in rows if envsnap.is_key(r)]
             if args.json:
@@ -1273,6 +1280,18 @@ def main(argv=None) -> int:
     rows = diff(a, b, raw_args=args.raw_args and args.against is None)
     if not args.all:  # errors after "ready" (e.g. on shutdown) say nothing about the config
         rows = [r for r in rows if not r["key"].startswith("after_ready.")]
+    # A gate that fails on every row is a gate nobody keeps: package pins move weekly, while
+    # the startup decisions (backend, graph mode, parallelism) are what a version bump
+    # actually changes. --only narrows the comparison, and a prefix that matches nothing is
+    # a broken gate rather than a pass, so it exits 2.
+    narrowed = args.only is not None
+    if narrowed:
+        kept = [r for r in rows if any(r["key"].startswith(p) for p in args.only)]
+        if not kept:
+            print(f"diff: --only {', '.join(args.only)} matched no fact in either input;"
+                  " a gate on nothing is not a pass", file=sys.stderr)
+            return 2
+        rows = kept
     all_differing = [r for r in rows if r["status"] != "same"]
     # A run that died at startup leaves every later fact <absent>, so one-sided rows
     # outnumber real differences roughly 10:1 and bury them. --skip-absent keeps only
@@ -1291,6 +1310,9 @@ def main(argv=None) -> int:
     if args.against is not None:
         notes.append(f"the baseline is {len(a['facts'])} fact(s) recorded from an earlier log,"
                      " not a log: anything it never recorded cannot be compared, so it shows as <absent>")
+    if narrowed:
+        notes.append(f"only {len(rows)} fact(s) matched --only {', '.join(args.only)}; every other"
+                     " fact was not compared, and the exit status covers only these")
     if args.skip_absent and all_differing:
         notes.append(f"{len(hidden_absent)} difference(s) hidden by --skip-absent: one side"
                      " never printed those lines, so they can only be listed, not compared")

@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.44 — 2026-11-10
+
+- **`diff --only PREFIX` (repeatable): a gate on the decisions you own.** Package pins move
+  every week; the startup decisions — attention/MoE backend, CUDA graph mode, parallelism —
+  are what a version bump actually changes. `--only backend. --only cuda_graph.` compares
+  those rows and nothing else, and the note says how many facts were left out, so a narrowed
+  pass cannot be read as a clean one.
+- **A prefix that matches nothing exits 2, not 0.** `--only cuda_graph` on two logs that
+  never printed it is a green gate watching nothing — the same failure as an unreadable
+  baseline. It says so and fails.
+- `--only` is rejected on `servediff env` snapshots rather than silently ignored: those are
+  compared whole today.
+- 4 new tests (107 total): narrowing, two prefixes at once, the no-match exit 2, and the
+  snapshot rejection.
+
 ## 0.4.43 — 2026-11-10
 
 - **Corrected the size figures in the 0.4.42 example.** 0.4.42 said a facts file is 4 KB

@@ -1465,3 +1465,57 @@ def test_a_file_that_is_not_a_facts_file_is_an_input_error(tmp_path, capsys):
 
     assert servediff.main(["diff", str(log), str(log), "--against", str(bad)]) == 2
     assert "drop the second log" in capsys.readouterr().err
+
+
+NARROW_A = ("INFO [core.py:122] Initializing a V1 LLM engine (v0.29.0) with config: model='m'\n"
+            "Using FLASH_ATTN attention backend out of potential backends: ['FLASH_ATTN']\n"
+            "[pip3] numpy==2.4.6\n")
+NARROW_B = ("INFO [core.py:122] Initializing a V1 LLM engine (v0.30.0) with config: model='m'\n"
+            "Using TRITON_ATTN attention backend out of potential backends: ['TRITON_ATTN']\n"
+            "[pip3] numpy==2.2.6\n")
+
+
+def test_only_one_prefix_watches_one_decision(tmp_path, capsys):
+    # A gate that goes red whenever a package pin moves is a gate that stays red, so the
+    # CI wants "the attention backend did not change" on its own. --only must compare just
+    # that row and must say how much it left out, or a narrowed pass reads as a clean one.
+    a, b = tmp_path / "a.log", tmp_path / "b.log"
+    a.write_text(NARROW_A, encoding="utf-8")
+    b.write_text(NARROW_B, encoding="utf-8")
+    assert servediff.main(["diff", str(a), str(b), "--only", "backend.attention"]) == 1
+    out = capsys.readouterr().out
+    assert "FLASH_ATTN" in out and "TRITON_ATTN" in out
+    assert "engine.version" not in out, out
+    assert "env.pip.numpy" not in out, out
+    assert "only 1 fact(s) matched --only backend.attention" in out
+    assert "the exit status covers only these" in out
+
+
+def test_only_takes_several_prefixes(tmp_path, capsys):
+    a, b = tmp_path / "a.log", tmp_path / "b.log"
+    a.write_text(NARROW_A, encoding="utf-8")
+    b.write_text(NARROW_B, encoding="utf-8")
+    assert servediff.main(["diff", str(a), str(b), "--only", "engine.", "--only", "env.pip.numpy"]) == 1
+    out = capsys.readouterr().out
+    assert "engine.version" in out and "env.pip.numpy" in out
+    assert "backend.attention" not in out, out
+
+
+def test_a_prefix_that_matches_nothing_is_exit_2(tmp_path, capsys):
+    # `--only cuda_graph` on two logs that never printed it would otherwise be a green
+    # gate that watches nothing: the same failure as an unreadable baseline.
+    a, b = tmp_path / "a.log", tmp_path / "b.log"
+    a.write_text(NARROW_A, encoding="utf-8")
+    b.write_text(NARROW_B, encoding="utf-8")
+    assert servediff.main(["diff", str(a), str(b), "--only", "cuda_graph"]) == 2
+    err = capsys.readouterr().err
+    assert "matched no fact" in err and "a gate on nothing is not a pass" in err
+
+
+def test_only_is_rejected_on_env_snapshots(tmp_path, capsys):
+    snap = {"schema": "servediff-env/1", "python": "3.12.3", "gpus": [], "packages": {"vllm": "0.30.0"}, "env": {}}
+    a, b = tmp_path / "a.json", tmp_path / "b.json"
+    a.write_text(json.dumps(snap), encoding="utf-8")
+    b.write_text(json.dumps({**snap, "packages": {"vllm": "0.31.0"}}), encoding="utf-8")
+    assert servediff.main(["diff", str(a), str(b), "--only", "pkg.vllm"]) == 2
+    assert "env snapshots are compared whole" in capsys.readouterr().err
