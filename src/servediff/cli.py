@@ -10,7 +10,9 @@ as absent, never filled with a default.
 
 Usage:
     servediff show <log>
+    servediff show <log> --json > facts.json
     servediff diff <baseline.log> <candidate.log> [--raw-args] [--json] [--markdown] [--all]
+    servediff diff <today.log> --against facts.json
     servediff env [--python /path/to/server/venv/bin/python] [-o env.json]
     servediff diff <baseline-env.json> <candidate-env.json>
     servediff capture [-o run.log] [--python /path/to/python] -- <server command>
@@ -592,6 +594,45 @@ def diff(a: dict, b: dict, raw_args: bool = False) -> list[dict]:
     return rows
 
 
+def _facts_from_json(path: Path) -> dict[str, Fact] | None:
+    """Read a facts file written by `servediff show --json`, or say why it cannot."""
+    try:
+        loaded = json.loads(path.read_text(encoding="utf-8"))
+    except OSError as exc:
+        print(f"diff: {path}: {exc}", file=sys.stderr)
+        return None
+    except ValueError as exc:
+        print(f"diff: {path}: not JSON: {exc}", file=sys.stderr)
+        return None
+    if not isinstance(loaded, dict) or not loaded:
+        print(f"diff: {path}: not a facts file (want the object `servediff show --json` writes)",
+              file=sys.stderr)
+        return None
+    facts = {}
+    for key, entry in loaded.items():
+        if not isinstance(entry, dict):
+            print(f"diff: {path}: not a facts file: {key} is {type(entry).__name__},"
+                  " want an object with value/evidence", file=sys.stderr)
+            return None
+        if "values" in entry:
+            values = entry["values"]
+        elif "value" in entry:
+            # Files written before 0.4.42 carry only `value`, where a list may be one
+            # list-valued fact (cuda_graph.captures) or several competing values. Taking
+            # it as one value keeps the common case (captures, allreduce candidates) right.
+            values = [entry["value"]]
+        else:
+            print(f"diff: {path}: not a facts file: {key} has no value", file=sys.stderr)
+            return None
+        if not isinstance(values, list) or not values:
+            print(f"diff: {path}: not a facts file: {key} has an empty value list", file=sys.stderr)
+            return None
+        evidence = [tuple(e) if isinstance(e, list) and len(e) == 2 else e
+                    for e in (entry.get("evidence") or [])]
+        facts[key] = Fact(values=list(values), evidence=evidence)
+    return facts
+
+
 def series(parsed_list: list[dict], raw_args: bool = False) -> list[dict]:
     """Compare N logs at once: one row per fact, one value per log.
 
@@ -813,7 +854,11 @@ def main(argv=None) -> int:
     show.add_argument("--json", action="store_true")
     d = sub.add_parser("diff", help="diff two server logs, or two `servediff env` snapshots")
     d.add_argument("baseline", type=Path, help="server log or env snapshot; - reads stdin")
-    d.add_argument("candidate", type=Path, help="server log or env snapshot; - reads stdin")
+    d.add_argument("candidate", type=Path, nargs="?",
+                   help="server log or env snapshot; - reads stdin (omit it when using --against)")
+    d.add_argument("--against", type=Path, default=None, metavar="FACTS",
+                   help="compare one log with facts recorded earlier by `servediff show --json`,"
+                        " so a CI job does not have to keep the old log around")
     d.add_argument("--raw-args", action="store_true", help="also diff every raw argument (same engine only)")
     d.add_argument("--json", action="store_true")
     d.add_argument("--markdown", action="store_true", help="render a GitHub-flavored report (paste into issues)")
@@ -1141,7 +1186,11 @@ def main(argv=None) -> int:
             print(f"{_label(args.log)}: no vLLM or SGLang configuration lines recognised", file=sys.stderr)
             return 2
         if args.json:
-            print(json.dumps({k: {"value": f.value, "evidence": f.evidence} for k, f in parsed["facts"].items()},
+            # `values` is the lossless list: `value` collapses to a scalar when a fact
+            # was printed once, so `--against` reads `values` and never has to guess
+            # whether a list was one list-valued fact or several competing values.
+            print(json.dumps({k: {"value": f.value, "values": f.values, "evidence": f.evidence}
+                             for k, f in parsed["facts"].items()},
                              indent=2, ensure_ascii=False))
         else:
             for key, fact in sorted(parsed["facts"].items()):
@@ -1149,50 +1198,79 @@ def main(argv=None) -> int:
                 print(f"{key:32s} {_fmt(fact.value):60s} line {where if where else '-'}")
         return 0
 
-    if str(args.baseline) == "-" and str(args.candidate) == "-":
+    if args.against is not None and args.candidate is not None:
+        print("diff: --against compares one log with recorded facts; drop the second log",
+              file=sys.stderr)
+        return 2
+    if str(args.baseline) == "-" and args.candidate is not None and str(args.candidate) == "-":
         print("diff: stdin can be read once, so only one side may be '-'", file=sys.stderr)
         return 2
-    try:
-        text_a = _read_log(args.baseline)
-        text_b = _read_log(args.candidate)
-    except InputError as exc:
-        print(f"diff: {exc}", file=sys.stderr)
-        return 2
-    snaps = envsnap.is_snapshot(text_a), envsnap.is_snapshot(text_b)
-    if any(snaps):
-        if not all(snaps):
-            print("diff: give two server logs or two `servediff env` snapshots, not one of each", file=sys.stderr)
-            return 2
-        rows = envsnap.ranked(envsnap.diff(json.loads(text_a), json.loads(text_b)))
-        key = [r for r in rows if envsnap.is_key(r)]
-        if args.json:
-            print(json.dumps({"differences": len(rows), "rows": rows}, indent=2, ensure_ascii=False))
-        elif args.markdown:
-            shown = rows if args.all else key
-            print(_render_markdown(
-                path_a=_label(args.baseline), path_b=_label(args.candidate),
-                engine_a=None, engine_b=None,
-                rows=shown, warnings=[],
-                differing=len(key), identical=len(rows) - len(key),
-                all_rows=bool(args.all)))
-        else:
-            shown = rows if args.all else key
-            print(f"{'fact':32s} {'baseline':40s} {'candidate':40s} status")
-            for r in shown:
-                print(f"{r['key']:32s} {_short(_fmt(r['baseline']), 40):40s}"
-                      f" {_short(_fmt(r['candidate']), 40):40s} {r['status']}"
-                      f"{('  ' + r['delta']) if r.get('delta') else ''}")
-            print(f"\n{len(key)} difference(s) in Python, GPU, inference packages and engine env vars;"
-                  f" {len(rows) - len(key)} in other packages{'' if args.all else ' (--all to list them)'}.")
-        return 1 if rows else 0
 
-    a = parse(text_a)
-    b = parse(text_b)
-    for path, parsed in ((args.baseline, a), (args.candidate, b)):
-        if not parsed["facts"]:
-            print(f"{path}: no vLLM or SGLang configuration lines recognised", file=sys.stderr)
+    if args.against is not None:
+        # The older log does not have to ship: a facts file is a few hundred bytes and
+        # diffs against the same extractor, so a CI job can gate on what the server
+        # printed today without keeping yesterday's 40 KB log in the repo.
+        try:
+            text_b = _read_log(args.baseline)
+        except InputError as exc:
+            print(f"diff: {exc}", file=sys.stderr)
             return 2
-    rows = diff(a, b, raw_args=args.raw_args)
+        if envsnap.is_snapshot(text_b):
+            print("diff: --against compares a server log with recorded facts, not an env snapshot",
+                  file=sys.stderr)
+            return 2
+        b = parse(text_b)
+        if not b["facts"]:
+            print(f"{args.baseline}: no vLLM or SGLang configuration lines recognised", file=sys.stderr)
+            return 2
+        facts = _facts_from_json(args.against)
+        if facts is None:
+            return 2
+        a = {"facts": facts, "engine": b["engine"], "args": {}, "raw_args": {}}
+    else:
+        try:
+            text_a = _read_log(args.baseline)
+            text_b = _read_log(args.candidate)
+        except InputError as exc:
+            print(f"diff: {exc}", file=sys.stderr)
+            return 2
+        snaps = envsnap.is_snapshot(text_a), envsnap.is_snapshot(text_b)
+        if any(snaps):
+            if not all(snaps):
+                print("diff: give two server logs or two `servediff env` snapshots, not one of each", file=sys.stderr)
+                return 2
+            rows = envsnap.ranked(envsnap.diff(json.loads(text_a), json.loads(text_b)))
+            key = [r for r in rows if envsnap.is_key(r)]
+            if args.json:
+                print(json.dumps({"differences": len(rows), "rows": rows}, indent=2, ensure_ascii=False))
+            elif args.markdown:
+                shown = rows if args.all else key
+                print(_render_markdown(
+                    path_a=_label(args.baseline), path_b=_label(args.candidate),
+                    engine_a=None, engine_b=None,
+                    rows=shown, warnings=[],
+                    differing=len(key), identical=len(rows) - len(key),
+                    all_rows=bool(args.all)))
+            else:
+                shown = rows if args.all else key
+                print(f"{'fact':32s} {'baseline':40s} {'candidate':40s} status")
+                for r in shown:
+                    print(f"{r['key']:32s} {_short(_fmt(r['baseline']), 40):40s}"
+                          f" {_short(_fmt(r['candidate']), 40):40s} {r['status']}"
+                          f"{('  ' + r['delta']) if r.get('delta') else ''}")
+                print(f"\n{len(key)} difference(s) in Python, GPU, inference packages and engine env vars;"
+                      f" {len(rows) - len(key)} in other packages{'' if args.all else ' (--all to list them)'}.")
+            return 1 if rows else 0
+
+        a = parse(text_a)
+        b = parse(text_b)
+        for path, parsed in ((args.baseline, a), (args.candidate, b)):
+            if not parsed["facts"]:
+                print(f"{path}: no vLLM or SGLang configuration lines recognised", file=sys.stderr)
+                return 2
+    label_a = _label(args.against) if args.against is not None else _label(args.baseline)
+    label_b = _label(args.baseline) if args.against is not None else _label(args.candidate)
+    rows = diff(a, b, raw_args=args.raw_args and args.against is None)
     if not args.all:  # errors after "ready" (e.g. on shutdown) say nothing about the config
         rows = [r for r in rows if not r["key"].startswith("after_ready.")]
     all_differing = [r for r in rows if r["status"] != "same"]
@@ -1207,7 +1285,12 @@ def main(argv=None) -> int:
     identical = len(rows) - len(all_differing)
     notes = []
     for side, parsed in (("baseline", a), ("candidate", b)):
+        if args.against is not None and side == "baseline":
+            continue  # recorded facts cannot say why a fact was never written down
         notes.extend(f"{side}: {note}" for note in absence_notes(parsed))
+    if args.against is not None:
+        notes.append(f"the baseline is {len(a['facts'])} fact(s) recorded from an earlier log,"
+                     " not a log: anything it never recorded cannot be compared, so it shows as <absent>")
     if args.skip_absent and all_differing:
         notes.append(f"{len(hidden_absent)} difference(s) hidden by --skip-absent: one side"
                      " never printed those lines, so they can only be listed, not compared")
@@ -1229,7 +1312,7 @@ def main(argv=None) -> int:
                 warnings.append(msg)
         shown_rows = rows if args.all else differing
         print(_render_markdown(
-            path_a=_label(args.baseline), path_b=_label(args.candidate),
+            path_a=label_a, path_b=label_b,
             engine_a=a["engine"], engine_b=b["engine"],
             rows=shown_rows, warnings=warnings, notes=notes,
             differing=len(differing), identical=identical,

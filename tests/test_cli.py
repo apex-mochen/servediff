@@ -1409,3 +1409,59 @@ def test_markdown_reports_absence_notes(tmp_path, capsys):
     assert servediff.main(["diff", str(a), str(b), "--markdown"]) == 0
     out = capsys.readouterr().out
     assert "ℹ️" in out and "world_size=1" in out
+
+
+def test_a_facts_file_gates_one_log_without_shipping_the_other(tmp_path, capsys):
+    # A CI job has today's log and no yesterday's: keeping the old log in the repo is
+    # what nobody does. `show --json` records the facts of a good run, and --against must
+    # produce the rows a two-log diff would, so the gate works on one log at a time.
+    good, bad = tmp_path / "good.log", tmp_path / "bad.log"
+    good.write_text(FALLBACK_STARTUP, encoding="utf-8")
+    bad.write_text(FAILED_STARTUP, encoding="utf-8")
+    facts = tmp_path / "facts.json"
+    assert servediff.main(["show", str(good), "--json"]) == 0
+    facts.write_text(capsys.readouterr().out, encoding="utf-8")
+
+    assert servediff.main(["diff", str(good), "--against", str(facts)]) == 0
+    out = capsys.readouterr().out
+    assert "0 difference(s)" in out
+    assert "recorded from an earlier log, not a log" in out
+
+    # A different run must fail the gate, and the reason must be visible: the facts file
+    # cannot explain why a fact is missing, only that it never recorded it.
+    assert servediff.main(["diff", str(bad), "--against", str(facts)]) == 1
+    out = capsys.readouterr().out
+    assert "only_baseline" in out
+
+
+def test_a_facts_file_round_trips_a_multi_valued_fact(tmp_path, capsys):
+    # `value` collapses to a scalar or a list depending on how many values a fact had,
+    # which is exactly the ambiguity that would silently turn two conflicting backends
+    # into one. --against reads `values`, so the round trip has to be exact.
+    log = tmp_path / "two.log"
+    log.write_text("Using FLASH_ATTN attention backend out of potential backends: ['FLASH_ATTN']\n"
+                   "Using TRITON_ATTN attention backend out of potential backends: ['TRITON_ATTN']\n",
+                   encoding="utf-8")
+    facts = tmp_path / "facts.json"
+    assert servediff.main(["show", str(log), "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["backend.attention"]["values"] == ["FLASH_ATTN", "TRITON_ATTN"]
+    facts.write_text(json.dumps(payload), encoding="utf-8")
+    assert servediff.main(["diff", str(log), "--against", str(facts)]) == 0
+
+
+def test_a_file_that_is_not_a_facts_file_is_an_input_error(tmp_path, capsys):
+    # Exit 2, not a traceback and not a difference: a broken baseline makes the gate
+    # wrong, and "wrong" is not the same finding as "the server changed".
+    log = tmp_path / "a.log"
+    log.write_text(FALLBACK_STARTUP, encoding="utf-8")
+    bad = tmp_path / "bad.json"
+    bad.write_text('{"x": 1}', encoding="utf-8")
+    assert servediff.main(["diff", str(log), "--against", str(bad)]) == 2
+    assert "not a facts file" in capsys.readouterr().err
+
+    assert servediff.main(["diff", str(log), "--against", str(tmp_path / "nope.json")]) == 2
+    assert "No such file" in capsys.readouterr().err
+
+    assert servediff.main(["diff", str(log), str(log), "--against", str(bad)]) == 2
+    assert "drop the second log" in capsys.readouterr().err

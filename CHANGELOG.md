@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.4.42 — 2026-11-10
+
+- **`servediff diff <log> --against facts.json`: one log is enough to gate.** A CI job has
+  today's startup log; nobody keeps the log from the run they accepted three months ago.
+  `servediff show accepted.log --json > facts.json` records those facts in a few kilobytes
+  (19 facts from a collect_env paste is 4 KB, versus 40 KB for the log), and `--against`
+  diffs today's log against them with the same rows, the same `<absent>` semantics and the
+  same exit codes as a two-log diff. Passing a second log alongside `--against` is a usage
+  error rather than a guess.
+- **`show --json` now also emits `values`, the lossless list.** `value` collapses to a
+  scalar when a fact was printed once and to a list when it was printed several times, so
+  reconstructing facts from it turns `cuda_graph.captures` (one list-valued fact) and
+  `backend.attention` (two conflicting backends) into the same shape. `--against` reads
+  `values`, so a round trip through the file cannot merge or split a fact; files written
+  before 0.4.42 still load, with their `value` taken as one value.
+- **Recorded facts cannot explain an absence.** In `--against` mode the baseline gets no
+  absence note — a facts file has nothing to say about why a line was never written — and
+  the output names how many facts the baseline holds, so a narrowed comparison is never
+  read as a clean one. Unreadable or non-facts input exits `2`, not `1`: a broken baseline
+  is a broken gate, not a finding.
+- `--raw-args` is ignored when the baseline is a facts file, because a facts file records
+  facts and not the resolved command line; the flag no longer invents `raw_arg.*` rows.
+- 3 new tests (103 total) covering the round trip, the multi-valued fact, and the three
+  new exit-2 cases.
+
 ## 0.4.41 — 2026-11-10
 
 - **The second CI gate is now on the landing page.** `--baseline` shipped in 0.4.40 and was

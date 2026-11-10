@@ -125,7 +125,7 @@ names a python launcher, that interpreter is the one snapshotted; for entry poin
 | Command | What it reads | Exit codes |
 |---|---|---|
 | `servediff show <log>` | one startup log (or `-` for stdin) → the facts it printed, each with its line number; `--json` | `0` read something; `2` unreadable path or no line recognised |
-| `servediff diff <a> <b>` | two startup logs, or two `servediff env` snapshots; `--json`, `--markdown`, `--all`, `--raw-args`, `--skip-absent` | `0` identical; `1` at least one difference; `2` usage error, unreadable path, or one log mixed with one snapshot |
+| `servediff diff <a> <b>` | two startup logs, or two `servediff env` snapshots; `--json`, `--markdown`, `--all`, `--raw-args`, `--skip-absent`; `servediff diff <log> --against facts.json` diffs one log with facts recorded by `show --json` | `0` identical; `1` at least one difference; `2` usage error, unreadable path, a facts file that is not one, or one log mixed with one snapshot |
 | `servediff series <a> <b> <c> ...` | three or more startup logs, in the column order you give → one fact per row; `--json`, `--markdown`, `--all`, `--raw-args` | `0` same across every log; `1` at least one fact differs; `2` fewer than three inputs |
 | `servediff env [--python P] [-o snap.json]` | that interpreter's packages, GPU info, and env vars whose names start with `VLLM_` / `SGLANG_` / `SGL_` / `CUDA_` / `NCCL_` / `TORCH_` / `PYTORCH_` / `FLASHINFER_` / `TRITON_` or are `HF_HUB_OFFLINE` / `TRANSFORMERS_OFFLINE`; secret-looking names become `<redacted>` | `0` written; `2` snapshot failed |
 | `servediff capture [-o run.log] -- <server command>` | runs the server, tees its log to stdout and to the file, and writes `<out>.env.json` **before** launch. If the command names a python launcher (`capture -- python -m vllm...`), that interpreter is the one snapshotted; otherwise pass `--python` to point at the server's venv | the server's own exit code |
@@ -167,6 +167,29 @@ servediff audit run.log --write-baseline audit-baseline.json
 
 A shape in the baseline is still unread and still reported; it is accepted, not parsed. What
 it stops is a gate that goes red on day one and stays red until someone deletes it.
+
+The same idea applies to the facts themselves. A CI job has today's log; nobody keeps the
+log from the run they accepted three months ago. `servediff show --json` records what that
+run printed in a few kilobytes, and `--against` diffs a single log with those facts:
+
+```bash
+# once, on a run whose startup you have read: commit facts.json (4 KB, not 40 KB)
+servediff show accepted.log --json > facts.json
+```
+
+```yaml
+# .github/workflows/facts-drift.yml — one log, no second log in the repo
+- run: pip install servediff
+- run: servediff show run.log --json > today.json
+- run: servediff diff run.log --against facts.json --skip-absent
+  # exit 0: today's startup still prints what the accepted run printed
+  # exit 1: a fact on the same code path changed
+  # exit 2: facts.json is unreadable — a broken gate, not a finding
+```
+
+`--skip-absent` matters here: a log that stopped early is missing facts, and a fact nobody
+recorded cannot be compared. The note in the output says how many facts the baseline holds,
+so a narrowed comparison never reads as a clean one.
 
 ## Real example: same flags, vLLM 0.28.0 vs 0.30.0
 
