@@ -1,0 +1,79 @@
+import concurrent.futures, json, time, urllib.request, urllib.error
+from pathlib import Path
+import os, uuid
+from transformers import AutoTokenizer
+r = Path('repro-results')
+r.mkdir(exist_ok=True)
+out = r / 'pressure-native'
+out.mkdir(exist_ok=True)
+
+def http(port, path, payload=None, timeout=300):
+    req = urllib.request.Request(f'http://127.0.0.1:{port}{path}', data=None if payload is None else json.dumps(payload).encode(), headers={'Content-Type': 'application/json'})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as f:
+            raw = f.read().decode()
+            try:
+                b = json.loads(raw)
+            except ValueError:
+                b = raw
+            return {'status': f.status, 'body': b}
+    except urllib.error.HTTPError as e:
+        return {'status': e.code, 'body': e.read().decode()}
+    except Exception as e:
+        return {'error': repr(e)}
+
+def snap(label):
+    for port in [32400, 32401, 9041, 9042]:
+        result = http(port, '/metrics')
+        (out / f'{label}-{port}.json').write_text(json.dumps(result))
+
+def flush():
+    for p in [32400, 32401]:
+        assert http(p, '/flush_cache', {}).get('status') == 200
+
+def pair(ids, name, n, salt):
+    payload = {'input_ids': ids, 'cache_salt': salt, 'sampling_params': {'temperature': 0, 'max_new_tokens': n, 'min_new_tokens': n, 'ignore_eos': True}, 'stream': False, 'bootstrap_host': '127.0.0.1', 'bootstrap_port': 32402, 'bootstrap_room': time.time_ns() % 2 ** 53}
+    (out / f'{name}-request.json').write_text(json.dumps(payload))
+    t = time.monotonic()
+    with concurrent.futures.ThreadPoolExecutor(2) as pool:
+        res = dict(zip([32400, 32401], pool.map(lambda p: http(p, '/generate', payload), [32400, 32401])))
+    result = {'elapsed': time.monotonic() - t, 'responses': res}
+    (out / f'{name}-responses.json').write_text(json.dumps(result, indent=2))
+    print(name, {p: {'status': v.get('status'), 'error': v.get('error'), 'cached': v['body'].get('meta_info', {}).get('cached_tokens') if isinstance(v.get('body'), dict) else v.get('body')} for (p, v) in res.items()}, flush=True)
+    return res
+tokenizer = AutoTokenizer.from_pretrained(os.environ['MODEL_PATH'], trust_remote_code=True)
+text = 'Document 0: A\n' + 'Record 0: The reference describes memory allocation, cache storage, and data transfer.\n' * 500 + '\nReply briefly with READY.'
+ids = tokenizer.encode(text)
+assert len(ids) >= 6100
+ids = ids[:6100]
+run_id = uuid.uuid4().hex
+salts = [run_id + '-' + str(i) for i in range(8)]
+flush()
+snap('before-seed')
+
+def seed(i):
+    result = pair(ids, f'seed-{i}', 96, salts[i])
+    assert all((v.get('status') == 200 for v in result.values())), result
+    generated = result[32401]['body']['output_ids']
+    return ids + generated[:44] + ids[-64:]
+with concurrent.futures.ThreadPoolExecutor(2) as pool:
+    continued = list(pool.map(seed, range(8)))
+time.sleep(5)
+snap('after-seed')
+(r / 'pressure-native-inputs.json').write_text(json.dumps({'continued': continued, 'salts': salts}))
+for round_id in range(3):
+    flush()
+    snap(f'round-{round_id}-before')
+    with concurrent.futures.ThreadPoolExecutor(8) as pool:
+        results = list(pool.map(lambda i: pair(continued[i], f'round-{round_id}-{i}', 32, salts[i]), range(8)))
+    time.sleep(3)
+    snap(f'round-{round_id}-after')
+    if any((v.get('status') != 200 for result in results for v in result.values())):
+        print('PRESSURE_FAILURE', round_id, flush=True)
+        failed = next((i for (i, result) in enumerate(results) if any((v.get('status') != 200 for v in result.values()))))
+        flush()
+        snap('serial-before')
+        pair(continued[failed], 'serial-control', 32, salts[failed])
+        snap('serial-after')
+        break
+print('NATIVE_PRESSURE_FINISHED', flush=True)

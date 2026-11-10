@@ -1,0 +1,93 @@
+"""Check the actual probe loop's HTTP payloads without inference.
+
+Usage: .venv/bin/python reproduce_vllm_probe_overrides.py VLLM_CHECKOUT
+Dependencies: aiohttp, regex, tqdm.
+The unchanged nested probe_loop is AST-extracted from benchmark(); actual
+request functions and HTTP transport are used. The full CLI is not run.
+"""
+
+import argparse
+import ast
+import asyncio
+from dataclasses import replace
+import importlib.util
+import json
+from pathlib import Path
+import sys
+
+import aiohttp
+from aiohttp import web
+
+
+async def main(checkout):
+    path = checkout / "vllm/benchmarks/lib/endpoint_request_func.py"
+    spec = importlib.util.spec_from_file_location("probe_client", path)
+    client = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = client
+    spec.loader.exec_module(client)
+    source = checkout / "vllm/benchmarks/serve.py"
+    tree = ast.parse(source.read_text())
+    benchmark = next(n for n in tree.body if isinstance(n, ast.AsyncFunctionDef)
+                     and n.name == "benchmark")
+    loop = next(n for n in benchmark.body if isinstance(n, ast.AsyncFunctionDef)
+                and n.name == "probe_loop")
+    code = compile(ast.Module(body=[loop], type_ignores=[]), str(source), "exec")
+    captured = []
+    stop = asyncio.Event()
+
+    async def handler(request):
+        payload = await request.json()
+        captured.append(payload)
+        stop.set()
+        if request.path.endswith("responses"):
+            events = [{"type": "response.output_text.delta", "delta": "x"},
+                      {"type": "response.completed", "response": {"usage": {
+                          "input_tokens": 1, "output_tokens": 1}}}]
+        else:
+            content = {"delta": {"content": "x"}} if "/chat/" in request.path else {"text": "x"}
+            events = [{"choices": [{"index": 0, "finish_reason": "stop", **content}]}]
+        body = "".join("data: " + json.dumps(e) + "\n\n" for e in events)
+        body += "data: [DONE]\n\n"
+        return web.Response(text=body, content_type="text/event-stream")
+
+    app = web.Application()
+    app.router.add_post("/{path:.*}", handler)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "127.0.0.1", 0)
+    await site.start()
+    port = site._server.sockets[0].getsockname()[1]
+    results = []
+    try:
+        for endpoint, function, field in [
+            ("completions", client.async_request_openai_completions, "max_tokens"),
+            ("chat/completions", client.async_request_openai_chat_completions, "max_completion_tokens"),
+            ("responses", client.async_request_openai_responses, "max_output_tokens"),
+        ]:
+            for extra in [{}, {field: 64}]:
+                stop.clear()
+                captured.clear()
+                outputs = []
+                test_input = client.RequestFuncInput(
+                    prompt="main workload", api_url=f"http://127.0.0.1:{port}/v1/{endpoint}",
+                    prompt_len=3, output_len=64, model="fixture", extra_body=extra)
+                scope = {"replace": replace, "asyncio": asyncio, "test_input": test_input,
+                         "probe_request_rate": 1000, "probe_stop": stop,
+                         "probe_outputs": outputs, "request_func": function,
+                         "make_session": lambda _limit: aiohttp.ClientSession()}
+                exec(code, scope)
+                await asyncio.wait_for(scope["probe_loop"](), timeout=5)
+                assert len(captured) == 1 and outputs[0].success
+                results.append({"endpoint": endpoint, "main_extra_body": extra,
+                                "expected_probe_token_limit": 1,
+                                "actual_probe_token_limit": captured[0][field],
+                                "payload": captured[0]})
+        print(json.dumps(results, indent=2))
+    finally:
+        await runner.cleanup()
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("checkout", type=Path)
+    asyncio.run(main(parser.parse_args().checkout.resolve()))

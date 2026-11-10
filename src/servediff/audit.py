@@ -257,6 +257,44 @@ NOISE = (
     # the noise table. The wider `if … else … )` shape was measured first and rejected: it ate
     # exactly that warning.
     re.compile(r"^[A-Za-z_][\w.]*\([^()]*\)\s+if\s+.+\s+else\s+.+\)$"),
+    # A month later, `collect_env` brought its whole package inventory with it: four reports
+    # carried ~41 `[conda]` rows each, and every row reads like a version fact. The `[pip3]`
+    # form above is already read for the few wheels that decide kernels; the `[conda]` table is
+    # the same inventory one column-format away, so the same policy applies. `[conda] Could not
+    # collect` was already here; this covers the rows.
+    re.compile(r"^\[conda\] \S+"),
+    # A pasted reproducer's *expression* lines, which the statement-shaped rules above still
+    # miss: an f-string (a real log line never carries `f"…{…}"`), a tuple/dict entry built
+    # inside a call, a nested call closed twice on one line, a bare name that only closes a
+    # parenthesis, a lone `[`, an annotation-only assignment, a comparison whose left operand
+    # was on the previous line, and the continuation of a boolean condition.
+    re.compile(r"\bf[\"']\{"),
+    re.compile(r"^(?:async\s+(?:def|with|for)\b|async\s+def\b)"),
+    re.compile(r"^[A-Za-z_]\w*:\s*[A-Za-z_][\w\[\], ']*=\s"),
+    re.compile(r"^!=\s*\("),
+    re.compile(r"^\s*\[\s*$"),
+    re.compile(r"^\s*[A-Za-z_][\w.]*\)\s*$"),
+    re.compile(r"^\s*[A-Za-z_][\w.]+\(.*\)\)\s*$"),
+    re.compile(r"^(?:and|or)\b.*\)\s*$"),
+    # The two rules above, widened by the dotted attribute names the same scripts use:
+    # `layer.output_size_per_partition, layer.input_size_per_partition = N, K` is a tuple
+    # assignment with qualified names, and `layer.weight_global_scale, layer.workspace, N, K)`
+    # is the argument list that closes the call it came from.
+    re.compile(r"^[A-Za-z_][\w.]*(?:, [A-Za-z_][\w.]*)+ (?:=|\+=) "),
+    re.compile(r"^\s*[A-Za-z_0-9][\w.]*(?:,\s*(?:[A-Za-z_0-9][\w.]*"
+               r"|[A-Za-z_][\w.]*=[^\s,)]+))+\s*\)\s*$"),
+    # A parenthesized expression whose value is then used by attribute
+    # (`(r / 'pressure-native-inputs.json').write_text(…)`). The wider
+    # `^\(.*\)$` was measured first and rejected: it ate 31 real vLLM lines,
+    # every one of them a `(EngineCore pid=…)` log entry.
+    re.compile(r"^\s*\(.*\)\.[A-Za-z_]"),
+    # The last three script shapes this batch brought: a tuple of layer specs whose line ends
+    # the `for … in (` header it belongs to, a one-line call chain
+    # (`tf.AutoModel….from_config(cfg).to(…).save_pretrained(path)`), and a `try` block's
+    # `finally:`, which the keyword rule above lists every sibling of except this one.
+    re.compile(r"^\s*\(.*\)\s*:\s*$"),
+    re.compile(r"^\s*[A-Za-z_][\w.]*\(.*\)(?:\.\w+\(.*\))+\s*$"),
+    re.compile(r"^\s*finally\s*:"),
 )
 
 # A line that is nothing but the prefix: `(EngineCore pid=3811)`.

@@ -1,0 +1,59 @@
+import torch
+
+from vllm.config import set_current_vllm_config
+from vllm.distributed import init_distributed_environment, initialize_model_parallel
+from vllm.engine.arg_utils import EngineArgs
+from vllm.model_executor.layers.attention import Attention
+from vllm.model_executor.model_loader.utils import initialize_model
+from vllm.utils.network_utils import get_open_port
+from vllm.utils.torch_utils import set_default_torch_dtype
+
+vllm_config = EngineArgs(
+    model="LiquidAI/LFM2-8B-A1B",
+    hf_overrides={
+        "num_hidden_layers": 3,
+        "layer_types": ["conv", "conv", "full_attention"],
+        "num_experts": 8,
+        "quantization_config": {
+            "quant_method": "compressed-tensors",
+            "format": "dense",
+            "config_groups": {},
+            "kv_cache_scheme": {
+                "num_bits": 8,
+                "type": "float",
+                "strategy": "tensor",
+                "dynamic": False,
+                "symmetric": True,
+            },
+        },
+    },
+    kv_cache_dtype="fp8",
+    load_format="dummy",
+    skip_tokenizer_init=True,
+    enforce_eager=True,
+    max_model_len=1024,
+).create_engine_config()
+
+with set_current_vllm_config(vllm_config):
+    init_distributed_environment(
+        world_size=1,
+        rank=0,
+        local_rank=0,
+        distributed_init_method=f"tcp://127.0.0.1:{get_open_port()}",
+        backend="nccl",
+    )
+    initialize_model_parallel(1, 1)
+    with set_default_torch_dtype(vllm_config.model_config.dtype), torch.device("cuda"):
+        model = initialize_model(vllm_config=vllm_config)
+
+    attn = model.model.layers[2].self_attn.attn
+    print("attention quant method:", type(getattr(attn, "quant_method", None)).__name__)
+    # Names and values as stored in CoolJohn-AI/LFM2.5-24B-A2B-NVFP4-AutoRound
+    model.load_weights(
+        [
+            ("model.layers.2.self_attn.k_scale", torch.tensor([0.019671])),
+            ("model.layers.2.self_attn.v_scale", torch.tensor([0.000279])),
+        ]
+    )
+    attn.quant_method.process_weights_after_loading(attn)
+    print("k_scale / v_scale used by attention:", attn._k_scale_float, attn._v_scale_float)

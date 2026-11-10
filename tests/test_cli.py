@@ -314,6 +314,58 @@ def test_a_conditional_expression_standing_alone_is_noise(capsys):
     assert look2 != {}, look2
 
 
+def test_a_third_month_of_pastes_finds_nothing_either(capsys):
+    # The batch collected on 11-10 with created:>2026-11-05, which is a different question from
+    # the two earlier directories: those asked whether the rules had learned October, this one
+    # asks whether they had learned the first week of November. At 0.4.38 it reported 17 of 28
+    # files, 191 shapes, almost all of them the `[conda]` package inventory that four reports
+    # pasted along with collect_env.
+    held = FIX / "held-out-2026-11b"
+    logs = sorted(held.glob("*.log"))
+    assert len(logs) == 28, logs
+    assert servediff.main(["audit", str(held)]) == 0
+    out = capsys.readouterr().out
+    assert f"{len(logs)} log(s): 0 with shapes worth a look" in out
+
+
+def test_a_conda_inventory_row_is_noise(capsys):
+    # collect_env lists every installed wheel twice, once as `[pip3] name==version` and once as
+    # a conda table row. The pip form was read for the few wheels that decide kernels; the table
+    # row says the same thing about the same wheel, so it is not a shape worth a look.
+    text = ("[conda] torch                     2.13.0+cu130             pypi_0    pypi\n"
+            "[conda] nvidia-cublas             13.1.1.3                 pypi_0    pypi\n")
+    look, _ = servediff_audit.split(*servediff_audit.unread_samples(text))
+    assert look == {}, look
+
+
+def test_a_path_expression_is_noise_but_an_enginecore_line_is_not(capsys):
+    # A pasted reproducer builds its output path with an expression and then calls a method on
+    # it. The wider `^\(.*\)$` was measured first and rejected: it ate 31 real vLLM lines,
+    # every one of them a `(EngineCore pid=…)` entry. That line is the control here: audit reads
+    # it as a log entry, so it must not turn up as a shape worth a look either.
+    engine = ("(EngineCore pid=4381) INFO 10-28 11:30:24 [core.py:372] init engine"
+              " (profile, create kv cache) done")
+    text = "(r / 'pressure-native-inputs.json').write_text(json.dumps({'a': b}))\n" + engine + "\n"
+    look, noise = servediff_audit.split(*servediff_audit.unread_samples(text))
+    # The expression is classified as noise; the engine line is not, which is the whole point of
+    # the narrow pattern. Whether audit has a *fact* rule for the engine line is a different
+    # question, and this control line is invented, so it is not asserted here.
+    assert any("pressure-native-inputs" in shape for shape in noise), noise
+    assert not any("pressure-native-inputs" in shape for shape in look), look
+    assert not servediff_audit.is_noise(engine), engine
+
+
+def test_a_pasted_call_chain_is_noise(capsys):
+    # The other script shapes one batch brought: an f-string inside a call, a chained call
+    # closed twice on one line, and an argument list that merely closes the call above it.
+    text = ("model.load_weights([(f\"{prefix}.{names[0]}\", torch.tensor(0.25))])\n"
+            "tf.AutoModelForCausalLM.from_config(cfg).to(torch.bfloat16).save_pretrained(path)\n"
+            "layer.weight_global_scale, layer.workspace, N, K)\n"
+            "async def main(checkout):\n")
+    look, _ = servediff_audit.split(*servediff_audit.unread_samples(text))
+    assert look == {}, look
+
+
 def test_the_held_out_corpus_reports_nothing_to_look_at(capsys):
     # Eleven pastes taken fresh from vLLM and SGLang issues in October 2026, shipped so the
     # claim in writeups/audit-noise-real-logs.md can be rerun instead of believed. At v0.4.32

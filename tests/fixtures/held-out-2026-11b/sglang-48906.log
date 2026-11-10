@@ -1,0 +1,72 @@
+"""SGLang: NVFP4 block scales below 2^-6 through the FP4 Marlin path that SGLang uses for NVFP4 linear layers
+on SM80-SM99 (fp4_utils.initialize_fp4_gemm_config picks "marlin" there: A100, L40S, H100, H200, H20, ...).
+
+Calls the two functions ModelOptFp4LinearMethod runs on those GPUs, prepare_nvfp4_layer_for_marlin (weight
+preparation) and apply_fp4_marlin_linear (the GEMM), on one 256 x 4096 layer. Same layers as the vLLM repro:
+default: every E4M3 block scale 448 except five blocks of row 0: 448, 2^-6, 2^-7, 2^-9, 7 * 2^-9.
+--small: every scale small (2^-4 .. 2^-9), as in checkpoints whose E4M3 scales do not use the top of the range.
+Weights are the positive E2M1 values 0.5..6 cycled, weight_scale_2 = 2^-4; the input is rows of 6 * identity,
+so the output is 6 x the weight matrix the kernel uses, compared with 6 x E2M1 value x block scale x 2^-4.
+
+    python repro_sglang_marlin_nvfp4_small_scales.py [--small] [--dtype bfloat16|float16]
+"""
+import argparse
+from types import SimpleNamespace
+
+import torch
+
+from sglang.srt.layers.quantization.marlin_utils_fp4 import apply_fp4_marlin_linear, prepare_nvfp4_layer_for_marlin
+
+ap = argparse.ArgumentParser()
+ap.add_argument("--small", action="store_true")
+ap.add_argument("--dtype", default="bfloat16", choices=["bfloat16", "float16"])
+args = ap.parse_args()
+dtype = getattr(torch, args.dtype)
+E2M1 = torch.tensor([0, .5, 1, 1.5, 2, 3, 4, 6, -0., -.5, -1, -1.5, -2, -3, -4, -6])
+N, K, G = 256, 4096, 16
+torch.cuda.set_device(0)
+
+codes = (torch.arange(N)[:, None] + torch.arange(K)[None, :]) % 7 + 1
+if args.small:
+    e = (torch.arange(N)[:, None] + torch.arange(K // G)[None, :]) % 6 + 4
+    scales = torch.exp2(-e.float())
+else:
+    scales = torch.full((N, K // G), 448.0)
+    scales[0, 1:5] = torch.tensor([2.0 ** -6, 2.0 ** -7, 2.0 ** -9, 7 * 2.0 ** -9])
+scales = scales.to(torch.float8_e4m3fn)
+gscale = 2.0 ** -4
+packed = (codes[:, 0::2] | (codes[:, 1::2] << 4)).to(torch.uint8)
+
+layer = torch.nn.Module()
+layer.weight = torch.nn.Parameter(packed.cuda(), requires_grad=False)
+layer.weight_scale = torch.nn.Parameter(scales.cuda(), requires_grad=False)
+layer.weight_global_scale = torch.nn.Parameter(torch.tensor(gscale, device="cuda"), requires_grad=False)
+layer.output_size_per_partition, layer.input_size_per_partition = N, K
+layer.params_dtype = dtype
+layer.quant_config = SimpleNamespace(group_size=G)
+prepare_nvfp4_layer_for_marlin(layer)
+
+with torch.inference_mode():
+    eye = 6 * torch.eye(K, dtype=dtype, device="cuda")
+    out = torch.cat([apply_fp4_marlin_linear(eye[r:r + 256], layer.weight, layer.weight_scale,
+                                             layer.weight_global_scale, layer.workspace, N, K)
+                     for r in range(0, K, 256)])
+out = out.float().cpu().T
+sc = scales.float()
+ref = 6 * E2M1[codes] * sc.repeat_interleave(G, dim=1) * gscale
+
+import sglang  # noqa: E402
+
+print(f"sglang {sglang.__version__}, activations {args.dtype}, GPU {torch.cuda.get_device_name()}")
+for blk in range(5):
+    cols = slice(blk * G, blk * G + 7)
+    s = float(sc[0, blk])
+    print(f"row 0, block {blk} (scale {s:.6g}): expected {[round(x, 4) for x in (ref[0, cols] / s).tolist()]}"
+          f"  got {[float(f'{x:.4g}') for x in (out[0, cols] / s).tolist()]}  (x scale)")
+wrong = out != ref
+tiny = wrong & (out.abs() < ref.abs() * 2.0 ** -100)
+print(f"weights decoded differently from the checkpoint: {int(wrong.sum())} of {N * K} "
+      f"({int((wrong & (out == 0)).sum())} as 0, {int(tiny.sum())} as less than 2^-100 of their value)")
+for v in sorted(set(sc.flatten().tolist())):
+    m = (sc == v).repeat_interleave(G, dim=1)
+    print(f"  blocks with scale {v:.6g}: {int((wrong & m).sum())} of {int(m.sum())} weights wrong")

@@ -1,0 +1,62 @@
+import torch
+
+from vllm.config import set_current_vllm_config
+from vllm.distributed import init_distributed_environment, initialize_model_parallel
+from vllm.engine.arg_utils import EngineArgs
+from vllm.model_executor.model_loader import get_model_loader
+from vllm.utils.network_utils import get_open_port
+from vllm.v1.worker.workspace import init_workspace_manager
+
+
+def shrink(config):
+    if getattr(config, "model_type", None) == "minimax_m3_vl":
+        config.text_config.num_hidden_layers = 4
+        config.text_config.num_local_experts = 8
+    return config
+
+
+vllm_config = EngineArgs(
+    model="juspay/MiniMax-M3-FP8",
+    hf_overrides=shrink,
+    kv_cache_dtype="fp8",
+    load_format="dummy",
+    skip_tokenizer_init=True,
+    enforce_eager=True,
+    max_model_len=1024,
+    limit_mm_per_prompt={"image": 0, "video": 0},
+).create_engine_config()
+
+with set_current_vllm_config(vllm_config):
+    init_distributed_environment(
+        world_size=1,
+        rank=0,
+        local_rank=0,
+        distributed_init_method=f"tcp://127.0.0.1:{get_open_port()}",
+        backend="nccl",
+    )
+    initialize_model_parallel(1, 1)
+    init_workspace_manager(torch.device("cuda"))
+    model = get_model_loader(vllm_config.load_config).load_model(
+        vllm_config=vllm_config, model_config=vllm_config.model_config
+    )
+    # Values as stored in juspay/MiniMax-M3-FP8 (rounded)
+    model.load_weights(
+        [
+            ("language_model.model.layers.0.self_attn.k_proj.k_scale", torch.tensor(0.019252)),
+            ("language_model.model.layers.0.self_attn.v_proj.v_scale", torch.tensor(0.005371)),
+            ("language_model.model.layers.3.self_attn.k_proj.k_scale", torch.tensor(0.023438)),
+            ("language_model.model.layers.3.self_attn.v_proj.v_scale", torch.tensor(0.005441)),
+        ]
+    )
+    for name in (
+        "language_model.model.layers.0.self_attn.attn",
+        "language_model.model.layers.3.self_attn",
+    ):
+        layer = model.get_submodule(name)
+        method = getattr(layer, "quant_method", None)
+        if method is not None:
+            method.process_weights_after_loading(layer)
+        print(
+            f"{name}: {type(layer).__name__}, quant method {type(method).__name__}, "
+            f"k_scale {layer._k_scale_float:.6f}, v_scale {layer._v_scale_float:.6f}"
+        )

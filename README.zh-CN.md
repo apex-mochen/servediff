@@ -37,7 +37,7 @@ servediff diff examples/issue-excerpts/vllm-47047-v0.23-default.log examples/iss
 servediff audit tests/fixtures      # 给目录就审计里面所有 *.log
 ```
 
-这份语料正是规则写作时面对的那批，所以它总能被调到通过。真正说明问题的是规则从没见过的输出：`tests/fixtures/held-out-2026-10/`（十一份粘贴）与 `tests/fixtures/held-out-2026-11/`（七份），两份都直接从 vLLM 与 SGLang 的 issue 里取来，issue 号写在同目录的 `PROVENANCE.md` 里。
+这份语料正是规则写作时面对的那批，所以它总能被调到通过。真正说明问题的是规则从没见过的输出：`tests/fixtures/held-out-2026-10/`（十一份粘贴）、`tests/fixtures/held-out-2026-11/`（七份）与 `tests/fixtures/held-out-2026-11b/`（二十八份），三份都直接从 vLLM 与 SGLang 的 issue 里取来，issue 号写在同目录的 `PROVENANCE.md` 里。
 
 
 前面还会打印两行 `note:`：这份摘录里没有 rank 行，工具无法判断它是不是多卡运行，所以它直接说明「此处无法判定」，而不是让你把沉默读成「没变」。这是输出的一部分，不是噪声。

@@ -1,0 +1,49 @@
+# The post-load step of the NVFP4 W4A4 linear schemes on a fused q/k/v layer whose parts have different
+# global scales, as in RedHatAI/gemma-4-31B-it-NVFP4 (layer 11: k_proj 10048, q_proj 12992). Dummy weights.
+import logging
+
+import torch
+
+from sglang.srt.layers.quantization.compressed_tensors.schemes import CompressedTensorsW4A4Fp4
+from sglang.srt.layers.quantization.fp4_utils import initialize_fp4_gemm_config
+from sglang.srt.layers.quantization.modelopt_quant import ModelOptFp4Config, ModelOptFp4LinearMethod
+from sglang.srt.runtime_context import publish
+from sglang.srt.server_args import ServerArgs
+
+logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(message)s")
+publish(ServerArgs(model_path="dummy", device="cuda"), role="test")
+initialize_fp4_gemm_config()
+torch.set_default_device("cuda")
+sizes = [512, 128, 128]  # q_proj, k_proj, v_proj
+
+
+def load(param, w, *args):
+    param.data.copy_(w)
+
+
+# compressed-tensors NVFP4 (served by CompressedTensorsW4A4Fp4 on SM100 and SM120)
+scheme, layer = CompressedTensorsW4A4Fp4(), torch.nn.Module()
+scheme.create_weights(layer, output_partition_sizes=sizes, input_size_per_partition=2048,
+                      params_dtype=torch.bfloat16, weight_loader=load)
+layer.weight_global_scale.data.copy_(torch.tensor([12992.0, 10048.0, 10048.0]))
+layer.input_global_scale.data.fill_(100.0)
+before = layer.weight_global_scale.tolist()
+try:
+    scheme.process_weights_after_loading(layer)
+    print(f"compressed-tensors: checkpoint weight_global_scale {before} -> used for all parts: "
+          f"{layer.weight_global_scale.item()}")
+except ValueError as e:
+    print(f"compressed-tensors: ValueError: {e}")
+
+# ModelOpt NVFP4 (ModelOptFp4LinearMethod)
+config = ModelOptFp4Config(is_checkpoint_nvfp4_serialized=True, group_size=16)
+method, layer = ModelOptFp4LinearMethod(config), torch.nn.Module()
+method.create_weights(layer, input_size_per_partition=2048, output_partition_sizes=sizes, input_size=2048,
+                      output_size=sum(sizes), params_dtype=torch.bfloat16, weight_loader=load)
+layer.weight_scale_2.data.copy_(1 / torch.tensor([12992.0, 10048.0, 10048.0]))
+layer.input_scale.data.fill_(0.01)
+layer.weight_scale.data.fill_(1.0)
+before = layer.weight_scale_2.tolist()
+method.process_weights_after_loading(layer)
+used = (layer.alpha / 0.01).item()  # alpha = input_scale * weight_scale_2
+print(f"ModelOpt: checkpoint weight_scale_2 {[f'{x:.3e}' for x in before]} -> used for all parts: {used:.3e}")

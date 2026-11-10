@@ -1,0 +1,70 @@
+# Run: torchrun --nproc-per-node 2 repro_row_parallel_fp4_tp.py [nvfp4|nvfp4a16|mxfp4] [groups]
+import os
+import sys
+
+import torch
+
+from vllm.config import VllmConfig, set_current_vllm_config
+from vllm.distributed import init_distributed_environment, initialize_model_parallel
+from vllm.model_executor.layers.linear import RowParallelLinear
+from vllm.model_executor.layers.quantization.compressed_tensors.compressed_tensors import (  # noqa: E501
+    CompressedTensorsConfig,
+)
+
+fmt = sys.argv[1] if len(sys.argv) > 1 else "nvfp4"
+G = 32 if fmt == "mxfp4" else 16
+K, N = int(sys.argv[2] if len(sys.argv) > 2 else 45) * G, 16  # 45: 22.5 per rank at TP=2
+weights = {"num_bits": 4, "type": "float", "symmetric": True, "dynamic": False,
+           "strategy": "group" if fmt == "mxfp4" else "tensor_group", "group_size": G}
+scheme = {"targets": ["Linear"], "weights": weights}
+if fmt == "nvfp4":  # W4A4, as RedHatAI/gemma-4-26B-A4B-it-NVFP4
+    scheme["input_activations"] = dict(weights, dynamic="local")
+quant_config = CompressedTensorsConfig.from_config({
+    "quant_method": "compressed-tensors",
+    "format": "mxfp4-pack-quantized" if fmt == "mxfp4" else "nvfp4-pack-quantized",
+    "config_groups": {"group_0": scheme},
+})
+
+rank, world = int(os.environ["RANK"]), int(os.environ["WORLD_SIZE"])
+torch.cuda.set_device(int(os.environ["LOCAL_RANK"]))
+with set_current_vllm_config(VllmConfig()):
+    init_distributed_environment(world, rank, "env://", int(os.environ["LOCAL_RANK"]))
+    initialize_model_parallel(world)
+    with torch.device("cuda"):
+        layer = RowParallelLinear(K, N, bias=False, input_is_parallel=False,
+                                  quant_config=quant_config, params_dtype=torch.bfloat16,
+                                  prefix="model.layers.0.mlp.down_proj")
+
+    # Checkpoint: every FP4 code is +1.0 (0x2), global scales 1, and the block
+    # scale of input group g is 2 ** (g % 8), so column k must read 2 ** (k // G % 8).
+    scale = (2.0 ** (torch.arange(K // G) % 8)).expand(N, -1).contiguous()
+    ckpt = {"weight_packed": torch.full((N, K // 2), 0x22, dtype=torch.uint8)}
+    if fmt == "mxfp4":
+        ckpt["weight_scale"] = (scale.log2() + 127).to(torch.uint8)
+    else:
+        ckpt["weight_scale"] = scale.to(torch.float8_e4m3fn)
+        ckpt["weight_global_scale"] = torch.ones(1)
+        if fmt == "nvfp4":
+            ckpt["input_global_scale"] = torch.ones(1)
+    for name, tensor in ckpt.items():
+        param = getattr(layer, name)
+        param.weight_loader(param, tensor.cuda())
+    layer.quant_method.process_weights_after_loading(layer)
+
+    # Input row k is 6 * e_k (exact in FP4), so output row k is column k of the
+    # weight as the kernel reads it.
+    x = 6 * torch.eye(K, dtype=torch.bfloat16, device="cuda")
+    with torch.inference_mode():
+        read = layer(x)[0][:, 0].float().cpu() / 6
+    expected = 2.0 ** (torch.arange(K) // G % 8).float()
+
+if rank == 0:
+    print("kernel:", type(layer.scheme.kernel).__name__)
+    k_r = K // world
+    for r in range(world):
+        cols = range(r * k_r, (r + 1) * k_r)
+        wrong = [k for k in cols if read[k] != expected[k]]
+        print(f"rank {r}: {len(wrong)} of {k_r} input columns read the wrong scale")
+        for k in wrong[:3]:
+            print(f"  column {k} (group {k // G}): read {read[k].item():g}, "
+                  f"expected {expected[k].item():g}")

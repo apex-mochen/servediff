@@ -1,0 +1,83 @@
+"""MXFP4 (compressed-tensors) linear layer on Hopper: E8M0 block scales far below the tensor's largest
+scale are decoded wrongly by the default kernel (HummingMxFp4LinearKernel).
+
+Default: one 256 x 4096 layer (no padding), every E8M0 scale 2^0 except three blocks of row 0:
+2^-12, 2^-14 and 2^-15 (12, 14 and 15 binades below the largest scale).
+--padded: one 128 x 4096 layer (N is not a multiple of 256, so the kernel pads it) whose E8M0 scales
+are all 2^-16: no block is below the tensor's own largest scale.
+Weights are the positive E2M1 values 0.5..6 cycled. The layer is fed rows of the identity, so the
+output is the weight matrix the kernel actually uses, compared with E2M1 value * 2^(scale - 127).
+Also prints the kernel vLLM selected and, for Humming, the activation dtype it runs with.
+
+    python repro_humming_mxfp4_window.py [--padded]           # vLLM's kernel selection
+    python repro_humming_mxfp4_window.py [--padded] --marlin  # same layer, Marlin MXFP4 forced
+"""
+import argparse
+import os
+
+ap = argparse.ArgumentParser()
+ap.add_argument("--marlin", action="store_true", help="disable Humming so Marlin MXFP4 is used")
+ap.add_argument("--padded", action="store_true", help="N = 128 (padded by the kernel), all scales 2^-16")
+args = ap.parse_args()
+if args.marlin:
+    os.environ["VLLM_DISABLED_KERNELS"] = "HummingMxFp4LinearKernel"
+
+import torch  # noqa: E402
+
+from vllm.config import VllmConfig, set_current_vllm_config  # noqa: E402
+from vllm.distributed import ensure_model_parallel_initialized, init_distributed_environment  # noqa: E402
+from vllm.model_executor.layers.linear import ReplicatedLinear  # noqa: E402
+from vllm.model_executor.layers.quantization.compressed_tensors.compressed_tensors import (  # noqa: E402
+    CompressedTensorsConfig)
+
+E2M1 = torch.tensor([0, .5, 1, 1.5, 2, 3, 4, 6, -0., -.5, -1, -1.5, -2, -3, -4, -6])
+N, K, G = (128 if args.padded else 256), 4096, 32  # 256: N % 256 == 0 and K % 128 == 0, no padding
+quant = CompressedTensorsConfig.from_config({
+    "quant_method": "compressed-tensors", "format": "mxfp4-pack-quantized", "ignore": [],
+    "config_groups": {"group_0": {"targets": ["Linear"],
+                                  "weights": {"num_bits": 4, "type": "float", "strategy": "group",
+                                              "group_size": 32, "symmetric": True, "dynamic": False},
+                                  "input_activations": {"num_bits": 4, "type": "float", "strategy": "group",
+                                                        "group_size": 32, "symmetric": True, "dynamic": True}}}})
+
+torch.cuda.set_device(0)
+vcfg = VllmConfig()
+with set_current_vllm_config(vcfg):
+    init_distributed_environment(world_size=1, rank=0, local_rank=0,
+                                 distributed_init_method="tcp://127.0.0.1:29511", backend="nccl")
+    ensure_model_parallel_initialized(1, 1)
+    with torch.device("cuda"):
+        layer = ReplicatedLinear(K, N, bias=False, quant_config=quant, prefix="layer",
+                                 params_dtype=torch.bfloat16)
+
+# checkpoint tensors: E2M1 codes (low nibble = even k) and E8M0 scales (code 127 = 2^0)
+codes = (torch.arange(N)[:, None] + torch.arange(K)[None, :]) % 7 + 1  # values 0.5 .. 6
+if args.padded:
+    scales = torch.full((N, K // G), 127 - 16, dtype=torch.uint8)
+else:
+    scales = torch.full((N, K // G), 127, dtype=torch.uint8)
+    scales[0, 1], scales[0, 2], scales[0, 3] = 127 - 12, 127 - 14, 127 - 15
+packed = (codes[:, 0::2] | (codes[:, 1::2] << 4)).to(torch.uint8)
+for name, t in (("weight_packed", packed), ("weight_scale", scales)):
+    p = getattr(layer, name)
+    p.weight_loader(p, t.cuda())
+with set_current_vllm_config(vcfg):
+    layer.quant_method.process_weights_after_loading(layer)
+    with torch.inference_mode():
+        eye = torch.eye(K, dtype=torch.bfloat16, device="cuda")
+        out = torch.cat([layer(eye[r:r + 256])[0] for r in range(0, K, 256)])  # out[k, n] = weight (n, k)
+out = out.float().cpu().T
+ref = E2M1[codes] * torch.exp2(scales.float() - 127).repeat_interleave(G, dim=1)
+
+kern = layer.scheme.kernel
+cfg = getattr(kern, "layer_config", None)  # Humming only: the layer config it built
+extra = f" (activations {cfg.a_dtype}, use_fused_e8m0_scale={cfg.use_fused_e8m0_scale})" if cfg is not None else ""
+print(f"kernel: {type(kern).__name__}{extra}")
+for blk in range(2 if args.padded else 4):
+    cols = slice(blk * G, blk * G + 7)
+    e = int(scales[0, blk]) - 127
+    print(f"row 0, block {blk} (scale 2^{e:>3}): expected {[round(x * 2 ** -e, 2) for x in ref[0, cols].tolist()]}"
+          f"  got {[round(x * 2 ** -e, 2) for x in out[0, cols].tolist()]}  (x 2^{e})")
+wrong = out != ref
+print(f"weights decoded differently from the checkpoint: {int(wrong.sum())} of {N * K} "
+      f"({int((wrong & (out == 0)).sum())} of them as 0)")

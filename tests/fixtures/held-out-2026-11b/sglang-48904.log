@@ -1,0 +1,46 @@
+# usage: python repro.py <hf_repo> <ct|modelopt> <checkpoint prefix of layer 0> ['<json config overrides>']
+import json
+import sys
+
+import torch
+
+from sglang.srt.configs.load_config import LoadConfig
+from sglang.srt.configs.model_config import ModelConfig
+from sglang.srt.distributed import init_distributed_environment, initialize_model_parallel
+from sglang.srt.distributed.bootstrap import init_layer_runtime
+from sglang.srt.layers.dp_attention import initialize_dp_attention
+from sglang.srt.layers.moe import initialize_moe_config
+from sglang.srt.layers.quantization.fp8_utils import initialize_fp8_gemm_config
+from sglang.srt.layers.radix_attention import RadixAttention
+from sglang.srt.model_loader.loader import DefaultModelLoader, _get_quantization_config, _initialize_model
+from sglang.srt.model_loader.utils import set_default_torch_dtype
+from sglang.srt.runtime_context import SpawnRanks, publish
+from sglang.srt.server_args import ServerArgs
+
+repo, fmt, prefix = sys.argv[1], sys.argv[2], sys.argv[3]
+ov = json.loads(sys.argv[4]) if len(sys.argv) > 4 else {}
+ov["quantization_config"] = {  # a static FP8 KV cache, in each format's own config
+    "ct": {"quant_method": "compressed-tensors", "config_groups": {},
+           "kv_cache_scheme": {"num_bits": 8, "type": "float", "strategy": "tensor", "dynamic": False, "symmetric": True}},
+    "modelopt": {"quant_method": "modelopt", "quant_algo": "FP8", "kv_cache_quant_algo": "FP8", "exclude_modules": ["lm_head"]},
+}[fmt]
+# per-layer KV-cache scales of layer 0, named the way each tool exports them
+names = {"ct": ("self_attn.k_scale", "self_attn.v_scale"),
+         "modelopt": ("self_attn.k_proj.k_scale", "self_attn.v_proj.v_scale")}[fmt]
+args = ServerArgs(model_path=repo, load_format="dummy", kv_cache_dtype="fp8_e4m3", json_model_override_args=json.dumps(ov))
+publish(args, role="scheduler", ranks=SpawnRanks(world_rank=0, gpu_id=0))
+torch.cuda.set_device(0)
+init_distributed_environment(world_size=1, rank=0, local_rank=0, distributed_init_method="tcp://127.0.0.1:29571")
+initialize_model_parallel()
+initialize_dp_attention(server_args=args)
+cfg, lc = ModelConfig.from_server_args(args), LoadConfig(load_format="dummy")
+init_layer_runtime(model_config=cfg)
+initialize_moe_config()
+initialize_fp8_gemm_config()
+with set_default_torch_dtype(cfg.dtype), torch.device("cuda"):
+    model = _initialize_model(cfg, lc, _get_quantization_config(cfg, lc))
+model.load_weights([(f"{prefix}.{names[0]}", torch.tensor(0.25)), (f"{prefix}.{names[1]}", torch.tensor(0.0625))])
+DefaultModelLoader.postprocess_weights(model, torch.device("cuda"))
+attn = [(n, m) for n, m in model.named_modules() if isinstance(m, RadixAttention) and m.layer_id == 0][0]
+method = type(attn[1].quant_method).__name__ if attn[1].quant_method is not None else None
+print(f"{type(model).__name__} {fmt}: {attn[0]} quant_method={method} k_scale={attn[1].k_scale_float} v_scale={attn[1].v_scale_float}")

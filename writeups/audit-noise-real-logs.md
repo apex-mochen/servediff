@@ -273,7 +273,8 @@ Both corpora ship in the repo, so this section is rerunnable instead of believab
 `servediff audit tests/fixtures` (twenty-one logs) and
 `servediff audit tests/fixtures/held-out-2026-10` (the eleven pastes, with
 `PROVENANCE.md` naming each issue). Check out `v0.4.32` and run the second command to watch
-it report eight of eleven.
+it report eight of eleven. The two later directories work the same way: check out `v0.4.38` and
+`servediff audit tests/fixtures/held-out-2026-11b` reports seventeen of twenty-eight.
 
 ## A second month, to see whether the rules learned logs or learned October
 
@@ -312,10 +313,57 @@ pins the difference between the two.
 
 Seven pastes, then: **none worth a look.** At 0.4.36 that directory reports one of seven.
 
+## A third batch, five days later, that the rules did not recognize
+
+A second clean month still leaves a way to be wrong: the two batches were collected by the
+calendar, and the rules were written in between, so a shape that appeared in neither window looks
+like no shape at all. So the same command was run once more, against issues created after
+2026-11-05 — five days of output rather than a month, which is the harder test, because the
+rules had no time to learn anything about it.
+
+Twenty-eight pastes qualified. **Seventeen of them had shapes worth a look, 191 in total.** A
+month's worth of rules, written against two windows, and five days defeated them.
+
+The largest class was one table. `collect_env` lists every installed wheel twice — once as
+`[pip3] name==version`, once as a `[conda]` row:
+
+```
+[conda] torch                     2.13.0+cu130             pypi_0    pypi
+[conda] nvidia-cublas             13.1.1.3                 pypi_0    pypi
+```
+
+164 of the 191 shapes were rows of that table: four reports carried ~41 rows each. The pip form
+was covered because it is what the reporter's own tool printed; the conda form is the same
+inventory in a different column layout, and it had never been in the corpus before. Every row
+reads like a version fact — which is precisely why it drowns a report.
+
+The rest was the same reproducer-script family the earlier batches taught, in shapes that
+individual rules had each missed: an f-string, a tuple assignment with qualified names, a one-line
+call chain, a nested call closed twice, a bare name closing a parenthesis, a lone `[`, an
+annotation-only assignment, a `!= (…)` continuation, a tuple of layer specs ending a `for … in (`
+header, `async def`, and `finally:`.
+
+And one pattern was written, measured, and thrown away again — the third time in this file:
+
+```
+^\(.*\)$        # any line that is one parenthesized thing
+```
+
+It covers the reproducer's Path expression, and it ate **31 real vLLM log lines**, every one of
+them a `(EngineCore pid=…)` entry. vLLM prefixes log entries with the process that emitted them,
+so a parenthesis at the start of a line is normal there. The adopted pattern requires the closing
+`)` to be followed by `.name` — how a value built in brackets is actually used — and the engine
+line is now a control in the test suite, so the rejected version cannot come back quietly.
+
+Twenty-eight pastes, then: **none worth a look**, and the four earlier corpora still at zero.
+Twenty-one fixtures, eleven October pastes, seven November pastes, twenty-eight from the
+first week of November, six logs from a real machine.
+
 ## Limits of the claim
 
 These four logs are from one machine's WSL2 runs plus one posted TP=8 log, plus eleven pastes
-taken fresh from vLLM and SGLang issues in October 2026 and seven more in November.
+taken fresh from vLLM and SGLang issues in October 2026, seven more in November, and twenty-eight
+from the first week of that month.
 `nvcc`, other engines, and other parallelism layouts are unmeasured, and a log from a
 different stack may well print shapes none of these rules know. That is what the audit is
 for: run it on your own log, and paste the report into

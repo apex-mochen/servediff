@@ -1,0 +1,59 @@
+# usage: python repro.py <TorchNativeLlamaForCausalLM|TorchNativePhi3ForCausalLM> <auto|layered> <workdir>
+# A tiny random Llama or Phi-3 checkpoint with per-layer KV-cache scales under the names LLM Compressor uses.
+import glob
+import json
+import os
+import sys
+
+import torch
+import transformers as tf
+from safetensors.torch import load_file, save_file
+
+from sglang.srt.configs.device_config import DeviceConfig
+from sglang.srt.configs.load_config import LoadConfig
+from sglang.srt.configs.model_config import ModelConfig
+from sglang.srt.distributed import init_distributed_environment, initialize_model_parallel
+from sglang.srt.distributed.bootstrap import init_layer_runtime
+from sglang.srt.layers.dp_attention import initialize_dp_attention
+from sglang.srt.layers.radix_attention import RadixAttention
+from sglang.srt.model_loader.loader import get_model_loader
+from sglang.srt.runtime_context import SpawnRanks, publish
+from sglang.srt.server_args import ServerArgs
+
+arch, load_format, work = sys.argv[1], sys.argv[2], sys.argv[3]
+path = f"{work}/{arch}"
+if not os.path.exists(f"{path}/config.json"):
+    torch.manual_seed(0)
+    c = dict(num_hidden_layers=2, hidden_size=256, intermediate_size=512, num_attention_heads=4,
+             num_key_value_heads=2, vocab_size=1024, max_position_embeddings=512)
+    cfg = tf.Phi3Config(**c, pad_token_id=0) if "Phi3" in arch else tf.LlamaConfig(**c, head_dim=64)
+    tf.AutoModelForCausalLM.from_config(cfg).to(torch.bfloat16).save_pretrained(path)
+    [shard] = glob.glob(f"{path}/model*.safetensors")
+    t = load_file(shard)
+    for i, (k, v) in enumerate([(0.5, 0.125), (0.25, 0.0625)]):
+        t[f"model.layers.{i}.self_attn.k_scale"], t[f"model.layers.{i}.self_attn.v_scale"] = torch.tensor(k), torch.tensor(v)
+    save_file(t, shard, metadata={"format": "pt"})
+    j = json.load(open(f"{path}/config.json"))
+    j["quantization_config"] = {"quant_method": "compressed-tensors", "format": "dense", "config_groups": {},
+                                "kv_cache_scheme": {"num_bits": 8, "type": "float", "strategy": "tensor",
+                                                    "dynamic": False, "symmetric": True}}
+    json.dump(j, open(f"{path}/config.json", "w"))
+args = ServerArgs(model_path=path, load_format=load_format, kv_cache_dtype="fp8_e4m3",
+                  json_model_override_args=json.dumps({"architectures": [arch]}))
+publish(args, role="scheduler", ranks=SpawnRanks(world_rank=0, gpu_id=0))
+torch.cuda.set_device(0)
+init_distributed_environment(world_size=1, rank=0, local_rank=0, distributed_init_method="tcp://127.0.0.1:29591")
+initialize_model_parallel()
+initialize_dp_attention(server_args=args)
+cfg = ModelConfig.from_server_args(args)
+init_layer_runtime(model_config=cfg)
+model = get_model_loader(LoadConfig(load_format=load_format)).load_model(
+    model_config=cfg, device_config=DeviceConfig("cuda"))
+ref = load_file(glob.glob(f"{path}/model*.safetensors")[0])["model.embed_tokens.weight"]
+print(f"{arch} {load_format}: embed_tokens loaded: {torch.equal(model.model.embed_tokens.weight.cpu(), ref)}")
+for n, m in model.named_modules():
+    if isinstance(m, RadixAttention):
+        method = type(m.quant_method).__name__ if m.quant_method is not None else None
+        tensors = [None if t is None else round(t.item(), 4) for t in (m.k_scale, m.v_scale)]
+        print(f"  {n}: quant_method={method} k_scale={m.k_scale_float} v_scale={m.v_scale_float} "
+              f"(tensors {tensors[0]} / {tensors[1]})")

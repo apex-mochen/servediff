@@ -1,0 +1,225 @@
+Collecting environment information...
+uv is set
+==============================
+        System Info
+==============================
+OS                           : Ubuntu 24.04.4 LTS (x86_64)
+GCC version                  : (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+Clang version                : Could not collect
+CMake version                : version 4.4.3
+Libc version                 : glibc-2.39
+
+==============================
+       PyTorch Info
+==============================
+PyTorch version              : 2.14.0+cu130
+Is debug build               : False
+CUDA used to build PyTorch   : 13.0
+ROCM used to build PyTorch   : N/A
+XPU used to build PyTorch    : N/A
+
+==============================
+      Python Environment
+==============================
+Python version               : 3.13.14 (main, Jun 11 2026, 12:30:59) [GCC 13.3.0] (64-bit runtime)
+Python platform              : Linux-5.10.134-013.8.2.kangaroo.al8.x86_64-x86_64-with-glibc2.39
+    
+==============================
+       CUDA / GPU Info
+==============================
+Is CUDA available            : True
+CUDA runtime version         : 13.0.88
+CUDA_MODULE_LOADING set to   : 
+GPU models and configuration : 
+GPU 0: NVIDIA H20-3e
+GPU 1: NVIDIA H20-3e
+GPU 2: NVIDIA H20-3e
+GPU 3: NVIDIA H20-3e
+GPU 4: NVIDIA H20-3e
+GPU 5: NVIDIA H20-3e
+GPU 6: NVIDIA H20-3e
+GPU 7: NVIDIA H20-3e
+
+Nvidia driver version        : 570.133.20
+cuDNN version                : Probably one of the following:
+/usr/lib/x86_64-linux-gnu/libcudnn.so.9.14.0
+/usr/lib/x86_64-linux-gnu/libcudnn_adv.so.9.14.0
+/usr/lib/x86_64-linux-gnu/libcudnn_cnn.so.9.14.0
+/usr/lib/x86_64-linux-gnu/libcudnn_engines_precompiled.so.9.14.0
+/usr/lib/x86_64-linux-gnu/libcudnn_engines_runtime_compiled.so.9.14.0
+/usr/lib/x86_64-linux-gnu/libcudnn_graph.so.9.14.0
+/usr/lib/x86_64-linux-gnu/libcudnn_heuristic.so.9.14.0
+/usr/lib/x86_64-linux-gnu/libcudnn_ops.so.9.14.0
+HIP runtime version          : N/A
+MIOpen runtime version       : N/A
+Is XNNPACK available         : False
+
+==============================
+          CPU Info
+==============================
+Architecture:                       x86_64
+CPU op-mode(s):                     32-bit, 64-bit
+Address sizes:                      52 bits physical, 57 bits virtual
+Byte Order:                         Little Endian
+CPU(s):                             165
+On-line CPU(s) list:                0-164
+Vendor ID:                          GenuineIntel
+Model name:                         Intel(R) Xeon(R) Processor
+CPU family:                         6
+Model:                              207
+Thread(s) per core:                 1
+Core(s) per socket:                 165
+Socket(s):                          1
+Stepping:                           2
+BogoMIPS:                           5600.00
+Flags:                              fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ss ht syscall nx pdpe1gb rdtscp lm constant_tsc rep_good nopl xtopology nonstop_tsc cpuid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pdcm pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch cpuid_fault invpcid_single ssbd ibrs ibpb stibp ibrs_enhanced fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves avx_vnni avx512_bf16 wbnoinvd avx512vbmi umip pku waitpkg avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid cldemote movdiri movdir64b fsrm md_clear serialize tsxldtrk amx_bf16 avx512_fp16 amx_tile amx_int8 arch_capabilities
+Hypervisor vendor:                  KVM
+Virtualization type:                full
+L1d cache:                          3.9 MiB (83 instances)
+L1i cache:                          2.6 MiB (83 instances)
+L2 cache:                           166 MiB (83 instances)
+L3 cache:                           640 MiB (2 instances)
+NUMA node(s):                       2
+NUMA node0 CPU(s):                  0-81
+NUMA node1 CPU(s):                  82-164
+Vulnerability Itlb multihit:        Not affected
+Vulnerability L1tf:                 Not affected
+Vulnerability Mds:                  Not affected
+Vulnerability Meltdown:             Not affected
+Vulnerability Mmio stale data:      Not affected
+Vulnerability Retbleed:             Not affected
+Vulnerability Spec rstack overflow: Not affected
+Vulnerability Spec store bypass:    Vulnerable
+Vulnerability Spectre v1:           Vulnerable: __user pointer sanitization and usercopy barriers only; no swapgs barriers
+Vulnerability Spectre v2:           Vulnerable, IBPB: disabled, STIBP: disabled, PBRSB-eIBRS: Vulnerable
+Vulnerability Srbds:                Not affected
+Vulnerability Tsx async abort:      Not affected
+
+==============================
+Versions of relevant libraries
+==============================
+[pip3] flash-attn==2.8.3+cu130torch2.14
+[pip3] flash-attn-3==3.0.0+cu130torch2.14gite2743ab
+[pip3] flashinfer-python==0.7.2.post1
+[pip3] mypy-extensions==1.1.0
+[pip3] nccl-extensions==0.1.0
+[pip3] nccl4py==0.5.0
+[pip3] numpy==2.4.6
+[pip3] nvidia-cublas==13.1.1.3
+[pip3] nvidia-cuda-cccl==13.0.85
+[pip3] nvidia-cuda-cccl-cu12==12.9.27
+[pip3] nvidia-cuda-crt==13.3.73
+[pip3] nvidia-cuda-cupti==13.0.85
+[pip3] nvidia-cuda-nvcc==13.2.78
+[pip3] nvidia-cuda-nvcc-cu12==12.9.86
+[pip3] nvidia-cuda-nvdisasm==13.3.73
+[pip3] nvidia-cuda-nvrtc==13.0.88
+[pip3] nvidia-cuda-nvrtc-cu12==12.9.86
+[pip3] nvidia-cuda-runtime==13.0.96
+[pip3] nvidia-cuda-runtime-cu12==12.9.79
+[pip3] nvidia-cuda-tileiras==13.2.78
+[pip3] nvidia-cudnn-cu13==9.24.0.43
+[pip3] nvidia-cudnn-frontend==1.31.0
+[pip3] nvidia-cufft==12.0.0.61
+[pip3] nvidia-cufile==1.15.1.6
+[pip3] nvidia-curand==10.4.0.35
+[pip3] nvidia-cusolver==12.0.4.66
+[pip3] nvidia-cusparse==12.6.3.3
+[pip3] nvidia-cusparselt-cu13==0.8.1
+[pip3] nvidia-cutlass-dsl==4.8.0
+[pip3] nvidia-cutlass-dsl-libs-base==4.8.0
+[pip3] nvidia-cutlass-dsl-libs-core==4.8.0
+[pip3] nvidia-cutlass-dsl-libs-cu12==4.8.0
+[pip3] nvidia-cutlass-dsl-libs-cu13==4.8.0
+[pip3] nvidia-ml-py==13.610.43
+[pip3] nvidia-modelopt==0.44.0
+[pip3] nvidia-nccl-cu13==2.30.7
+[pip3] nvidia-nvjitlink==13.0.88
+[pip3] nvidia-nvshmem-cu13==3.4.5
+[pip3] nvidia-nvtx==13.0.85
+[pip3] nvidia-nvvm==13.2.78
+[pip3] onnx==1.22.0
+[pip3] onnx-ir==0.2.1
+[pip3] onnxscript==0.7.1
+[pip3] pynvml==13.0.1
+[pip3] pyzmq==27.1.0
+[pip3] tokenspeed-triton==3.9.10.post20261008
+[pip3] torch==2.14.0
+[pip3] torch-c-dlpack-ext==0.1.5
+[pip3] torchao==0.18.0
+[pip3] torchaudio==2.11.0
+[pip3] torchcodec==0.15.0
+[pip3] torchdata==0.11.0
+[pip3] torchvision==0.29.0
+[pip3] transformer-engine-torch==2.20.2
+[pip3] transformers==5.19.0
+[pip3] triton==3.8.0
+[conda] Could not collect
+
+==============================
+         vLLM Info
+==============================
+ROCM Version                 : Could not collect
+vLLM Version                 : 0.33.0
+vLLM Build Flags:
+  CUDA Archs: Not Set; ROCm: Disabled; XPU: Disabled
+GPU Topology:
+  	GPU0	GPU1	GPU2	GPU3	GPU4	GPU5	GPU6	GPU7	NIC0	NIC1	NIC2	NIC3	CPU Affinity	NUMA Affinity	GPU NUMA ID
+GPU0	 X 	NV18	NV18	NV18	NV18	NV18	NV18	NV18	PIX	PHB	NODE	NODE	0-81	0-1		N/A
+GPU1	NV18	 X 	NV18	NV18	NV18	NV18	NV18	NV18	PXB	PHB	NODE	NODE	0-81	0-1		N/A
+GPU2	NV18	NV18	 X 	NV18	NV18	NV18	NV18	NV18	PHB	PIX	NODE	NODE	0-81	0-1		N/A
+GPU3	NV18	NV18	NV18	 X 	NV18	NV18	NV18	NV18	PHB	PXB	NODE	NODE	0-81	0-1		N/A
+GPU4	NV18	NV18	NV18	NV18	 X 	NV18	NV18	NV18	NODE	NODE	PIX	PHB	0-164	0-1		N/A
+GPU5	NV18	NV18	NV18	NV18	NV18	 X 	NV18	NV18	NODE	NODE	PXB	PHB	0-164	0-1		N/A
+GPU6	NV18	NV18	NV18	NV18	NV18	NV18	 X 	NV18	NODE	NODE	PHB	PIX	0-164	0-1		N/A
+GPU7	NV18	NV18	NV18	NV18	NV18	NV18	NV18	 X 	NODE	NODE	PHB	PXB	0-164	0-1		N/A
+NIC0	PIX	PXB	PHB	PHB	NODE	NODE	NODE	NODE	 X 	PHB	NODE	NODE				
+NIC1	PHB	PHB	PIX	PXB	NODE	NODE	NODE	NODE	PHB	 X 	NODE	NODE				
+NIC2	NODE	NODE	NODE	NODE	PIX	PXB	PHB	PHB	NODE	NODE	 X 	PHB				
+NIC3	NODE	NODE	NODE	NODE	PHB	PHB	PIX	PXB	NODE	NODE	PHB	 X 				
+
+Legend:
+
+  X    = Self
+  SYS  = Connection traversing PCIe as well as the SMP interconnect between NUMA nodes (e.g., QPI/UPI)
+  NODE = Connection traversing PCIe as well as the interconnect between PCIe Host Bridges within a NUMA node
+  PHB  = Connection traversing PCIe as well as a PCIe Host Bridge (typically the CPU)
+  PXB  = Connection traversing multiple PCIe bridges (without traversing the PCIe Host Bridge)
+  PIX  = Connection traversing at most a single PCIe bridge
+  NV#  = Connection traversing a bonded set of # NVLinks
+
+NIC Legend:
+
+  NIC0: mlx5_0
+  NIC1: mlx5_1
+  NIC2: mlx5_2
+  NIC3: mlx5_3
+
+==============================
+     Environment Variables
+==============================
+CUDA_VISIBLE_DEVICES=4
+CUDA_VISIBLE_DEVICES=4
+NVIDIA_VISIBLE_DEVICES=all
+NCCL_IB_TC=16
+NVIDIA_REQUIRE_CUDA=cuda>=13.0
+NCCL_MIN_NCHANNELS=4
+NCCL_VERSION=2.28.3-1
+NCCL_SOCKET_IFNAME=eth
+NCCL_NET_GDR_LEVEL=2
+CUDNN_HOME=/usr/local/lib/python3.13/dist-packages/nvidia/cudnn
+NVIDIA_DRIVER_CAPABILITIES=compute,utility
+NCCL_IB_HCA=mlx5
+NVIDIA_PRODUCT_NAME=CUDA
+NCCL_IB_GID_INDEX=3
+CUDA_VERSION=13.0.3
+NCCL_IB_QPS_PER_CONNECTION=8
+NCCL_IB_TIMEOUT=22
+NCCL_IB_SL=5
+LD_LIBRARY_PATH=/usr/local/lib/python3.13/dist-packages/nvidia/cudnn/lib:/usr/local/cuda/lib64:/usr/local/cuda/lib64:/usr/local/cuda/extras/CUPTI/lib64:/usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/local/cuda/lib64
+NCCL_IB_DISABLE=0
+CUDA_HOME=/usr/local/cuda
+CUDA_HOME=/usr/local/cuda
+PYTORCH_NVML_BASED_CUDA_CHECK=1
+TORCHINDUCTOR_COMPILE_THREADS=1
+TORCHINDUCTOR_CACHE_DIR=/root/tmp/torchinductor_root

@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.4.39 — 2026-11-10
+
+- **A third held-out batch, collected five days later, and what it found.** `created:>2026-11-05`
+  across both repositories produced 28 usable pastes (3306 lines), now in
+  `tests/fixtures/held-out-2026-11b/` with a `PROVENANCE.md`. The rules as of 0.4.38 reported
+  17 of those 28 files: 191 shapes.
+- **The `[conda]` package inventory.** 164 of the 191 shapes were one table — `collect_env`
+  lists every installed wheel twice, once as `[pip3] name==version` and once as a `[conda]`
+  row, and only the pip form was covered. Four reports carried ~41 rows each, and every row
+  reads like a version fact. The `[conda]` table is the same inventory in another column
+  format, so it gets the same policy; `[conda] Could not collect` was already there.
+- **The rest of a pasted reproducer's expression lines**: an f-string (`f"…{…}"`), a tuple
+  assignment with qualified names (`layer.output_size_per_partition, layer.input_size_per_partition
+  = N, K`), the argument list that only closes the call above it, a one-line call chain
+  (`tf.AutoModel…from_config(cfg).to(…).save_pretrained(path)`), a nested call closed twice
+  (`asyncio.run(main(parser.parse_args()…))`), a bare name closing a parenthesis, a lone `[`,
+  an annotation-only assignment, a `!= (…)` continuation, an `and … )` continuation, a tuple
+  of layer specs ending the `for … in (` header, `async def`, and `finally:`.
+- **One candidate measured and thrown away again.** `^\(.*\)$` — any parenthesized line —
+  looked like it covered the reproducer's Path expression, and it ate 31 real vLLM log lines,
+  every one a `(EngineCore pid=…)` entry. The adopted pattern requires the closing `)` to be
+  followed by `.name`, which is how a value built in brackets gets used. The engine line is
+  now a control in the tests.
+- All five corpora report zero: 21 fixtures, 11 October pastes, 7 November pastes, these 28,
+  and the 6 logs from a real machine. 96 tests.
+
 ## 0.4.38 — 2026-11-10
 
 - **`servediff audit --json`.** The audit prints a table for a person; a CI gate should read

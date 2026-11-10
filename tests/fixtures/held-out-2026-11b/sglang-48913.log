@@ -1,0 +1,53 @@
+# usage: python repro.py <hf_repo> <checkpoint prefix of the decoder layers>
+import json
+import re
+import sys
+
+import torch
+
+from sglang.srt.configs.load_config import LoadConfig
+from sglang.srt.configs.model_config import ModelConfig
+from sglang.srt.distributed import init_distributed_environment, initialize_model_parallel
+from sglang.srt.distributed.bootstrap import init_layer_runtime
+from sglang.srt.layers.dp_attention import initialize_dp_attention
+from sglang.srt.layers.moe import initialize_moe_config
+from sglang.srt.layers.radix_attention import RadixAttention
+from sglang.srt.model_loader.loader import DefaultModelLoader, _get_quantization_config, _initialize_model
+from sglang.srt.model_loader.utils import set_default_torch_dtype
+from sglang.srt.runtime_context import SpawnRanks, publish
+from sglang.srt.server_args import ServerArgs
+
+repo, prefix = sys.argv[1], sys.argv[2]
+# a compressed-tensors checkpoint that only declares a static FP8 KV cache
+qc = {"quant_method": "compressed-tensors", "config_groups": {},
+      "kv_cache_scheme": {"num_bits": 8, "type": "float", "strategy": "tensor", "dynamic": False, "symmetric": True}}
+args = ServerArgs(model_path=repo, load_format="dummy", kv_cache_dtype="fp8_e4m3",
+                  json_model_override_args=json.dumps({"quantization_config": qc}))
+publish(args, role="scheduler", ranks=SpawnRanks(world_rank=0, gpu_id=0))
+torch.cuda.set_device(0)
+init_distributed_environment(world_size=1, rank=0, local_rank=0, distributed_init_method="tcp://127.0.0.1:29581")
+initialize_model_parallel()
+initialize_dp_attention(server_args=args)
+cfg, lc = ModelConfig.from_server_args(args), LoadConfig(load_format="dummy")
+init_layer_runtime(model_config=cfg)
+initialize_moe_config()
+with set_default_torch_dtype(cfg.dtype), torch.device("cuda"):
+    model = _initialize_model(cfg, lc, _get_quantization_config(cfg, lc))
+attns = {int(re.search(r"layers\.(\d+)\.", n).group(1)): m
+         for n, m in model.named_modules() if isinstance(m, RadixAttention)}
+# a distinct k/v scale for every layer, named the way LLM Compressor names them
+weights = []
+for i in attns:
+    weights += [(f"{prefix}.{i}.self_attn.k_scale", torch.tensor(0.01 * (i + 1))),
+                (f"{prefix}.{i}.self_attn.v_scale", torch.tensor(0.001 * (i + 1)))]
+model.load_weights(weights)
+DefaultModelLoader.postprocess_weights(model, torch.device("cuda"))
+shared = [i for i, m in attns.items() if m.layer_id != i]
+wrong = [i for i in shared if (attns[i].k_scale_float, attns[i].v_scale_float)
+         != (attns[attns[i].layer_id].k_scale_float, attns[attns[i].layer_id].v_scale_float)]
+print(f"{type(model).__name__}: {len(attns)} layers, {len(shared)} read another layer's KV cache, "
+      f"{len(wrong)} of them with scales other than that layer's")
+for i in shared[:2] + shared[-1:]:
+    o = attns[i].layer_id
+    print(f"layer {i}: reads the KV cache of layer {o}; k_scale={attns[i].k_scale_float:.4g} "
+          f"v_scale={attns[i].v_scale_float:.4g}, layer {o}: k_scale={attns[o].k_scale_float:.4g} v_scale={attns[o].v_scale_float:.4g}")

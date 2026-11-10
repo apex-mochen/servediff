@@ -70,8 +70,9 @@ servediff audit tests/fixtures      # a directory audits every *.log inside it
 
 That corpus is the one the rules were written against, so it can always be made to pass.
 The test that matters is output the rules have never seen: `tests/fixtures/held-out-2026-10/`
-(eleven pastes) and `tests/fixtures/held-out-2026-11/` (seven), both collected straight from
-vLLM and SGLang issues with their issue numbers in a `PROVENANCE.md` beside them.
+(eleven pastes), `tests/fixtures/held-out-2026-11/` (seven), and
+`tests/fixtures/held-out-2026-11b/` (twenty-eight), all collected straight from vLLM and
+SGLang issues with their issue numbers in a `PROVENANCE.md` beside them.
 
 ```text
 note: baseline: no all-reduce facts and no rank line: cannot tell whether this run had more than one rank, so an absent all-reduce path here is inconclusive
