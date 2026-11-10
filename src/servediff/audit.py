@@ -372,22 +372,37 @@ def _rows(lines: list[str], counts: Counter) -> None:
         lines.append(f"  {count:>4}  {line[:150]}")
 
 
-def report(path: Path, text: str, limit: int = 0, everything: bool = False) -> str:
-    """One block per log: totals first, then shapes, noise separated out."""
+def report(path: Path, text: str, limit: int = 0, everything: bool = False,
+           known: set[str] | None = None) -> str:
+    """One block per log: totals first, then shapes, noise separated out.
+
+    `known` is the set of shapes an earlier `--write-baseline` recorded: they are still
+    counted but not listed, so a log that already passed once does not re-print the same rows
+    every run. The line is reported as accepted, not as read: nothing changed about the parser.
+    """
     counts, samples = unread_samples(text)
     lines = [f"{path}: {sum(counts.values())} unread line(s), {len(counts)} shape(s)"]
     if not counts:
         lines.append("  nothing unread: every non-empty line matched a rule")
         return "\n".join(lines)
     look, noise = split(counts, samples)
+    hidden = {}
+    if known:
+        hidden = {line: count for line, count in look.items() if line in known}
+        look = {line: count for line, count in look.items() if line not in known}
     if look:
         lines.append(f"  {sum(look.values())} line(s) worth a look — no rule reads them and"
                      " they are not routes, banners, deprecations, progress bars or access logs:")
-        rows = look.most_common(limit or None)
+        rows = Counter(look).most_common(limit or None)
         for line, count in rows:
             lines.append(f"  {count:>4}  {line[:150]}")
     else:
-        lines.append("  nothing worth a look: every unread line is noise.")
+        lines.append("  nothing new: every shape worth a look is already in the baseline."
+                     if hidden else
+                     "  nothing worth a look: every unread line is noise.")
+    if hidden:
+        lines.append(f"  {sum(hidden.values())} line(s) in {len(hidden)} shape(s) are in the"
+                     " baseline: accepted earlier, still unread by any rule")
     if noise and (everything or not look):
         lines.append(f"  {sum(noise.values())} line(s) of noise"
                      f" (routes, banners, deprecations, progress bars, access logs):")

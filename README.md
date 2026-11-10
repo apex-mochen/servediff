@@ -130,7 +130,7 @@ names a python launcher, that interpreter is the one snapshotted; for entry poin
 | `servediff env [--python P] [-o snap.json]` | that interpreter's packages, GPU info, and env vars whose names start with `VLLM_` / `SGLANG_` / `SGL_` / `CUDA_` / `NCCL_` / `TORCH_` / `PYTORCH_` / `FLASHINFER_` / `TRITON_` or are `HF_HUB_OFFLINE` / `TRANSFORMERS_OFFLINE`; secret-looking names become `<redacted>` | `0` written; `2` snapshot failed |
 | `servediff capture [-o run.log] -- <server command>` | runs the server, tees its log to stdout and to the file, and writes `<out>.env.json` **before** launch. If the command names a python launcher (`capture -- python -m vllm...`), that interpreter is the one snapshotted; otherwise pass `--python` to point at the server's venv | the server's own exit code |
 | `servediff demo` | two excerpt logs shipped inside the package → a real diff with no log files of your own; run this first after installing | `1` always (the bundled logs differ; see the note it prints) |
-| `servediff audit <log|dir>` | the lines no rule reads, split into noise (counted) and shapes worth a look (listed); a directory (or several paths) is audited as one corpus, one line per log; `--top N`, `--everything`, `--markdown`, `--json`, `--max-shapes N` | `0` reported; `1` more shapes worth a look than `--max-shapes` allows; `2` unreadable path |
+| `servediff audit <log|dir>` | the lines no rule reads, split into noise (counted) and shapes worth a look (listed); a directory (or several paths) is audited as one corpus, one line per log; `--top N`, `--everything`, `--markdown`, `--json`, `--max-shapes N`, `--baseline JSON`, `--write-baseline JSON` | `0` reported; `1` more shapes worth a look than `--max-shapes` allows (with `--baseline`, only shapes not in it); `2` unreadable path or a file that is not a baseline |
 
 `1` always means *the inputs differ* — never *something went wrong* — so
 `servediff diff old.log new.log` works directly as a CI gate. At most one input may be
@@ -550,7 +550,7 @@ Exit codes: `0` no differences, `1` differences, `2` nothing recognised.
   the message after stripping the `(EngineCore pid=…) ERROR … [core.py:…]` preamble, so
   frames, carets, `[shutdown]` chatter and logging-error dumps are counted as noise, and
   the last shapes that were left there are now read: the `Casting torch.bfloat16 to
-torch.float32` warning (`model.cast` — a silent numeric change no flag records), a failed
+  torch.float32` warning (`model.cast` — a silent numeric change no flag records), a failed
 output handler (`startup: failed (output handler)`), and an installed-but-unimportable
 optional kernel library (`kernel.module_missing`, `kernel.missing_lib`). All four full logs
 now report `nothing worth a look`; the measurements behind that, and what it does not
@@ -565,6 +565,13 @@ prove, are in [writeups/audit-noise-real-logs.md](writeups/audit-noise-real-logs
   `unread` and `shapes` counts, the shapes worth a look with their counts, and a total
   `shapes_worth_a_look`, so the gate reads a field instead of parsing a table. `--json`
   changes the format, not the exit code, and it does not mix with `--markdown`.
+  `servediff audit --write-baseline accepted.json run1.log` records the shapes this run saw,
+  and `servediff audit --baseline accepted.json --max-shapes 0 run2.log` counts only shapes
+  that are not in it. Without that, a threshold gate goes red the first time the server prints
+  a line the parser cannot read and stays red, which is how a gate gets deleted — and then
+  nothing is checked at all. With a baseline the gate answers the question you actually have:
+  did this upgrade make the server print configuration nothing reads. A shape in the baseline
+  is still reported as unread, because it is — accepted once, not read.
 - One worked example end to end: [writeups/wsl-uva-028-vs-030.md](writeups/wsl-uva-028-vs-030.md)
   — same flags on a laptop GPU under WSL2, 0.28.0 dies with `RuntimeError: UVA is not
   available`, 0.30.0 starts; the startup-log diff is 48 differences and 14 identical facts,

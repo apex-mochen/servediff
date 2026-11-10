@@ -14,6 +14,8 @@ Usage:
     servediff env [--python /path/to/server/venv/bin/python] [-o env.json]
     servediff diff <baseline-env.json> <candidate-env.json>
     servediff capture [-o run.log] [--python /path/to/python] -- <server command>
+    servediff audit <log|dir>... [--json] [--markdown] [--max-shapes N]
+                [--baseline accepted.json] [--write-baseline accepted.json]
 Exit codes: 0 no differences, 1 differences found, 2 nothing recognised in an input.
 """
 
@@ -847,13 +849,37 @@ def main(argv=None) -> int:
     a.add_argument("--max-shapes", type=int, default=None, metavar="N",
                    help="exit 1 when the number of shapes worth a look is above N, so a"
                         " pipeline can fail when a log format grows past the parser")
+    a.add_argument("--baseline", type=Path, default=None, metavar="JSON",
+                   help="a file --write-baseline wrote: its shapes are known, so only new"
+                        " shapes are reported and gated")
+    a.add_argument("--write-baseline", type=Path, default=None, metavar="JSON",
+                   help="record the shapes worth a look in this run, so a later --baseline"
+                        " accepts them and a pipeline fails only on what is new")
     args = parser.parse_args(argv)
 
     if args.command == "audit":
         if sum(1 for path in args.logs if str(path) == "-") > 1:
             print("audit: stdin can be read once, so at most one entry may be '-'", file=sys.stderr)
             return 2
+        from collections import Counter
+
         from servediff import audit as auditmod
+
+        # A baseline is what "already accepted" means: shapes a previous run saw and shipped.
+        # Without it, a --max-shapes gate fails forever after the first line the parser cannot
+        # read, which is how a gate gets switched off. With it, the gate is about what changed.
+        known = None
+        if args.baseline is not None:
+            try:
+                loaded = json.loads(args.baseline.read_text(encoding="utf-8"))
+                known = set(loaded["shapes"])
+            except OSError as exc:
+                print(f"audit: {args.baseline}: {exc.strerror or exc}", file=sys.stderr)
+                return 2
+            except (json.JSONDecodeError, KeyError, TypeError):
+                print(f"audit: {args.baseline} is not a baseline --write-baseline wrote"
+                      " (expected an object with a `shapes` mapping)", file=sys.stderr)
+                return 2
 
         logs = _expand_logs(args.logs)
         blocks = []
@@ -861,6 +887,9 @@ def main(argv=None) -> int:
         # Counted separately from the printed report so a threshold decision never depends
         # on parsing the report text back.
         shapes_worth_a_look = 0
+        seen = Counter()  # every shape this run saw, baseline or not, for --write-baseline
+        hidden_shapes = 0
+        hidden_lines = 0
         for path in logs:
             try:
                 text = _read_log(path)
@@ -869,10 +898,30 @@ def main(argv=None) -> int:
                 return 2
             counts, samples = auditmod.unread_samples(text)
             look, _ = auditmod.split(counts, samples)
+            seen.update({line: count for line, count in look.items()})
+            if known is not None:
+                hidden = {line: count for line, count in look.items() if line in known}
+                hidden_shapes += len(hidden)
+                hidden_lines += sum(hidden.values())
+                look = Counter({line: count for line, count in look.items() if line not in known})
             shapes_worth_a_look += len(look)
             blocks.append(auditmod.report(Path(_label(path)), text,
-                                          limit=args.top, everything=args.everything))
+                                          limit=args.top, everything=args.everything,
+                                          known=known))
             summary.append((_label(path), sum(counts.values()), len(counts), look))
+        if args.write_baseline is not None:
+            try:
+                args.write_baseline.write_text(
+                    json.dumps({"shapes": dict(seen)}, indent=2, ensure_ascii=False) + "\n",
+                    encoding="utf-8")
+            except OSError as exc:
+                print(f"audit: {args.write_baseline}: {exc.strerror or exc}", file=sys.stderr)
+                return 2
+            print(f"audit: baseline -> {args.write_baseline} ({len(seen)} shape(s))",
+                  file=sys.stderr)
+        if known is not None:
+            print(f"audit: {hidden_shapes} shape(s) in the baseline ({hidden_lines} line(s))"
+                  " were not counted", file=sys.stderr)
         if args.json:
             # Same numbers the text report prints, counted while the loop runs, so a CI gate
             # reads fields instead of scraping a human layout. `shapes_worth_a_look` is the
@@ -898,6 +947,11 @@ def main(argv=None) -> int:
                 "shapes_worth_a_look": shapes_worth_a_look,
                 "logs_with_shapes_worth_a_look": sum(1 for item in summary if item[3]),
             }
+            if known is not None:
+                # Only present when a baseline was given, so a pipeline reading the default
+                # document sees the same fields it saw before 0.4.40.
+                payload["baseline_shapes_not_counted"] = hidden_shapes
+                payload["baseline_lines_not_counted"] = hidden_lines
             print(json.dumps(payload, indent=2, ensure_ascii=False))
             return _audit_gate(args.max_shapes, shapes_worth_a_look)
         if len(logs) > 1 and not args.markdown and not args.json:
@@ -906,8 +960,11 @@ def main(argv=None) -> int:
             out = []
             for name, unread, shapes, look in summary:
                 name = Path(name).name
-                verdict = (f"{len(look)} shape(s) worth a look" if look
-                           else "nothing worth a look")
+                if look:
+                    verdict = f"{len(look)} shape(s) worth a look"
+                else:
+                    verdict = ("nothing new (all in the baseline)" if known is not None
+                               else "nothing worth a look")
                 out.append(f"{name:<42} {unread:>6} unread  {shapes:>4} shape(s)  {verdict}")
                 for line, count in look.most_common(args.top or None):
                     out.append(f"    {count:>4}  {line[:150]}")

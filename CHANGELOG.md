@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.4.40 — 2026-11-10
+
+- **`audit --baseline` / `--write-baseline`: a gate that stays on.** `--write-baseline
+  accepted.json` records the shapes a run saw; `--baseline accepted.json` reports and gates
+  only on shapes that are not in it, printing how many were hidden (`N shape(s) in the
+  baseline (M line(s)) were not counted`). Without this, `--max-shapes` goes red the first
+  time the server prints a line no rule reads and stays red forever — a gate that is always
+  red gets deleted, and then nothing is checked. A baseline turns it into the question that
+  actually matters: did this upgrade make the server print configuration nothing reads.
+- **A shape in the baseline is still reported as unread**, because it is: accepted once, not
+  read. The single-log report says `nothing new: every shape worth a look is already in the
+  baseline`, not `every unread line is noise`, which would misdescribe what happened — that
+  wording is now pinned by a test.
+- **`--json` gains two fields only when `--baseline` is given** (`baseline_shapes_not_counted`,
+  `baseline_lines_not_counted`), so a pipeline reading the default document sees the same
+  fields it saw in 0.4.38. `--max-shapes` and the exit code behave as before: `--json` still
+  changes the format, not the code, and `--json` with `--markdown` is still exit 2.
+- **A file that is not a baseline is exit 2**, not a traceback and not exit 1: an unreadable
+  or malformed `--baseline` is an input error, the same rule the rest of `audit` follows.
+- 100 tests.
+
 ## 0.4.39 — 2026-11-10
 
 - **A third held-out batch, collected five days later, and what it found.** `created:>2026-11-05`

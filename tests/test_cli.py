@@ -291,6 +291,63 @@ def test_audit_json_still_honours_the_gate(tmp_path):
     assert servediff.main(["audit", str(log), "--json", "--max-shapes", "0"]) == 1
 
 
+def test_a_baseline_turns_the_gate_into_a_regression_gate(tmp_path, capsys):
+    # A gate on the absolute count fails forever after the first line the parser cannot read,
+    # which is how a gate gets switched off. A baseline makes it a question about what is new.
+    log = tmp_path / "run.log"
+    log.write_text("Router gate chose expert 3 for every token on this run\n",
+                   encoding="utf-8")
+    base = tmp_path / "baseline.json"
+    assert servediff.main(["audit", str(log), "--write-baseline", str(base)]) == 0
+    recorded = json.loads(base.read_text(encoding="utf-8"))
+    assert list(recorded["shapes"]) == ["Router gate chose expert N for every token on this run"]
+    # The line is the same line that fails without a baseline, and the gate passes now.
+    assert servediff.main(["audit", str(log), "--baseline", str(base),
+                           "--max-shapes", "0"]) == 0
+    captured = capsys.readouterr()
+    assert "1 shape(s) in the baseline" in captured.err
+    # The row is not noise: it is a shape the baseline accepted, and saying "every unread line
+    # is noise" here would misdescribe what the tool just did.
+    assert "nothing new" in captured.out
+    assert "every unread line is noise" not in captured.out
+
+
+def test_a_new_shape_still_fails_against_a_baseline(tmp_path):
+    log = tmp_path / "old.log"
+    log.write_text("Router gate chose expert 3 for every token on this run\n", encoding="utf-8")
+    base = tmp_path / "baseline.json"
+    assert servediff.main(["audit", str(log), "--write-baseline", str(base)]) == 0
+    fresh = tmp_path / "new.log"
+    fresh.write_text("Router gate chose expert 3 for every token on this run\n"
+                     "A line the baseline never saw, about six or more words here\n",
+                     encoding="utf-8")
+    assert servediff.main(["audit", str(fresh), "--baseline", str(base),
+                           "--max-shapes", "0"]) == 1
+
+
+def test_audit_json_names_what_the_baseline_hid(tmp_path, capsys):
+    log = tmp_path / "run.log"
+    log.write_text("Router gate chose expert 3 for every token on this run\n", encoding="utf-8")
+    base = tmp_path / "baseline.json"
+    assert servediff.main(["audit", str(log), "--write-baseline", str(base)]) == 0
+    capsys.readouterr()
+    assert servediff.main(["audit", str(log), "--baseline", str(base), "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["shapes_worth_a_look"] == 0
+    assert payload["baseline_shapes_not_counted"] == 1
+    assert payload["baseline_lines_not_counted"] == 1
+
+
+def test_a_file_that_is_not_a_baseline_is_an_input_error(tmp_path, capsys):
+    log = tmp_path / "run.log"
+    log.write_text("Router gate chose expert 3 for every token on this run\n", encoding="utf-8")
+    bad = tmp_path / "bad.json"
+    bad.write_text('{"lines": []}\n', encoding="utf-8")
+    assert servediff.main(["audit", str(log), "--baseline", str(bad)]) == 2
+    err = capsys.readouterr().err
+    assert "not a baseline" in err
+
+
 def test_a_second_month_of_pastes_finds_nothing_either(capsys):
     # The batch collected one month after the first, so this is what tests whether the noise
     # table learned October or learned logs. At 0.4.36 one line survived here: the conditional
