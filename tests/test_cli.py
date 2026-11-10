@@ -256,6 +256,29 @@ def test_the_second_half_of_a_call_is_noise_but_an_env_var_is_not():
     assert not servediff_audit.is_noise("NVIDIA_DRIVER_CAPABILITIES=compute,utility")
 
 
+def test_a_second_month_of_pastes_finds_nothing_either(capsys):
+    # The batch collected one month after the first, so this is what tests whether the noise
+    # table learned October or learned logs. At 0.4.36 one line survived here: the conditional
+    # expression `run(a) if a.cmd == "run" else compare(a)` in sglang-49403.log.
+    held = FIX / "held-out-2026-11"
+    logs = sorted(held.glob("*.log"))
+    assert len(logs) == 7, logs
+    assert servediff.main(["audit", str(held)]) == 0
+    out = capsys.readouterr().out
+    assert f"{len(logs)} log(s): 0 with shapes worth a look" in out
+
+
+def test_a_conditional_expression_standing_alone_is_noise(capsys):
+    text = "run(a) if a.cmd == \"run\" else compare(a)"
+    look, _ = servediff_audit.split(*servediff_audit.unread_samples(text))
+    assert look == {}
+    # The same shape does not swallow a real warning that happens to contain both keywords.
+    real = ("Using FlashInfer all-reduce if available else falling back to the custom kernel "
+            "(set VLLM_ALLREDUCE_USE_FLASHINFER=0 to disable)")
+    look2, _ = servediff_audit.split(*servediff_audit.unread_samples(real))
+    assert look2 != {}, look2
+
+
 def test_the_held_out_corpus_reports_nothing_to_look_at(capsys):
     # Eleven pastes taken fresh from vLLM and SGLang issues in October 2026, shipped so the
     # claim in writeups/audit-noise-real-logs.md can be rerun instead of believed. At v0.4.32

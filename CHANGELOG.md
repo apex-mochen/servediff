@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.4.37 — 2026-11-10
+
+- **A second held-out batch, a month later, to test whether the rules learned logs or learned
+  October.** The same collection (`created:>2026-11-01`) produced twelve blocks; five were
+  already in the October batch, so `tests/fixtures/held-out-2026-11/` holds the seven new
+  ones (713 lines) with a `PROVENANCE.md`. Six were clean on the first try; the seventh had
+  one line.
+- **A conditional expression standing alone is not a log line.** `run(a) if a.cmd == "run"
+  else compare(a)`, lifted out of a reproducer script, is the argument-list shape one form
+  further out: it picks between two values, so it has no subject. The obvious pattern
+  (contains `if` and `else`, ends in `)`) was measured and rejected — it also ate the warning
+  *"Using FlashInfer all-reduce if available else falling back to the custom kernel (set
+  VLLM_ALLREDUCE_USE_FLASHINFER=0 to disable)"*, which is a statement and belongs in the
+  report. The adopted pattern requires the line to begin with a call; it matches one line
+  across all four corpora.
+- The old result is reproducible: `v0.4.36` reports one of seven on this directory.
+- 89 tests.
+
 ## 0.4.36 — 2026-11-10
 
 - **The held-out corpus ships, so the claim about it can be rerun instead of believed.**

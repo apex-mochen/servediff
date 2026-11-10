@@ -275,10 +275,47 @@ Both corpora ship in the repo, so this section is rerunnable instead of believab
 `PROVENANCE.md` naming each issue). Check out `v0.4.32` and run the second command to watch
 it report eight of eleven.
 
+## A second month, to see whether the rules learned logs or learned October
+
+Eleven pastes from two weeks of one month is one point. The obvious doubt is that the noise
+table was bent until that particular set passed — each rule here was written in front of a
+paste that broke it, which is a good way to write a rule and an excellent way to overfit.
+
+So the same collection was run again against issues created after 2026-11-01, a month later.
+Twelve blocks qualified; five were already in the October batch, so seven were new.
+
+Six of the seven were clean on the first try, which is the useful half of the result: the
+table did generalize past the month it was written in. The seventh had one line:
+
+```
+    run(a) if a.cmd == "run" else compare(a)
+```
+
+A conditional expression used as a statement, lifted out of a reproducer script pasted as the
+issue body. It picks between two values, so unlike a log line it has no subject to say
+anything about — the same principle as the argument lists above, one form further out.
+
+The first pattern written for it was the obvious shape — contains ` if `, contains ` else `,
+ends in `)` — and it had to be thrown away, because it also swallowed a warning that merely
+uses both words in a sentence:
+
+```
+Using FlashInfer all-reduce if available else falling back to the custom kernel
+(set VLLM_ALLREDUCE_USE_FLASHINFER=0 to disable)
+```
+
+That line is a statement about a decision, and it is exactly what this tool exists to find.
+The adopted pattern requires the line to *begin* with a call
+(`^[A-Za-z_][\w.]*\([^()]*\)\s+if\s+…\s+else\s+…\)$`), which the sentence does not. It
+matches one line across all four corpora — the one it was written for — and the guard test
+pins the difference between the two.
+
+Seven pastes, then: **none worth a look.** At 0.4.36 that directory reports one of seven.
+
 ## Limits of the claim
 
 These four logs are from one machine's WSL2 runs plus one posted TP=8 log, plus eleven pastes
-taken fresh from vLLM and SGLang issues in October 2026.
+taken fresh from vLLM and SGLang issues in October 2026 and seven more in November.
 `nvcc`, other engines, and other parallelism layouts are unmeasured, and a log from a
 different stack may well print shapes none of these rules know. That is what the audit is
 for: run it on your own log, and paste the report into

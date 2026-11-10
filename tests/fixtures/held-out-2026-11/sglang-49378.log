@@ -1,0 +1,68 @@
+
+from sglang.srt.entrypoints.openai.protocol import Function, Tool
+from sglang.srt.function_call.minicpm5_detector import MiniCPM5Detector
+from sglang.srt.function_call.poolside_v1_detector import PoolsideV1Detector
+from sglang.srt.function_call.step3_detector import Step3Detector
+
+# Pydantic emits Optional[...] as anyOf with null; type lists are also common.
+PROPERTIES = {
+    "zip_code": {"anyOf": [{"type": "string"}, {"type": "null"}]},  # Optional[str]
+    "area_code": {"type": ["string", "null"]},  # Optional[str]
+    "limit": {"anyOf": [{"type": "integer"}, {"type": "null"}]},  # Optional[int]
+    "metric": {"anyOf": [{"type": "boolean"}, {"type": "null"}]},  # Optional[bool]
+}
+VALUES = {"zip_code": "10001", "area_code": "212", "limit": "5", "metric": "true"}
+EXPECTED = {"zip_code": "10001", "area_code": "212", "limit": 5, "metric": True}
+
+tools = [
+    Tool(
+        type="function",
+        function=Function(
+            name="lookup",
+            parameters={"type": "object", "properties": PROPERTIES},
+        ),
+    )
+]
+
+
+def minicpm5_text():
+    params = "".join(f'<param name="{k}">{v}</param>' for k, v in VALUES.items())
+    return f'<function name="lookup">{params}</function>\n'
+
+
+def poolside_text():
+    args = "".join(
+        f"<arg_key>{k}</arg_key>\n<arg_value>{v}</arg_value>\n"
+        for k, v in VALUES.items()
+    )
+    return f"<tool_call>lookup\n{args}</tool_call>"
+
+
+def step3_text(d):
+    params = "".join(
+        f'<steptml:parameter name="{k}">{v}</steptml:parameter>'
+        for k, v in VALUES.items()
+    )
+    return (
+        f"{d.bot_token}{d.tool_call_begin}function{d.tool_sep}"
+        f'<steptml:invoke name="lookup">{params}</steptml:invoke>'
+        f"{d.tool_call_end}{d.eot_token}"
+    )
+
+cases = [
+    ("MiniCPM5", MiniCPM5Detector(), minicpm5_text),
+    ("PoolsideV1", PoolsideV1Detector(), poolside_text),
+    ("Step3", Step3Detector(), None),
+]
+for name, detector, make_text in cases:
+    text = make_text() if make_text else step3_text(detector)
+    result = detector.detect_and_parse(text, tools)
+    args = json.loads(result.calls[0].parameters)
+    print(f"{name}: {args}")
+    for key, want in EXPECTED.items():
+        got = args.get(key)
+        if got != want or type(got) is not type(want):
+            print(
+                f"  WRONG {key}: got {got!r} ({type(got).__name__}), expected {want!r}"
+            )
+print(f"\nexpected: {EXPECTED}")

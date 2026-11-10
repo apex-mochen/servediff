@@ -1,0 +1,102 @@
+"""Greedy outputs of an SGLang server under repetition_penalty, for comparing a speculative and a
+non-speculative server of the same target model.
+
+usage:
+  python3 repro_spec_rep_penalty.py run --url http://host:30000 --out base.json [--rp 1.3] [--max-tokens 256]
+  python3 repro_spec_rep_penalty.py compare base.json spec.json
+The reference server runs without speculative decoding and with --disable-overlap-schedule (the
+exact penalty semantics of the stock decoder); the other one with EAGLE/EAGLE3.
+"""
+
+import argparse
+import concurrent.futures
+import json
+import urllib.request
+
+PROMPTS = [
+    "List thirty different fruits, one per line.",
+    "Count from one to forty in English words, separated by commas.",
+    "Write a short song with a chorus that repeats three times.",
+    "Name twenty European capital cities and their countries.",
+    "Explain recursion to a ten-year-old, with two examples.",
+    "Write the multiplication table for 7 from 1 to 12.",
+    "Give ten tips for writing clean Python code.",
+    "Describe a walk through a forest in autumn in about 150 words.",
+    "List the planets of the solar system with one fact about each.",
+    "Write a limerick about a cat, then explain its rhyme scheme.",
+    "Translate 'good morning' into fifteen languages, one per line.",
+    "Summarize the plot of a typical detective story in five steps.",
+    "Write a JSON array of ten objects with fields id and name.",
+    "List the days of the week and a chore for each day.",
+    "Give twelve synonyms for the word 'happy'.",
+    "Write a dialogue between a teacher and a student about fractions.",
+    "Describe how to make a cup of tea, step by step.",
+    "List fifteen programming languages and the year each appeared.",
+    "Write a short story that uses the phrase 'once again' at least four times.",
+    "Explain the difference between a list and a tuple in Python with code.",
+]
+
+
+def _post(url, path, body=None):
+    req = urllib.request.Request(
+        url.rstrip("/") + path,
+        data=None if body is None else json.dumps(body).encode(),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=600) as r:
+        return r.read()
+
+
+def _complete(url, prompt, rp, max_tokens):
+    body = {
+        "model": "default",
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0,
+        "max_tokens": max_tokens,
+        "repetition_penalty": rp,
+    }
+    return json.loads(_post(url, "/v1/chat/completions", body))["choices"][0]["message"]["content"]
+
+
+def run(a):
+    _post(a.url, "/flush_cache")
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+        outs = list(pool.map(lambda p: _complete(a.url, p, a.rp, a.max_tokens), PROMPTS))
+    json.dump({"rp": a.rp, "max_tokens": a.max_tokens, "outputs": outs}, open(a.out, "w"))
+
+
+def compare(a):
+    x, y = (json.load(open(f)) for f in (a.a, a.b))
+    assert x["rp"] == y["rp"] and x["max_tokens"] == y["max_tokens"]
+    pairs = list(zip(x["outputs"], y["outputs"]))
+    diffs = [
+        next((i for i, (p, q) in enumerate(zip(s, t)) if p != q), min(len(s), len(t)))
+        for s, t in pairs
+        if s != t
+    ]
+    print(json.dumps({
+        "rp": x["rp"],
+        "prompts": len(pairs),
+        "identical": len(pairs) - len(diffs),
+        "mean_first_diff_char": round(sum(diffs) / len(diffs), 1) if diffs else None,
+    }))
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    r = sub.add_parser("run")
+    r.add_argument("--url", required=True)
+    r.add_argument("--out", required=True)
+    r.add_argument("--rp", type=float, default=1.3)
+    r.add_argument("--max-tokens", type=int, default=256)
+    c = sub.add_parser("compare")
+    c.add_argument("a")
+    c.add_argument("b")
+    a = ap.parse_args()
+    run(a) if a.cmd == "run" else compare(a)
+
+
+if __name__ == "__main__":
+    main()

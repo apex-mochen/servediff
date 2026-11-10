@@ -250,6 +250,13 @@ NOISE = (
     re.compile(r"^\s*[A-Za-z_0-9][\w.]*(?:,\s*(?:[A-Za-z_0-9][\w.]*"
                r"|[A-Za-z_][\w.]*=[^\s,)]+))+\s*$"),
     re.compile(r"^(?=.*,\s*[A-Za-z_]\w*=)(?=.*\)\)).*\)\s*$"),
+    # A conditional expression standing alone (`run(a) if a.cmd == "run" else compare(a)`):
+    # it picks between two values, so there is no subject for it to say anything about. The
+    # line is required to *begin* with a call, which is what keeps a warning that merely
+    # contains both keywords (`… if available else falling back … (set X=0 to disable)`) out of
+    # the noise table. The wider `if … else … )` shape was measured first and rejected: it ate
+    # exactly that warning.
+    re.compile(r"^[A-Za-z_][\w.]*\([^()]*\)\s+if\s+.+\s+else\s+.+\)$"),
 )
 
 # A line that is nothing but the prefix: `(EngineCore pid=3811)`.
