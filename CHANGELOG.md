@@ -1,11 +1,21 @@
 # Changelog
 
+## 0.4.43 — 2026-11-10
+
+- **Corrected the size figures in the 0.4.42 example.** 0.4.42 said a facts file is 4 KB
+  "versus 40 KB for the log"; measured on the fixtures it is **5 190 B for 19 facts**, the
+  ROCm collect_env paste it came from is **9 904 B**, and a full startup log is 33–42 KB.
+  The point still holds — you commit kilobytes instead of the log — but the numbers in
+  the README and the release body now match what `Get-Item` reports.
+- No code change: same behaviour, same 103 tests, same exit codes.
+
 ## 0.4.42 — 2026-11-10
 
 - **`servediff diff <log> --against facts.json`: one log is enough to gate.** A CI job has
   today's startup log; nobody keeps the log from the run they accepted three months ago.
   `servediff show accepted.log --json > facts.json` records those facts in a few kilobytes
-  (19 facts from a collect_env paste is 4 KB, versus 40 KB for the log), and `--against`
+  (19 facts from a collect_env paste is 5.2 KB, against 9.7 KB for that excerpt and 33–42 KB
+  for a full startup log), and `--against`
   diffs today's log against them with the same rows, the same `<absent>` semantics and the
   same exit codes as a two-log diff. Passing a second log alongside `--against` is a usage
   error rather than a guess.

@@ -173,7 +173,7 @@ log from the run they accepted three months ago. `servediff show --json` records
 run printed in a few kilobytes, and `--against` diffs a single log with those facts:
 
 ```bash
-# once, on a run whose startup you have read: commit facts.json (4 KB, not 40 KB)
+# once, on a run whose startup you have read: commit facts.json (5 KB, not the 40 KB log)
 servediff show accepted.log --json > facts.json
 ```
 
