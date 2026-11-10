@@ -148,6 +148,26 @@ That is the difference the reporter of
 v0.21 → v0.23 throughput drop. The example files are the log lines posted in that
 issue (see [tests/fixtures/README.md](https://github.com/apex-mochen/servediff/blob/main/tests/fixtures/README.md)).
 
+The second thing worth gating is the tool's own blind spot: a server that starts printing
+configuration no rule reads. `--max-shapes` alone fails forever after the first such line, so
+record what today's log prints and gate on what is new:
+
+```bash
+# once, on a log you have read and accepted: commit the file
+servediff audit run.log --write-baseline audit-baseline.json
+```
+
+```yaml
+# .github/workflows/config-drift.yml — fail only when the server prints something new
+- run: pip install servediff
+- run: servediff audit run.log --baseline audit-baseline.json --max-shapes 0
+  # exit 1: a shape no rule reads appeared that the baseline did not have
+  # exit 2: the baseline or the log could not be read — a broken gate, not a finding
+```
+
+A shape in the baseline is still unread and still reported; it is accepted, not parsed. What
+it stops is a gate that goes red on day one and stays red until someone deletes it.
+
 ## Real example: same flags, vLLM 0.28.0 vs 0.30.0
 
 Two startup logs from one RTX 4060 Laptop under WSL2, identical flags

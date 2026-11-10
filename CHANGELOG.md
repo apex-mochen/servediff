@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.41 — 2026-11-10
+
+- **The second CI gate is now on the landing page.** `--baseline` shipped in 0.4.40 and was
+  documented only inside the audit section; the README that PyPI renders now carries the
+  two-step recipe near the top — write the baseline once on a log you have read, then gate
+  with `--max-shapes 0` against it — with the exit codes spelled out: `1` a new shape, `2`
+  the baseline or the log could not be read, which is a broken gate rather than a finding.
+- No parser or CLI change: this release is the documentation the previous one needed, and
+  the PyPI long description is this README.
+
 ## 0.4.40 — 2026-11-10
 
 - **`audit --baseline` / `--write-baseline`: a gate that stays on.** `--write-baseline
