@@ -100,11 +100,23 @@ And a measurement every worker repeats is read once, from the lowest rank — on
 `Model loading took …` is printed eight times with eight slightly different numbers, and
 those differences are per-rank jitter, not a change between your two runs.
 
-## Recording your own two logs
+## Your own logs
 
-Most people meet this with one log and a question, not two ready files. `capture` runs the
-server, tees its output, and snapshots the environment *before* launch, so the next run is
-directly comparable:
+**If you already have a log** — copied out of an issue, or left on disk by last week's run —
+start there; nothing has to be captured first:
+
+```bash
+servediff show serve.log                     # what that one run actually used
+servediff show serve.log --json > facts.json # record it, so a later run can be gated against it
+servediff diff today.log --against facts.json
+```
+
+`show` needs no second log and no GPU. The diff is the second step, once you have something
+to compare against.
+
+**If the failure is ahead of you** — you are about to upgrade, or you have to reproduce it —
+`capture` runs the server, tees its output, and snapshots the environment *before* launch, so
+the two runs are directly comparable:
 
 ```bash
 # before the upgrade, with the flags you actually use
