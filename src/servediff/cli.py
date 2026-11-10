@@ -1147,8 +1147,12 @@ def main(argv=None) -> int:
             print(f"servediff capture: env snapshot failed: {exc}", file=sys.stderr)
             return 2
         snap_path = args.output.with_suffix(args.output.suffix + ".env.json")
-        snap_path.write_text(json.dumps(snap, indent=2, ensure_ascii=False, sort_keys=True) + "\n",
-                             encoding="utf-8")
+        try:
+            snap_path.write_text(json.dumps(snap, indent=2, ensure_ascii=False, sort_keys=True) + "\n",
+                                 encoding="utf-8")
+        except OSError as exc:
+            print(f"servediff capture: cannot write {snap_path}: {exc}", file=sys.stderr)
+            return 2
         print(f"env snapshot -> {snap_path}  (interpreter: {snap.get('executable') or snapshot_python})",
               file=sys.stderr)
         if snapshot_python is None:
@@ -1157,12 +1161,19 @@ def main(argv=None) -> int:
                   " server lives in another venv", file=sys.stderr)
         print(f"log -> {args.output}  (running: {' '.join(shlex.quote(p) for p in cmd)})", file=sys.stderr)
         try:
+            log_file = open(args.output, "w", encoding="utf-8", errors="replace")
+        except OSError as exc:
+            # Nothing was launched yet, so this is a usage error, not the server's exit code.
+            print(f"servediff capture: cannot write {args.output}: {exc}", file=sys.stderr)
+            return 2
+        try:
             proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
                                     bufsize=1)
         except (FileNotFoundError, OSError) as exc:
+            log_file.close()
             print(f"capture: cannot start {cmd[0]}: {exc}", file=sys.stderr)
             return 2
-        with open(args.output, "w", encoding="utf-8", errors="replace") as logf:
+        with log_file as logf:
             interrupted = False
             try:
                 for line in proc.stdout:
@@ -1199,7 +1210,14 @@ def main(argv=None) -> int:
             return 2
         text = json.dumps(snap, indent=2, ensure_ascii=False, sort_keys=True)
         if args.output:
-            args.output.write_text(text + "\n", encoding="utf-8")
+            try:
+                args.output.write_text(text + "\n", encoding="utf-8")
+            except OSError as exc:
+                # A typo in the output path is the same kind of problem as an interpreter
+                # that cannot be snapshotted: nothing was written, and the caller asked
+                # for a file. Say so instead of ending in a traceback.
+                print(f"servediff env: cannot write {args.output}: {exc}", file=sys.stderr)
+                return 2
             print(f"wrote {args.output}: {len(snap['packages'])} packages, {len(snap['env'])} env vars", file=sys.stderr)
         else:
             print(text)

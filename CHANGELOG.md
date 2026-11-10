@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.47 — 2026-11-10
+
+- **`env -o` and `capture -o` say so when the path cannot be written.** Pointing `-o` at a
+  directory that does not exist raised `FileNotFoundError` and exited `1` — and `1` is documented
+  as "the inputs differ", so a script that branches on it reads a typo as a finding. Both now
+  exit `2` with `cannot write <path>`. For `capture` this happens before anything is launched,
+  so it is a usage error, never the server's exit code.
+- **`tools/verify_readme_exit_codes.py`: the command table is now a test.** It builds its own
+  fixtures, runs every documented case (21 of them), and fails on a code that does not match or
+  on a traceback. CI runs it on each matrix job, so a README promise cannot drift from the tool
+  without going red.
+- 2 new tests (114 total): `env` and `capture` to an unwritable path are exit `2`, with no
+  `Traceback`.
+
 ## 0.4.46 — 2026-11-10
 
 - **`diff` with one log now explains itself instead of raising.** `candidate` became optional

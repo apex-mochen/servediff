@@ -1337,6 +1337,8 @@ def test_series_keeps_the_middle_column(capsys):
     assert servediff.main(["series", *map(str, logs)]) == 1
     out = capsys.readouterr().out
     assert "differ across 3 logs" in out
+
+
     # two logs belong to `diff`
     assert servediff.main(["series", str(logs[0]), str(logs[1])]) == 2
     # --all adds the identical rows back, and the markdown keeps one column per log
@@ -1344,6 +1346,30 @@ def test_series_keeps_the_middle_column(capsys):
     out = capsys.readouterr().out
     assert "identical" in out
     assert out.splitlines()[0].count("|") == 5
+
+
+def test_env_to_a_path_that_cannot_be_written_is_exit_2(tmp_path, capsys, monkeypatch):
+    # The README promises `2 snapshot failed`. A typo in -o used to end in
+    # FileNotFoundError with exit 1, which reads as "one difference" to a calling script.
+    monkeypatch.setattr(servediff.envsnap, "snapshot",
+                        lambda *a, **k: {"schema": "servediff-env/1", "packages": {}, "env": {}})
+    missing = tmp_path / "nodir" / "snap.json"
+    assert servediff.main(["env", "-o", str(missing)]) == 2
+    err = capsys.readouterr().err
+    assert "cannot write" in err
+    assert "Traceback" not in err
+
+
+def test_capture_to_a_path_that_cannot_be_written_is_exit_2(tmp_path, capsys, monkeypatch):
+    # Nothing has been launched when the paths cannot be opened, so this is a usage error
+    # and never the server's exit code.
+    monkeypatch.setattr(servediff.envsnap, "snapshot",
+                        lambda *a, **k: {"schema": "servediff-env/1", "packages": {}, "env": {}})
+    missing = tmp_path / "nodir" / "run.log"
+    assert servediff.main(["capture", "-o", str(missing), "--", "fake-server"]) == 2
+    err = capsys.readouterr().err
+    assert "cannot write" in err
+    assert "Traceback" not in err
 
 
 def test_series_text_keeps_values_distinct_after_truncation():

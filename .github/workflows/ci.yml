@@ -40,3 +40,11 @@ jobs:
                    tests/fixtures/held-out-2026-11 tests/fixtures/held-out-2026-11b; do
             servediff audit "$d" --max-shapes 0
           done
+      - name: Check the exit codes the README promises
+        shell: bash
+        run: |
+          set -e
+          # `1` means the inputs differ and `2` means the input was broken; scripts branch
+          # on that. This walks the command table in README.md and fails when the tool
+          # returns a different number -- or a traceback, which is never an answer.
+          python tools/verify_readme_exit_codes.py
