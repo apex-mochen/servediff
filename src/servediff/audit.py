@@ -239,6 +239,17 @@ NOISE = (
     re.compile(r"^[A-Za-z_]\w*\s+\+= "),
     re.compile(r"^\s*f?[\"']"),
     re.compile(r"^\s*.*,\s*$"),
+    # The other half of a call split across lines: a bare argument list
+    # (`8, 96, 128, conv_kernel_size=4, num_spec=5`, `groups, KVCacheLayout.BLHNC`) and a
+    # continuation that closes a parenthesis without ever starting a statement
+    # (`…routing_input_mode=…), wp))(ml)`). A log line is a statement -- it starts with a word
+    # and says something about it -- so it never consists of arguments alone. The first token
+    # is required to be a bare name, which is what keeps `CUDA_VISIBLE_DEVICES=0,1,2,3` and
+    # `NVIDIA_DRIVER_CAPABILITIES=compute,utility` out: those are facts, and the env-var rule
+    # reads them.
+    re.compile(r"^\s*[A-Za-z_0-9][\w.]*(?:,\s*(?:[A-Za-z_0-9][\w.]*"
+               r"|[A-Za-z_][\w.]*=[^\s,)]+))+\s*$"),
+    re.compile(r"^(?=.*,\s*[A-Za-z_]\w*=)(?=.*\)\)).*\)\s*$"),
 )
 
 # A line that is nothing but the prefix: `(EngineCore pid=3811)`.

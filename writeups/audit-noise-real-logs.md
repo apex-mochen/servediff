@@ -250,7 +250,8 @@ correct: the tool could not read the torch version on a CPU-only box.
 
 That is the failure mode this whole writeup is about, one level up: a rule pinned to the
 one copy of the wording its author happened to see. `\s*` on eight rules fixed it, and the
-same eleven-log corpus now returns two files worth a look, both script pastes, four lines.
+same eleven-log corpus dropped from eight files worth a look to two, both script pastes,
+four lines.
 
 The rest were inventory shapes the table had never seen: SGLang's macOS report (`MPS
 available`, `Apple Silicon`, `Metal Support`, `Unified Memory`, `CPU Cores (…)`), a
@@ -258,6 +259,15 @@ multi-GPU row written `GPU 0,1,2,3: NVIDIA H20`, the container runtime's `brand=
 capability list, a topology header row, a reporter's parenthetical note, and a plugin source
 paste (`WTYPE = …`, `tensor.offset`, `(Path(…) / "config.json").write_text(`). None of those
 can be a log line, so each got one narrow pattern.
+
+The last four lines were the same script in a harder form: an argument list standing alone
+(`8, 96, 128, conv_kernel_size=4, num_spec=5`, `groups, KVCacheLayout.BLHNC`) and a
+continuation that closes parentheses without starting a statement
+(`…routing_input_mode=…), wp))(ml)`). A log line is a statement — it starts with a word and
+says something about it — so it never consists of arguments alone. Those two patterns require
+exactly that and nothing else: the first token must be a bare name, which is what keeps
+`NVIDIA_DRIVER_CAPABILITIES=compute,utility` readable as a fact. Eleven pastes, then: **none
+worth a look.**
 
 ## Limits of the claim
 

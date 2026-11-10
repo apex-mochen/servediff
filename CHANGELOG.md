@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.35 — 2026-11-10
+
+- **The last four "worth a look" lines in the held-out corpus are gone.** They were the same
+  pasted script in a harder form: an argument list standing alone
+  (`8, 96, 128, conv_kernel_size=4, num_spec=5`, `groups, KVCacheLayout.BLHNC`) and a
+  continuation that closes parentheses without starting a statement
+  (`…routing_input_mode=…), wp))(ml)`). A log line is a statement — it starts with a word and
+  says something about it — so it never consists of arguments alone. Two patterns, both
+  anchored on that: the line must be arguments only, and the first token must be a bare name.
+  That anchor is what keeps `NVIDIA_DRIVER_CAPABILITIES=compute,utility` a fact.
+- Eleven pastes taken fresh from vLLM and SGLang issues (October 2026): **0 with shapes worth
+  a look.** 21 shipped fixtures: 0. Six real startup logs: 0.
+- Measured before adopting: both patterns hit **zero** lines across the 21 fixtures and the six
+  real startup logs, and the `NAME=value` counter-examples were checked explicitly. 86 tests.
+
 ## 0.4.34 — 2026-11-10
 
 - **The log that caught the padded-colon bug is now fixture 21.** `vllm-66525` is a real

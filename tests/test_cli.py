@@ -236,6 +236,26 @@ def test_a_cpu_only_collect_env_from_a_real_issue_is_read_and_looks_clean():
     assert look == {}, look
 
 
+def test_the_second_half_of_a_call_is_noise_but_an_env_var_is_not():
+    # What was left after 0.4.33's rules: argument lists standing alone, and a continuation
+    # that closes parentheses without ever starting a statement. Both come from a script pasted
+    # into the issue, so they are the same class as the rest -- but a line that sets a real
+    # environment variable must stay readable, because that is a fact.
+    script = (
+        "8, 96, 128, conv_kernel_size=4, num_spec=5\n"
+        "config, groups, num_blocks=5\n"
+        "groups, KVCacheLayout.BLHNC\n"
+        "x, None, ids, w, routing_input_mode=RoutingInputMode.PackedPrecomputed), wp))(ml)\n")
+    look, _ = servediff_audit.split(*servediff_audit.unread_samples(script))
+    assert look == {}, look
+    # The counter-examples: a `NAME=value` line is a setting, one of them with commas in the
+    # value. Device selection is excluded on purpose (GPU numbering is per box), so it is
+    # noise and not a fact -- that asymmetry is the existing design, not a miss.
+    facts = servediff.parse("NVIDIA_DRIVER_CAPABILITIES=compute,utility\n")["facts"]
+    assert facts["env.var.NVIDIA_DRIVER_CAPABILITIES"].values == ["compute,utility"]
+    assert not servediff_audit.is_noise("NVIDIA_DRIVER_CAPABILITIES=compute,utility")
+
+
 def test_a_directory_is_audited_as_one_corpus_with_a_line_per_log(capsys):
     # The claim "twenty logs from public reports, nothing worth a look" should be
     # checkable in one command rather than twenty.
