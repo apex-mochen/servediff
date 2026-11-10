@@ -28,3 +28,15 @@ jobs:
           set +e
           servediff diff examples/issue-excerpts/vllm-47047-v0.23-default.log examples/issue-excerpts/vllm-47047-v0.23-marlin.log | tee out.txt
           test "${PIPESTATUS[0]}" -eq 1 && grep -q "MARLIN (NvFp4)" out.txt
+      - name: Audit every shipped log, and fail if any line became unread
+        shell: bash
+        run: |
+          set -e
+          # 21 hand-written excerpts, 11 October pastes, 7 and 28 November pastes.
+          # Each directory is already at zero shapes worth a look, so --max-shapes 0
+          # turns this into a regression gate on real server output: a rule edit that
+          # stops reading a real line fails CI here instead of shipping.
+          for d in tests/fixtures tests/fixtures/held-out-2026-10 \
+                   tests/fixtures/held-out-2026-11 tests/fixtures/held-out-2026-11b; do
+            servediff audit "$d" --max-shapes 0
+          done
