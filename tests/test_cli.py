@@ -256,6 +256,18 @@ def test_the_second_half_of_a_call_is_noise_but_an_env_var_is_not():
     assert not servediff_audit.is_noise("NVIDIA_DRIVER_CAPABILITIES=compute,utility")
 
 
+def test_the_held_out_corpus_reports_nothing_to_look_at(capsys):
+    # Eleven pastes taken fresh from vLLM and SGLang issues in October 2026, shipped so the
+    # claim in writeups/audit-noise-real-logs.md can be rerun instead of believed. At v0.4.32
+    # this command reported 8 of 11 files with lines worth a look.
+    held = FIX / "held-out-2026-10"
+    logs = sorted(held.glob("*.log"))
+    assert len(logs) == 11, logs
+    assert servediff.main(["audit", str(held)]) == 0
+    out = capsys.readouterr().out
+    assert f"{len(logs)} log(s): 0 with shapes worth a look" in out
+
+
 def test_a_directory_is_audited_as_one_corpus_with_a_line_per_log(capsys):
     # The claim "twenty logs from public reports, nothing worth a look" should be
     # checkable in one command rather than twenty.

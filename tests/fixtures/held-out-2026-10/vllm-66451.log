@@ -1,0 +1,206 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: Copyright contributors to the vLLM project
+"""CPU metadata reproduction of Kimi-K3.1-Pro-like packed KV geometry."""
+
+import argparse
+import importlib.util
+import json
+import os
+import sys
+import tempfile
+from pathlib import Path
+
+os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+
+import torch
+from vllm.config import (
+    CacheConfig,
+    DeviceConfig,
+    ModelConfig,
+    ParallelConfig,
+    VllmConfig,
+)
+from vllm.model_executor.layers.mamba.mamba_utils import (
+    MambaStateDtypeCalculator,
+    MambaStateShapeCalculator,
+)
+from vllm.v1.core import kv_cache_planning
+from vllm.v1.kv_cache_interface import FullAttentionSpec, MambaSpec, MLAAttentionSpec
+from vllm.v1.kv_cache_layout import KVCacheLayout
+
+
+class PlatformOptions:
+    def compile_factors(self):
+        return {}
+
+
+def layer_specs(dcp):
+    shapes = MambaStateShapeCalculator.kda_state_shape(
+        8, 96, 128, conv_kernel_size=4, num_spec=5
+    )
+    dtypes = MambaStateDtypeCalculator.kda_state_dtype(torch.bfloat16, "auto", "auto")
+    specs = {
+        f"kda.{i}": MambaSpec(
+            block_size=2048,
+            shapes=shapes,
+            dtypes=dtypes,
+            mamba_cache_mode="align",
+            num_speculative_blocks=5,
+            num_prefill_checkpoint_blocks=1,
+        )
+        for i in range(69)
+    }
+    for i in range(24):
+        specs[f"mla.{i}"] = MLAAttentionSpec(
+            block_size=2048,
+            num_kv_heads=1,
+            head_size=576,
+            dtype=torch.uint8,
+            state_content_bytes=352,
+        )
+        specs[f"indexer.{i}"] = MLAAttentionSpec(
+            block_size=2048,
+            num_kv_heads=1,
+            head_size=132,
+            dtype=torch.uint8,
+            state_content_bytes=132,
+        )
+    for i in range(5):
+        specs[f"draft.{i}"] = FullAttentionSpec(
+            block_size=2048,
+            num_kv_heads=2,
+            head_size=64,
+            dtype=torch.bfloat16,
+            dcp_sharded=dcp == 1,
+            is_draft=True,
+        )
+    return specs
+
+
+def verify_placement(planner, config, groups, specs, pool_bytes):
+    allocation = planner.DefaultKVCacheConfigBuilder().get_kv_cache_config_from_groups(
+        config, groups, num_blocks=5
+    )
+    assert all(tensor.size == 5 * pool_bytes for tensor in allocation.kv_cache_tensors)
+    for group in groups:
+        intervals = []
+        for tensor in allocation.kv_cache_tensors:
+            for layer, name in enumerate(tensor.layers):
+                if name not in group.layer_names:
+                    continue
+                for block in range(5):
+                    start = (
+                        tensor.offset
+                        + layer * tensor.layer_stride
+                        + block * tensor.block_stride
+                    )
+                    end = start + specs[name].page_size_bytes
+                    assert 0 <= start < end <= tensor.size
+                    intervals.append((start, end))
+        intervals.sort()
+        assert all(a[1] <= b[0] for a, b in zip(intervals, intervals[1:]))
+
+
+def run(planner, expect_override):
+    rows = []
+    with tempfile.TemporaryDirectory(prefix="kimi-packed-config-") as folder:
+        # Only a real configuration object is needed; no weights/tokenizer load.
+        (Path(folder) / "config.json").write_text(
+            json.dumps(
+                {
+                    "architectures": ["LlamaForCausalLM"],
+                    "model_type": "llama",
+                    "max_position_embeddings": 1048576,
+                    "hidden_size": 512,
+                    "num_attention_heads": 8,
+                    "num_key_value_heads": 1,
+                    "num_hidden_layers": 12,
+                    "intermediate_size": 2048,
+                    "vocab_size": 32000,
+                }
+            )
+        )
+        for dcp in [1, 8]:
+            cache_config = CacheConfig(mamba_cache_mode="align")
+            cache_config.kv_cache_layout = "BLHNC"
+            config = VllmConfig(
+                model_config=ModelConfig(
+                    model=folder,
+                    max_model_len=1048576,
+                    skip_tokenizer_init=True,
+                    dtype="float16",
+                ),
+                parallel_config=ParallelConfig(
+                    tensor_parallel_size=8,
+                    decode_context_parallel_size=dcp,
+                    cp_kv_cache_interleave_size=1,
+                ),
+                cache_config=cache_config,
+                device_config=DeviceConfig("cpu"),
+            )
+            specs = layer_specs(dcp)
+            values = [None, 6] if expect_override else [None]
+            for repeats in values:
+                config.additional_config = (
+                    {}
+                    if repeats is None
+                    else {"packed_kv_cache_group_repeats": repeats}
+                )
+                groups = planner._get_packed_kv_cache_groups(config, specs)
+                assert groups is not None
+                names = [name for group in groups for name in group.layer_names]
+                assert len(names) == len(set(names)) and set(names) == set(specs)
+                pool_bytes = planner._get_kv_cache_bytes_per_block(
+                    groups, KVCacheLayout.BLHNC
+                )
+                if dcp == 8:
+                    assert len(groups) == (5 if repeats is None else 17)
+                    assert pool_bytes == (23789568 if repeats is None else 5947392)
+                verify_placement(planner, config, groups, specs, pool_bytes)
+                rows.append(
+                    {
+                        "dcp": dcp,
+                        "repeats": repeats,
+                        "groups": len(groups),
+                        "pool_bytes_per_block": pool_bytes,
+                    }
+                )
+            config.additional_config = PlatformOptions()
+            groups = planner._get_packed_kv_cache_groups(config, specs)
+            assert len(groups) == (4 if dcp == 1 else 5)
+            if expect_override:
+                for bad in [0, -1, 1.5, True, False, "6"]:
+                    config.additional_config = {"packed_kv_cache_group_repeats": bad}
+                    try:
+                        planner._get_packed_kv_cache_groups(config, specs)
+                    except ValueError as error:
+                        assert "positive integer" in str(error)
+                    else:
+                        raise AssertionError(f"Invalid repeats accepted: {bad!r}")
+    assert not torch.cuda.is_initialized()
+    return {
+        "rows": rows,
+        "invalid_cases_rejected": 12 if expect_override else 0,
+        "placement_and_partition_checks": True,
+        "platform_config_compatible": True,
+        "cuda_initialized": False,
+    }
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--planner", type=Path, help="Optional pinned planner source file"
+    )
+    parser.add_argument("--expect-override", action="store_true")
+    args = parser.parse_args()
+    planner = kv_cache_planning
+    if args.planner:
+        spec = importlib.util.spec_from_file_location(
+            "planner_under_test", args.planner
+        )
+        planner = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = planner
+        spec.loader.exec_module(planner)
+    print(json.dumps(run(planner, args.expect_override)))

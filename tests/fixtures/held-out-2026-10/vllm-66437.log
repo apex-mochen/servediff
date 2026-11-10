@@ -1,0 +1,88 @@
+# SPDX-License-Identifier: Apache-2.0
+"""Minimal reproducer: Humming W4A16 wrong output at G=96 (bf16 default path).
+
+Synthetic GPTQ-format layer, no model needed. At bf16 with G=96, kernel
+selection lands on HummingLinearKernel (Marlin/TritonW4A16 reject the size,
+Exllama is fp16-only); the output is wrong against an fp32 reference,
+including NaN at M=1. G=32 is the control. fp16 shown for contrast
+(selection lands on Exllama there: the #60608 class).
+"""
+
+import os
+import tempfile
+
+import torch
+
+from vllm.config import VllmConfig, set_current_vllm_config
+from vllm.distributed import init_distributed_environment, initialize_model_parallel
+from vllm.model_executor.kernels.linear import choose_mp_linear_kernel
+from vllm.model_executor.kernels.linear.mixed_precision.MPLinearKernel import (
+    MPLinearLayerConfig,
+)
+from vllm.model_executor.layers.quantization.utils.quant_utils import (
+    pack_quantized_values_into_int32,
+)
+from vllm.model_executor.parameter import GroupQuantScaleParameter, PackedvLLMParameter
+from vllm.scalar_type import scalar_types
+
+WTYPE = scalar_types.uint4b8
+N = 256
+
+_ctx = set_current_vllm_config(VllmConfig())
+_ctx.__enter__()
+_fd, _store = tempfile.mkstemp()
+os.close(_fd)
+init_distributed_environment(
+    world_size=1, rank=0, local_rank=0, backend="gloo",
+    distributed_init_method=f"file://{_store}",
+)
+initialize_model_parallel(1, 1)
+print("device:", torch.cuda.get_device_name())
+print("torch:", torch.__version__)
+
+
+def run(G, K, dtype, M):
+    torch.manual_seed(0)
+    config = MPLinearLayerConfig(
+        full_weight_shape=(K, N), partition_weight_shape=(K, N),
+        weight_type=WTYPE, act_type=dtype, group_size=G, zero_points=False,
+    )
+    selected = choose_mp_linear_kernel(config)
+    q = torch.randint(0, 16, (K, N), dtype=torch.int32, device="cuda")
+    s = torch.rand(K // G, N, device="cuda") * 0.02 + 0.001
+    x = torch.randn(M, K, device="cuda").to(dtype)
+    w_ref = (q.float() - WTYPE.bias) * s.float().repeat_interleave(G, 0)
+    ref = x.float() @ w_ref
+
+    class Layer(torch.nn.Module):
+        pass
+
+    layer = Layer()
+    layer.input_size = layer.input_size_per_partition = K
+    layer.output_size = layer.output_size_per_partition = N
+    layer.output_partition_sizes = [N]
+    layer.params_dtype = dtype
+    layer.has_bias = False
+    layer.layer_name = "repro"
+    layer.register_parameter("qweight", PackedvLLMParameter(
+        data=pack_quantized_values_into_int32(q, WTYPE, packed_dim=0),
+        weight_loader=lambda *a, **k: None,
+        input_dim=0, output_dim=1, packed_dim=0, packed_factor=8))
+    layer.register_parameter("scales", GroupQuantScaleParameter(
+        data=s.to(dtype), weight_loader=lambda *a, **k: None,
+        input_dim=0, output_dim=1))
+
+    kernel = selected(
+        config, w_q_param_name="qweight", w_s_param_name="scales",
+        w_zp_param_name=None)
+    kernel.process_weights_after_loading(layer)
+    out = kernel.apply_weights(layer, x, bias=None).float()
+    err = ((out - ref).norm() / ref.norm()).item()
+    print(f"G={G:3d} K={K:4d} {str(dtype)[6:]:8s} M={M:2d} "
+          f"selected={selected.__name__:24s} rel_L2={err:.4f}")
+
+
+for dtype in (torch.bfloat16, torch.float16):
+    for G, K in ((96, 384), (32, 384)):
+        for M in (1, 8, 64):
+            run(G, K, dtype, M)

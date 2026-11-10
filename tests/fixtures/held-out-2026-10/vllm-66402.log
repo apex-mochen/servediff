@@ -1,0 +1,173 @@
+==============================
+        System Info
+==============================
+OS                           : Ubuntu 24.04.3 LTS (x86_64)
+GCC version                  : (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+Clang version                : Could not collect
+CMake version                : Could not collect
+Libc version                 : glibc-2.39
+
+==============================
+       PyTorch Info
+==============================
+PyTorch version              : 2.14.0+cu130
+Is debug build               : False
+CUDA used to build PyTorch   : 13.0
+ROCM used to build PyTorch   : N/A
+XPU used to build PyTorch    : N/A
+
+==============================
+      Python Environment
+==============================
+Python version               : 3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0] (64-bit runtime)
+Python platform              : Linux-5.14.0-570.64.1.el9_6.x86_64-x86_64-with-glibc2.39
+
+==============================
+       CUDA / GPU Info
+==============================
+Is CUDA available            : True
+CUDA runtime version         : 13.0.88
+CUDA_MODULE_LOADING set to   :
+GPU models and configuration : GPU 0: NVIDIA H100 80GB HBM3
+Nvidia driver version        : 580.105.08
+cuDNN version                : Could not collect
+HIP runtime version          : N/A
+MIOpen runtime version       : N/A
+Is XNNPACK available         : False
+
+==============================
+          CPU Info
+==============================
+Architecture:                            x86_64
+CPU op-mode(s):                          32-bit, 64-bit
+Address sizes:                           46 bits physical, 57 bits virtual
+Byte Order:                              Little Endian
+CPU(s):                                  224
+On-line CPU(s) list:                     0-223
+Vendor ID:                               GenuineIntel
+Model name:                              Intel(R) Xeon(R) Platinum 8480+
+CPU family:                              6
+Model:                                   143
+Thread(s) per core:                      2
+Core(s) per socket:                      56
+Socket(s):                               2
+Stepping:                                8
+CPU(s) scaling MHz:                      92%
+CPU max MHz:                             3800.0000
+CPU min MHz:                             800.0000
+BogoMIPS:                                4000.00
+Flags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc art arch_perfmon pebs bts rep
+_good nopl xtopology nonstop_tsc cpuid aperfmperf tsc_known_freq pni pclmulqdq dtes64 monitor ds_cpl vmx smx est tm2 ssse3 sdbg fma cx16 xtpr pdcm pcid dca sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdra
+nd lahf_lm abm 3dnowprefetch cpuid_fault epb cat_l3 cat_l2 cdp_l3 intel_ppin cdp_l2 ssbd mba ibrs ibpb stibp ibrs_enhanced tpr_shadow flexpriority ept vpid ept_ad fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512
+f avx512dq rdseed adx smap avx512ifma clflushopt clwb intel_pt avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local split_lock_detect avx_vnni avx512_bf16 wbnoinvd dtherm
+ ida arat pln pts vnmi avx512vbmi umip pku ospke waitpkg avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg tme avx512_vpopcntdq la57 rdpid bus_lock_detect cldemote movdiri movdir64b enqcmd fsrm md_clear serialize tsxldtrk
+pconfig arch_lbr ibt amx_bf16 avx512_fp16 amx_tile amx_int8 flush_l1d arch_capabilities
+Virtualization:                          VT-x
+L1d cache:                               5.3 MiB (112 instances)
+L1i cache:                               3.5 MiB (112 instances)
+L2 cache:                                224 MiB (112 instances)
+L3 cache:                                210 MiB (2 instances)
+NUMA node(s):                            2
+NUMA node0 CPU(s):                       0-55,112-167
+NUMA node1 CPU(s):                       56-111,168-223
+Vulnerability Gather data sampling:      Not affected
+Vulnerability Indirect target selection: Not affected
+Vulnerability Itlb multihit:             Not affected
+Vulnerability L1tf:                      Not affected
+Vulnerability Mds:                       Not affected
+Vulnerability Meltdown:                  Not affected
+Vulnerability Mmio stale data:           Not affected
+Vulnerability Reg file data sampling:    Not affected
+Vulnerability Retbleed:                  Not affected
+Vulnerability Spec rstack overflow:      Not affected
+Vulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl
+Vulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization
+Vulnerability Spectre v2:                Mitigation; Enhanced / Automatic IBRS; IBPB conditional; RSB filling; PBRSB-eIBRS SW sequence; BHI BHI_DIS_S
+Vulnerability Srbds:                     Not affected
+Vulnerability Tsa:                       Not affected
+Vulnerability Tsx async abort:           Not affected
+Vulnerability Vmscape:                   Mitigation; IBPB before exit to userspace
+
+==============================
+Versions of relevant libraries
+==============================
+[pip3] flashinfer-python==0.7.3
+[pip3] nccl-extensions==0.1.0
+[pip3] nccl4py==0.6.0
+[pip3] numpy==2.2.6
+[pip3] nvidia-cublas==13.1.1.3
+[pip3] nvidia-cuda-cccl==13.3.5.0.6
+[pip3] nvidia-cuda-crt==13.5.37
+[pip3] nvidia-cuda-cupti==13.0.85
+[pip3] nvidia-cuda-nvcc==13.5.37
+[pip3] nvidia-cuda-nvrtc==13.0.88
+[pip3] nvidia-cuda-runtime==13.0.96
+[pip3] nvidia-cudnn-cu13==9.24.0.43
+[pip3] nvidia-cudnn-frontend==1.32.2
+[pip3] nvidia-cufft==12.0.0.61
+[pip3] nvidia-cufile==1.15.1.6
+[pip3] nvidia-curand==10.4.0.35
+[pip3] nvidia-cusolver==12.0.4.66
+[pip3] nvidia-cusparse==12.6.3.3
+[pip3] nvidia-cusparselt-cu13==0.8.1
+[pip3] nvidia-cutlass-dsl==4.8.0
+[pip3] nvidia-cutlass-dsl-libs-base==4.8.0
+[pip3] nvidia-cutlass-dsl-libs-core==4.8.0
+[pip3] nvidia-cutlass-dsl-libs-cu12==4.8.0
+[pip3] nvidia-cutlass-dsl-libs-cu13==4.8.0
+[pip3] nvidia-ml-py==13.615.71
+[pip3] nvidia-nccl-cu13==2.31.2
+[pip3] nvidia-nvjitlink==13.5.37
+[pip3] nvidia-nvshmem-cu13==3.4.5
+[pip3] nvidia-nvtx==13.0.85
+[pip3] nvidia-nvvm==13.5.37
+[pip3] pyzmq==27.3.0
+[pip3] tokenspeed-triton==3.9.10.post20261028
+[pip3] torch==2.14.0
+[pip3] torch_c_dlpack_ext==0.1.5
+[pip3] torchaudio==2.11.0
+[pip3] torchcodec==0.17.0
+[pip3] torchvision==0.29.0
+[pip3] transformers==5.22.2
+[pip3] triton==3.8.0
+[conda] Could not collect
+
+==============================
+         vLLM Info
+==============================
+ROCM Version                 : Could not collect
+vLLM Version                 : 0.33.0rc1.dev1030+gcf5cea2da (git sha: cf5cea2da)
+vLLM Build Flags:
+  CUDA Archs: 7.5 8.0 8.6 8.9 9.0 10.0 12.0; ROCm: Disabled; XPU: Disabled
+GPU Topology:
+  (90-NIC topology matrix omitted; single GPU, not relevant to this bug)
+==============================
+     Environment Variables
+==============================
+VLLM_BUILD_PIPELINE=019d130e-464e-4ff7-b84b-492992c0c06b
+NVIDIA_CTK_LIBCUDA_DIR=/usr/lib64
+VLLM_ENABLE_CUDA_COMPATIBILITY=0
+LD_LIBRARY_PATH=/usr/local/nvidia/lib64:/usr/local/cuda/lib64:/usr/local/cuda/lib64:/usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/local/cuda/lib64
+CUDA_VERSION=13.0.2
+TORCH_CUDA_ARCH_LIST=7.5 8.0 8.6 8.9 9.0 10.0 12.0
+VLLM_BUILD_COMMIT=cf5cea2da37d3dfed27d2e0aa3041c3e553c2d57
+NVIDIA_REQUIRE_CUDA=cuda>=13.0 brand=unknown,driver>=535,driver<536 brand=grid,driver>=535,driver<536 brand=tesla,driver>=535,driver<536 brand=nvidia,driver>=535,driver<536 brand=quadro,driver>=535,driver<536 brand=quadrortx,driver>
+=535,driver<536 brand=nvidiartx,driver>=535,driver<536 brand=vapps,driver>=535,driver<536 brand=vpc,driver>=535,driver<536 brand=vcs,driver>=535,driver<536 brand=vws,driver>=535,driver<536 brand=cloudgaming,driver>=535,driver<536 br
+and=unknown,driver>=550,driver<551 brand=grid,driver>=550,driver<551 brand=tesla,driver>=550,driver<551 brand=nvidia,driver>=550,driver<551 brand=quadro,driver>=550,driver<551 brand=quadrortx,driver>=550,driver<551 brand=nvidiartx,d
+river>=550,driver<551 brand=vapps,driver>=550,driver<551 brand=vpc,driver>=550,driver<551 brand=vcs,driver>=550,driver<551 brand=vws,driver>=550,driver<551 brand=cloudgaming,driver>=550,driver<551 brand=unknown,driver>=565,driver<56
+6 brand=grid,driver>=565,driver<566 brand=tesla,driver>=565,driver<566 brand=nvidia,driver>=565,driver<566 brand=quadro,driver>=565,driver<566 brand=quadrortx,driver>=565,driver<566 brand=nvidiartx,driver>=565,driver<566 brand=vapps
+,driver>=565,driver<566 brand=vpc,driver>=565,driver<566 brand=vcs,driver>=565,driver<566 brand=vws,driver>=565,driver<566 brand=cloudgaming,driver>=565,driver<566 brand=unknown,driver>=570,driver<571 brand=grid,driver>=570,driver<5
+71 brand=tesla,driver>=570,driver<571 brand=nvidia,driver>=570,driver<571 brand=quadro,driver>=570,driver<571 brand=quadrortx,driver>=570,driver<571 brand=nvidiartx,driver>=570,driver<571 brand=vapps,driver>=570,driver<571 brand=vpc
+,driver>=570,driver<571 brand=vcs,driver>=570,driver<571 brand=vws,driver>=570,driver<571 brand=cloudgaming,driver>=570,driver<571 brand=unknown,driver>=575,driver<576 brand=grid,driver>=575,driver<576 brand=tesla,driver>=575,driver
+<576 brand=nvidia,driver>=575,driver<576 brand=quadro,driver>=575,driver<576 brand=quadrortx,driver>=575,driver<576 brand=nvidiartx,driver>=575,driver<576 brand=vapps,driver>=575,driver<576 brand=vpc,driver>=575,driver<576 brand=vcs
+,driver>=575,driver<576 brand=vws,driver>=575,driver<576 brand=cloudgaming,driver>=575,driver<576
+NVIDIA_DRIVER_CAPABILITIES=compute,utility
+NVIDIA_GDRCOPY=enabled
+VLLM_USAGE_SOURCE=production-docker-image
+CUDA_HOME=/usr/local/cuda
+CUDA_HOME=/usr/local/cuda
+VLLM_BUILD_URL=https://buildkite.com/vllm/release-v2/builds/10265
+NVIDIA_VISIBLE_DEVICES=void
+VLLM_IMAGE_TAG=vllm/vllm-openai:nightly-cf5cea2da37d3dfed27d2e0aa3041c3e553c2d57
+PYTORCH_NVML_BASED_CUDA_CHECK=1
+TORCHINDUCTOR_COMPILE_THREADS=1

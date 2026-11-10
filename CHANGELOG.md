@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.36 — 2026-11-10
+
+- **The held-out corpus ships, so the claim about it can be rerun instead of believed.**
+  `tests/fixtures/held-out-2026-10/` holds the eleven pastes taken fresh from vLLM and SGLang
+  issues in October 2026 (1291 lines), with a `PROVENANCE.md` naming each issue and stating
+  what the sample does not prove. A test audits that directory and asserts
+  `11 log(s): 0 with shapes worth a look`; checking out `v0.4.32` and rerunning the same
+  command reports eight of eleven, which is the measurement 0.4.33 was about.
+- Directory expansion stays non-recursive, so `audit tests/fixtures` still reports the
+  twenty-one main-corpus logs and not thirty-two; the two corpora are audited separately.
+- 87 tests.
+
 ## 0.4.35 — 2026-11-10
 
 - **The last four "worth a look" lines in the held-out corpus are gone.** They were the same

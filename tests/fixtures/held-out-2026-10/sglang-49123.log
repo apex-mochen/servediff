@@ -1,0 +1,195 @@
+"""One MiniMax-M3.1 MoE layer (32 experts, top-4, NVFP4 compressed-tensors) through SGLang's Marlin NVFP4 MoE
+(prepare_moe_nvfp4_layer_for_marlin + fused_marlin_moe, the path SGLang takes for these experts on SM120) and
+through FlashInfer's cuTile NVFP4 MoE (W4A4, the checkpoint's precision; swizzled scales as FlashInfer prepares them). Upstream code
+only: PYTHONPATH=<sglang>/python:<flashinfer tree>.
+For each path: median time per call eager and replayed from a CUDA graph, error against a float32 reference (W4A16 math; W4A4 also against the same math with x and the
+intermediate quantized to NVFP4), whether four runs on the same input are bit-identical.
+usage: marlin_vs_cutile.py <model dir> <layer> [tokens,...]"""
+import json
+import os
+import statistics
+import sys
+import types
+
+import torch
+from safetensors import safe_open
+
+mm, L = sys.argv[1], int(sys.argv[2])
+tokens = [int(t) for t in (sys.argv[3] if len(sys.argv) > 3 else "1,64,412,4096,16384").split(",")]
+NE = 32
+cfg = json.load(open(os.path.join(mm, "config.json")))
+tc = cfg.get("text_config", cfg)
+K, H, I = tc["num_experts_per_tok"], tc["hidden_size"], tc["intermediate_size"]
+alpha, limit = float(tc["swiglu_alpha"]), float(tc["swiglu_limit"])
+wm = json.load(open(os.path.join(mm, "model.safetensors.index.json")))["weight_map"]
+pre = next(k for k in wm if f"layers.{L}.block_sparse_moe.experts.0.w1.weight_packed" in k).rsplit(".0.w1.", 1)[0]
+handles = {}
+
+
+def get(name):
+    f = wm[name]
+    if f not in handles:
+        handles[f] = safe_open(os.path.join(mm, f), "pt")
+    return handles[f].get_tensor(name)
+
+
+dev = torch.device("cuda")
+t = {p: [[get(f"{pre}.{e}.{p}.{s}") for e in range(NE)] for s in ("weight_packed", "weight_scale", "weight_global_scale")]
+     for p in ("w1", "w2", "w3")}
+gs = {p: torch.stack([x.float().reshape(()) for x in t[p][2]]) for p in ("w1", "w2", "w3")}
+assert torch.equal(gs["w1"], gs["w3"]), "gate and up globals differ"
+w13_bytes = torch.stack([torch.cat((g, u), 0) for g, u in zip(t["w1"][0], t["w3"][0])]).view(torch.uint8)  # gate, up
+w13_scale = torch.stack([torch.cat((g, u), 0) for g, u in zip(t["w1"][1], t["w3"][1])])
+w2_bytes = torch.stack(t["w2"][0]).view(torch.uint8)
+w2_scale = torch.stack(t["w2"][1])
+
+# ---- float32 reference (dequantized weights; a rounded to bf16 before w2), optional NVFP4 activations
+E2M1 = torch.tensor([0, .5, 1, 1.5, 2, 3, 4, 6, -0., -.5, -1, -1.5, -2, -3, -4, -6], device=dev)
+
+
+def deq(b, s, g):
+    b = b.to(dev)
+    v = torch.stack((E2M1[(b & 15).long()], E2M1[(b >> 4).long()]), -1).reshape(b.shape[0], -1)
+    return v * (s.to(dev).float() / g).repeat_interleave(16, dim=1)
+
+
+_THR = torch.tensor([0.25, 0.75, 1.25, 1.75, 2.5, 3.5, 5.0], device=dev)
+_POS = torch.tensor([0, 0.5, 1, 1.5, 2, 3, 4, 6], device=dev)
+
+
+def fp4(v):
+    sh = v.shape
+    g = v.reshape(*sh[:-1], sh[-1] // 16, 16)
+    sc = (g.abs().amax(-1) / 6.0).to(torch.float8_e4m3fn).float()
+    q = g / sc.clamp(min=2.0 ** -9).unsqueeze(-1)
+    code = (q.abs().unsqueeze(-1) > _THR).sum(-1)
+    return (_POS[code] * torch.where(q < 0, -1.0, 1.0) * sc.unsqueeze(-1)).reshape(sh)
+
+
+DQ = {}
+
+
+def reference(x, ids, w, a4=False):
+    xf = fp4(x.float()) if a4 else x.float()
+    ref = torch.zeros(x.shape[0], H, dtype=torch.float32, device=dev)
+    for e in range(NE):
+        tt, j = (ids == e).nonzero(as_tuple=True)
+        if tt.numel() == 0:
+            continue
+        if e not in DQ:
+            DQ[e] = (deq(t["w1"][0][e].view(torch.uint8), t["w1"][1][e], gs["w1"][e].item()),
+                     deq(t["w3"][0][e].view(torch.uint8), t["w3"][1][e], gs["w3"][e].item()),
+                     deq(t["w2"][0][e].view(torch.uint8), t["w2"][1][e], gs["w2"][e].item()))
+        gw, uw, dw = DQ[e]
+        g, u = (xf[tt] @ gw.T).clamp(max=limit), (xf[tt] @ uw.T).clamp(-limit, limit)
+        a = (g * torch.sigmoid(alpha * g) * (u + 1)).to(torch.bfloat16).float()
+        if a4:
+            a = fp4(a)
+        ref.index_add_(0, tt, w[tt, j].unsqueeze(1) * (a @ dw.T))
+    return ref
+
+
+# ---- Marlin (SGLang)
+from sglang.srt.layers.moe.fused_moe_triton.fused_marlin_moe import fused_marlin_moe  # noqa: E402
+from sglang.srt.layers.quantization.marlin_utils_fp4 import prepare_moe_nvfp4_layer_for_marlin  # noqa: E402
+
+layer = types.SimpleNamespace(
+    w13_weight=torch.nn.Parameter(w13_bytes.to(dev), requires_grad=False),
+    w2_weight=torch.nn.Parameter(w2_bytes.to(dev), requires_grad=False),
+    w13_weight_scale=torch.nn.Parameter(w13_scale.to(dev), requires_grad=False),
+    w2_weight_scale=torch.nn.Parameter(w2_scale.to(dev), requires_grad=False),
+    # the MiniMax scheme's _process_marlin_weights: the decode multiplier, one per expert (gate's)
+    w13_weight_scale_2=torch.nn.Parameter((1.0 / gs["w1"]).to(dev), requires_grad=False),
+    w2_weight_scale_2=torch.nn.Parameter((1.0 / gs["w2"]).to(dev), requires_grad=False),
+    moe_runner_config=types.SimpleNamespace(is_gated=True),
+    intermediate_size_per_partition=I, params_dtype=torch.bfloat16)
+prepare_moe_nvfp4_layer_for_marlin(layer, group_size=16)
+
+
+def run_marlin(x, ids, w):
+    return fused_marlin_moe(
+        x, layer.w13_weight, layer.w2_weight, layer.w13_weight_scale, layer.w2_weight_scale,
+        torch.empty((x.shape[0], NE), dtype=torch.float32, device=dev), w, ids, global_num_experts=NE,
+        w1_global_scale=layer.w13_weight_scale_2, w2_global_scale=layer.w2_weight_scale_2,
+        workspace=layer.workspace, num_bits=4, clamp_limit=limit, gemm1_alpha=alpha, activation="silu",
+        is_gated=True)
+
+
+# ---- cuTile (FlashInfer)
+from flashinfer.fused_moe import (  # noqa: E402
+    BackendOptions, CuTileNvfp4Config, ExecutionConfig, ExpertConfig, MoEActivationPack,
+    MoEConfig, MoELayer, MoEWeightPack, QuantConfig, QuantFormat, RoutingConfig, SwiGLU,
+)
+from flashinfer.fused_moe.core import RoutingInputMode  # noqa: E402
+
+act_cfg = SwiGLU(alpha=alpha, beta=1.0, limit=limit)
+# FlashInfer's canonical input is [up, gate] rows
+w13_ug = torch.stack([torch.cat((u, g), 0) for g, u in zip(t["w1"][0], t["w3"][0])]).view(torch.uint8)
+s13_ug = torch.stack([torch.cat((u, g), 0) for g, u in zip(t["w1"][1], t["w3"][1])])
+view = CuTileNvfp4Config.prepare_weights(w13_ug, s13_ug, gs["w1"], w2_bytes, w2_scale, gs["w2"], num_local_experts=NE,
+                                         hidden_size=H, intermediate_size=I, activation=act_cfg,
+                                         source_format="compressed_tensors", device=dev)
+wp = MoEWeightPack()
+wp.prepare_for("cutile_nvfp4", view)
+
+
+def make_layer(a4):
+    assert a4
+    qc = QuantConfig(weight=QuantFormat.NVFP4, activation=QuantFormat.NVFP4)
+    be = CuTileNvfp4Config()
+    mc = MoEConfig(routing=RoutingConfig(num_experts=NE, top_k=K), quant=qc, experts=ExpertConfig(intermediate_size=I),
+                   activation=act_cfg, backend=BackendOptions(candidates=(be,)),
+                   execution=ExecutionConfig(tune_max_num_tokens=max(tokens)))
+    return MoELayer(mc, device=dev)
+
+
+ct = {"cuTile W4A4": make_layer(True)}
+paths = {"Marlin W4A16": run_marlin}
+for name, ml in ct.items():
+    paths[name] = (lambda ml: lambda x, ids, w: ml(MoEActivationPack(
+        x, None, ids, w, routing_input_mode=RoutingInputMode.PackedPrecomputed), wp))(ml)
+
+print(f"GPU {torch.cuda.get_device_name(dev)}, layer {L}, {NE} experts, top-{K}, H {H}, I {I}", flush=True)
+for m in tokens:
+    gm = torch.Generator().manual_seed(m)
+    x = (torch.randn(m, H, generator=gm) * 0.5).to(torch.bfloat16).to(dev)
+    ids = torch.stack([torch.randperm(NE, generator=gm)[:K] for _ in range(m)]).to(torch.int32).to(dev)
+    w = torch.rand(m, K, generator=gm).to(dev)
+    acc = m <= 4096
+    if acc:
+        ref, ref4 = reference(x, ids, w), reference(x, ids, w, a4=True)
+    for name, fn in paths.items():
+        outs = [fn(x, ids, w).clone() for _ in range(4)]
+        torch.cuda.synchronize()
+        same = all(torch.equal(outs[0].view(torch.int16), o.view(torch.int16)) for o in outs[1:])
+        ts = []
+        for _ in range(20):
+            a, b = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+            a.record()
+            fn(x, ids, w)
+            b.record()
+            b.synchronize()
+            ts.append(a.elapsed_time(b))
+        # the same call captured in a CUDA graph and replayed (how a server's decode runs it: no host work between)
+        graph = torch.cuda.CUDAGraph()
+        with torch.cuda.graph(graph):
+            fn(x, ids, w)
+        graph.replay()
+        torch.cuda.synchronize()
+        tg = []
+        for _ in range(20):
+            a, b = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+            a.record()
+            graph.replay()
+            b.record()
+            b.synchronize()
+            tg.append(a.elapsed_time(b))
+        del graph
+        err = ""
+        if acc:
+            y = outs[0].float()
+            err = f"rel err {float((y - ref).norm() / ref.norm()):.4f}"
+            if "W4A4" in name:
+                err += f" (vs NVFP4-activation reference {float((y - ref4).norm() / ref4.norm()):.4f})"
+        print(f"tokens {m:6d} {name:13s}: {statistics.median(ts):8.3f} ms eager, {statistics.median(tg):8.3f} ms graph  "
+              f"4 runs bit-identical {same}  {err}", flush=True)

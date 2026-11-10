@@ -269,6 +269,12 @@ exactly that and nothing else: the first token must be a bare name, which is wha
 `NVIDIA_DRIVER_CAPABILITIES=compute,utility` readable as a fact. Eleven pastes, then: **none
 worth a look.**
 
+Both corpora ship in the repo, so this section is rerunnable instead of believable:
+`servediff audit tests/fixtures` (twenty-one logs) and
+`servediff audit tests/fixtures/held-out-2026-10` (the eleven pastes, with
+`PROVENANCE.md` naming each issue). Check out `v0.4.32` and run the second command to watch
+it report eight of eleven.
+
 ## Limits of the claim
 
 These four logs are from one machine's WSL2 runs plus one posted TP=8 log, plus eleven pastes
