@@ -904,7 +904,26 @@ def _gate_corpus(args) -> int:
     return 1 if changed_logs else 0
 
 
+def _keep_console_printable() -> None:
+    # A Windows console defaults to a single-byte code page, and the report echoes log
+    # lines back: a box-drawing banner (██▄█▀) or a warning sign then raises
+    # UnicodeEncodeError, and the command exits 1 with a traceback -- which reads as
+    # "the inputs differ". Keep the console's own code page and let an unprintable
+    # character come out as `?` instead of killing the report.
+    for stream in (sys.stdout, sys.stderr):
+        if stream is None or not hasattr(stream, "reconfigure"):
+            continue
+        try:
+            "\u2588".encode(stream.encoding or "ascii")
+        except (LookupError, UnicodeEncodeError, TypeError):
+            try:
+                stream.reconfigure(errors="replace")
+            except (ValueError, OSError):
+                pass
+
+
 def main(argv=None) -> int:
+    _keep_console_printable()
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--version", action="version", version=f"servediff {_version()}")
     sub = parser.add_subparsers(dest="command", required=True)

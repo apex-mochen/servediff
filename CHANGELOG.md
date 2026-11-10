@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.48 — 2026-11-10
+
+- **A single-byte console no longer turns a report into exit 1.** `audit` echoes log lines
+  back, and a real log carries a box-drawing banner (`██▄█▀`). On a default Windows console
+  (cp1252) that raised `UnicodeEncodeError`, so `audit` exited `1` — and `1` means *the inputs
+  differ*, so a gate read a console limitation as a config change. `show --json` failed the
+  same way; because it writes the payload in one `print()`, nothing was written and
+  `--against` then read an empty facts file. Output streams now keep the console's own code
+  page and let a character it cannot encode come out as `?`.
+- Found by the step added in 0.4.47: CI's Windows job runs under that code page, and
+  `python tools/verify_readme_exit_codes.py` reported `19/21` there while both Linux jobs
+  reported `21/21`. The failure was real, not a test artifact.
+- 2 new tests (116 total): `audit` and `show --json` under `PYTHONIOENCODING=cp1252` exit `0`
+  with no `UnicodeEncodeError` and no `Traceback`.
+
 ## 0.4.47 — 2026-11-10
 
 - **`env -o` and `capture -o` say so when the path cannot be written.** Pointing `-o` at a

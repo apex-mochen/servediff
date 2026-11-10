@@ -1325,6 +1325,36 @@ def test_diff_reads_one_side_from_stdin(monkeypatch, capsys, tmp_path):
     assert servediff.main(["diff", "-", "-"]) == 2
 
 
+def test_audit_survives_a_single_byte_console_code_page():
+    # A Windows console defaults to a single-byte code page, and the report echoes a
+    # box-drawing banner back. That raised UnicodeEncodeError and exited 1 -- and 1 means
+    # "the inputs differ", so a CI gate read a console limitation as a config change.
+    import os
+    log = FIX / "vllm-0.33.0-real-rtx4060.log"
+    assert "\u2588" in log.read_text(encoding="utf-8"), "the fixture must carry the banner"
+    env = dict(os.environ, PYTHONIOENCODING="cp1252", PYTHONUTF8="0")
+    proc = subprocess.run([sys.executable, "-m", "servediff", "audit", str(log)],
+                          capture_output=True, text=True, env=env,
+                          encoding="utf-8", errors="replace")
+    assert proc.returncode == 0, proc.stderr[-400:]
+    assert "UnicodeEncodeError" not in (proc.stdout + proc.stderr)
+    assert "Traceback" not in (proc.stdout + proc.stderr)
+
+
+def test_show_json_survives_a_single_byte_console_code_page():
+    # `show --json` writes the payload in one print(); when the encoding failed nothing
+    # was written, and `--against` then read an empty facts file.
+    import os
+    log = FIX / "vllm-0.33.0-real-rtx4060.log"
+    env = dict(os.environ, PYTHONIOENCODING="cp1252", PYTHONUTF8="0")
+    proc = subprocess.run([sys.executable, "-m", "servediff", "show", str(log), "--json"],
+                          capture_output=True, text=True, env=env,
+                          encoding="utf-8", errors="replace")
+    assert proc.returncode == 0, proc.stderr[-400:]
+    payload = json.loads(proc.stdout)
+    assert payload["engine.version"]["value"]
+
+
 def test_series_keeps_the_middle_column(capsys):
     # vllm#53472 carried three runs of the same config. Two pairwise diffs lose the
     # middle column; one series table keeps every version side by side.
