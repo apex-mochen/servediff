@@ -332,6 +332,16 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
     (re.compile(r"Using (AttentionBackendEnum\.\w+) backend"), lambda m: [("attn.backend", m[1].split(".")[-1])]),
     (re.compile(r"Using (Eagle\d*) auxiliary layers from config: (.+)$"),
      lambda m: [("spec_decode.eagle_layers", f"{m[1]}: {m[2].strip()}")]),
+    # The draft model's context is silently halved by the speculative path, and nothing in
+    # the flags records the effective value. An upgrade that changes this bound changes
+    # every speculative prefix for the same command line.
+    (re.compile(r"Overriding draft model max model len from (\d+) to (\d+)"),
+     lambda m: [("spec.draft_max_len", f"{m[1]} -> {m[2]}")]),
+    # A flag the user passed that the frontend accepted and then dropped. The run looks
+    # configured and is not: vllm#58580 passes --enable-auto-tool-choice and
+    # --structured-outputs-config, and the Rust frontend says it will ignore both.
+    (re.compile(r"argument '(\w+)' currently has no effect in [\w ]+frontend, ignoring"),
+     lambda m: [("frontend.ignored_arg", m[1])]),
     # Batching and scheduling decisions that decide the shape of every forward pass.
     (re.compile(r"Chunked prefill is (enabled|disabled)(?: with max_num_batched_tokens=(\d+))?"),
      lambda m: [("scheduler.chunked_prefill",

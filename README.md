@@ -390,6 +390,15 @@ the model-loading window and stop the moment loading reports 63.31 GiB, so they 
 near-miss (20 MiB asked, 9.19 MiB free on a 79.14 GiB card) rather than the cause of the
 `shm_broadcast` messages that start a minute later and outlive graph capture.
 
+`frontend.ignored_arg` is the least comforting of these, and the most worth having: a flag the
+server accepted and then dropped. In `vllm#58580` the run passes `--enable-auto-tool-choice`
+and `--structured-outputs-config`, and the Rust frontend logs
+`argument 'enable_auto_tool_choice' currently has no effect in Rust frontend, ignoring` — the
+command line reads as configured and nothing is. `servediff` keeps that as a fact, so two runs
+that differ only in which flags survived is a row, not a footnote you have to spot in 80 lines.
+Same family: `spec.draft_max_len` records the draft model's context as the speculative path
+bounded it (`262144 -> 131072`), because a version can halve it with no flag to show for it.
+
 ## When one of the two runs died
 
 The most common real pair is a run that crashed against the same flags that now work. The

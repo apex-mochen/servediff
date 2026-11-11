@@ -189,6 +189,27 @@ def test_the_allocator_shortfall_under_a_real_oom_is_read():
     assert round(f["torch.oom_requested_mib"].value / f["torch.oom_free_mib"].value, 2) == 2.18
 
 
+def test_the_flags_a_frontend_dropped_and_the_draft_len_it_halved_are_read():
+    # Verbatim lines from vllm#58580 (Gemma 4 MTP + speculative decoding on the Rust frontend).
+    # The run passes --enable-auto-tool-choice and --structured-outputs-config; the frontend
+    # accepts both and says it will ignore them, which is the plainest form of "same flags,
+    # different server" — the flag never reached anything.
+    text = (
+        "(RustFrontend pid=1185) WARNING 09-24 15:00:44 [unsupported.rs:67] argument "
+        "'structured_outputs_config' currently has no effect in Rust frontend, ignoring\n"
+        "(RustFrontend pid=1185) WARNING 09-24 15:00:44 [unsupported.rs:67] argument "
+        "'enable_auto_tool_choice' currently has no effect in Rust frontend, ignoring\n"
+        "INFO 09-24 15:00:44 [speculative.py:1220] Overriding draft model max model len "
+        "from 262144 to 131072\n"
+    )
+    f = servediff.parse(text)["facts"]
+    assert f["frontend.ignored_arg"].value == [
+        "structured_outputs_config", "enable_auto_tool_choice"
+    ]
+    # Halved, not set: the pair is kept because the upper bound is what the upgrade changed.
+    assert f["spec.draft_max_len"].value == "262144 -> 131072"
+
+
 # --- Synthetic lines in the formats of the user's real logs -----------------------
 
 VLLM = """\

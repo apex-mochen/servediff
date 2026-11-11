@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.4.55 — 2026-11-11
+
+Two facts for the flags a run did not get.
+
+`vllm#58580` looked like noise when the sweep counted it: 143 lines, 55 facts, mostly a
+`collect_env` block. What `audit` still flagged as unread, twice, was this:
+
+```text
+(RustFrontend pid=1185) WARNING [unsupported.rs:67] argument 'structured_outputs_config'
+currently has no effect in Rust frontend, ignoring
+(RustFrontend pid=1185) WARNING [unsupported.rs:67] argument 'enable_auto_tool_choice'
+currently has no effect in Rust frontend, ignoring
+```
+
+The run passes both flags, the frontend accepts both, and neither reaches anything. Same
+command line, different server — and no amount of log-diffing by hand makes that a row
+instead of a footnote in 80 lines. It is now `frontend.ignored_arg`, one value per dropped
+flag, so a pair of runs that differ only in which flags survived shows up as a list that
+changed.
+
+The same block carries `Overriding draft model max model len from 262144 to 131072`, i.e. the
+speculative path halved the draft model's context with no flag recording it: `spec.draft_max_len`
+keeps both ends (`262144 -> 131072`) so an upgrade that moves the bound is visible.
+
+The audit of that block went from 89 unread lines / 63 worth a look to 86 / 60, and its facts
+from 55 to 57.
+
+120 tests (one new, pinning these lines verbatim, including the order of the two ignored
+args). Unchanged and re-verified: 21/21 documented exit codes, five corpora at
+`0 with shapes worth a look`, README's worked examples still 53 / 14 and 35 / 33, the same
+numbers reproduced from the 0.4.54 wheel in a fresh venv.
+
 ## 0.4.54 — 2026-11-11
 
 Docs correction, no code change.
