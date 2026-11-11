@@ -226,6 +226,15 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
                 ("gpu.total_gib", float(m[2])),
                 ("gpu.utilization", float(m[3])),
                 ("gpu.budget_gib", float(m[4]))]),
+    # The line above continues into the post-capture breakdown, and that triple is the answer
+    # to "where did the memory go" after an OOM: consumed (weights + non-torch) barely moves
+    # between versions, while peak activation and the CUDA-graph reservation are what an
+    # upgrade can change without changing a flag. Dropping it left the one line a real report
+    # turned on unreadable — vllm#65907's whole argument is 14.16 -> 8.97 GiB peak activation.
+    (re.compile(r"Actual usage is ([\d.]+) GiB for consumed memory.*?([\d.]+) GiB for peak activation, and ([\d.]+) GiB for CUDAGraph memory"),
+     lambda m: [("gpu.consumed_gib", float(m[1])),
+                ("gpu.peak_activation_gib", float(m[2])),
+                ("gpu.cudagraph_gib", float(m[3]))]),
     # CUDA graph memory profiling is on by default since v0.21.0, and it changes what a
     # given --gpu-memory-utilization actually buys: the line itself prints the equivalent
     # value without profiling and the value needed to keep the old KV cache size. Comparing
@@ -233,7 +242,12 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
     # exists to surface, so both numbers are kept rather than the flag.
     (re.compile(r"CUDA graph memory profiling is (enabled|disabled) \(default since v([\d.]+)\)"),
      lambda m: [("cuda_graph.profiling", f"{m[1]} (default since v{m[2]})")]),
-    (re.compile(r"equivalent to --gpu-memory-utilization=([\d.]+) without CUDA graph memory profiling"),
+    # The trailing clause of that sentence is not stable: 0.30-0.33 print "... without
+    # CUDA graph memory profiling", while a 0.32/0.33 report pastes the same fact as
+    # "... is equivalent to --gpu-memory-utilization=0.7715" and no more. Requiring the
+    # clause made the real line unreadable, so the number is taken from wherever the
+    # sentence appears.
+    (re.compile(r"equivalent to --gpu-memory-utilization=([\d.]+)"),
      lambda m: [("gpu.utilization_effective", float(m[1]))]),
     (re.compile(r"increase --gpu-memory-utilization to ([\d.]+)\."),
      lambda m: [("gpu.utilization_to_match_kv_cache", float(m[1]))]),

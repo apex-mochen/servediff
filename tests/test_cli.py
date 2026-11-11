@@ -88,6 +88,12 @@ def test_real_server_log_from_033_is_parsed():
     assert f["gpu.total_gib"].value == 8.0
     assert f["gpu.utilization"].value == 0.45
     assert f["gpu.budget_gib"].value == 3.6
+    # The same sentence continues into the post-capture breakdown. Consumed memory barely
+    # moves between versions; peak activation and the graph reservation are what an upgrade
+    # changes without changing a flag, so an OOM report is unreadable without this triple.
+    assert f["gpu.consumed_gib"].value == 1.15
+    assert f["gpu.peak_activation_gib"].value == 0.53
+    assert f["gpu.cudagraph_gib"].value == 0.18
     # Silent gates inside startup: JIT compile time and whether late compiles are loud.
     assert f["jit.warmup_s"].value == 0.0
     assert f["jit.monitor_mode"].value == "warn"
@@ -108,6 +114,27 @@ def test_real_server_log_from_033_is_parsed():
     # two different configs would truncate to the same visible string.
     assert f["kernel.ir_op.rms_norm"].value == "native"
     assert f["kernel.ir_op.gelu_and_mul_sparse"].value == "triton|native"
+
+
+def test_the_memory_breakdown_of_a_real_oom_report_is_read():
+    # Verbatim lines from vllm#65907 (v0.32.0 @ 0.97), where the whole argument is that
+    # consumed memory stayed at ~45 GiB while peak activation dropped 14.16 -> 8.97 GiB.
+    # Both line shapes here differ from what the shipped fixtures print: the equivalent-
+    # utilization sentence ends right after the number, and the breakdown stands alone.
+    text = (
+        "INFO 11-05 12:20:12 [gpu_worker.py:774] CUDA graph memory profiling is enabled "
+        "(default since v0.21.0). The current --gpu-memory-utilization=0.9700 is equivalent "
+        "to --gpu-memory-utilization=0.7715 ...\n"
+        "INFO 11-05 12:21:02 [gpu_worker.py:812] Desired GPU memory utilization is "
+        "(0.97, 61.39 GiB). Actual usage is 45.05 GiB for consumed memory (weights + "
+        "non-torch), 14.16 GiB for peak activation, and 10.32 GiB for CUDAGraph memory. "
+        "... Current kv cache memory in use is 2.18 GiB.\n"
+    )
+    f = servediff.parse(text)["facts"]
+    assert f["gpu.utilization_effective"].value == 0.7715
+    assert f["gpu.consumed_gib"].value == 45.05
+    assert f["gpu.peak_activation_gib"].value == 14.16
+    assert f["gpu.cudagraph_gib"].value == 10.32
 
 
 # --- Synthetic lines in the formats of the user's real logs -----------------------

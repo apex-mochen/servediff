@@ -196,7 +196,7 @@ log from the run they accepted three months ago. `servediff show --json` records
 run printed in a few kilobytes, and `--against` diffs a single log with those facts:
 
 ```bash
-# once, on a run whose startup you have read: commit facts.json (5 KB, not the 40 KB log)
+# once, on a run whose startup you have read: commit facts.json (a few KB, not the whole log)
 servediff show accepted.log --json > facts.json
 ```
 
@@ -273,7 +273,10 @@ cuda_graph.profiling             <absent>                                 enable
 engine.init_s                    <absent>                                 109.17                                   only_candidate
 engine.version                   0.28.0                                   0.30.0                                   changed
 gpu.budget_gib                   <absent>                                 3.6                                      only_candidate
+gpu.consumed_gib                 <absent>                                 1.44                                     only_candidate
+gpu.cudagraph_gib                <absent>                                 0.17                                     only_candidate
 gpu.free_gib                     <absent>                                 6.93                                     only_candidate
+gpu.peak_activation_gib          <absent>                                 0.53                                     only_candidate
 gpu.total_gib                    <absent>                                 8.0                                      only_candidate
 gpu.utilization                  <absent>                                 0.45                                     only_candidate
 gpu.utilization_effective        <absent>                                 0.4151                                   only_candidate
@@ -303,7 +306,7 @@ weights.filesystem               <absent>                                 EXT4  
 weights.load_s                   <absent>                                 10.49                                    only_candidate
 weights.prefetch                 <absent>                                 disabled (EXT4 is not a network FS)      only_candidate
 
-48 difference(s); 14 fact(s) identical. Absent means the log did not print it, not that it was off.
+51 difference(s); 14 fact(s) identical. Absent means the log did not print it, not that it was off.
 ```
 
 0.28.0 does not start on WSL2 with default settings; 0.30.0 does, because it falls
@@ -328,6 +331,9 @@ cuda_graph.captures              ["mixed prefill-decode, PIECEWISE x51... ["PIEC
 cuda_graph.pool_gib              0.36                                     0.17                                     changed
 engine.init_s                    74.0                                     109.17                                   changed
 engine.version                   0.28.0                                   0.30.0                                   changed
+gpu.consumed_gib                 1.29                                     1.44                                     changed
+gpu.cudagraph_gib                0.36                                     0.17                                     changed
+gpu.peak_activation_gib          0.89                                     0.53                                     changed
 gpu.utilization_effective        0.4031                                   0.4151                                   changed
 gpu.utilization_to_match_kv_cache 0.4969                                   0.4849                                   changed
 jit.warmup_s                     <absent>                                 0.0                                      only_candidate
@@ -348,7 +354,7 @@ weights.available_ram_gib        4.94                                     4.23  
 weights.cache                    <absent>                                 miss (from scratch)                      only_candidate
 weights.load_s                   7.86                                     10.49                                    changed
 
-30 difference(s); 33 fact(s) identical. Absent means the log did not print it, not that it was off.
+33 difference(s); 33 fact(s) identical. Absent means the log did not print it, not that it was off.
 ```
 
 Rows of that kind are the reason this exists, and none of them shows up in a bug report.
@@ -360,6 +366,11 @@ which is why two "identical" launches can sample differently. `gpu.free_gib` ver
 is the utilization a run *actually* spends once CUDA graph memory profiling takes its
 share — the line also prints the value needed to keep the old KV cache, so a version that
 changed only that default is visible here instead of as an unexplained capacity loss.
+`gpu.peak_activation_gib` is the other half of that OOM story: the line after the graph
+capture splits the footprint into consumed memory, peak activation and the graph
+reservation, and activation is the part a version can move by several GiB without touching
+a flag. It is also what a real report (`vllm#65907`) turned on — consumed memory stayed at
+~45 GiB while peak activation went 14.16 → 8.97 GiB.
 `weights.prefetch` is the same story on the loading side: the loader skips prefetch on a
 filesystem it does not recognise as a network FS, and startup time changes with it.
 
@@ -664,7 +675,7 @@ prove, are in [writeups/audit-noise-real-logs.md](writeups/audit-noise-real-logs
   is still reported as unread, because it is — accepted once, not read.
 - One worked example end to end: [writeups/wsl-uva-028-vs-030.md](writeups/wsl-uva-028-vs-030.md)
   — same flags on a laptop GPU under WSL2, 0.28.0 dies with `RuntimeError: UVA is not
-  available`, 0.30.0 starts; the startup-log diff is 48 differences and 14 identical facts,
+  available`, 0.30.0 starts; the startup-log diff is 51 differences and 14 identical facts,
   and the one line that explains it is the pinned-memory fallback from vllm#56908.
 
 ## License

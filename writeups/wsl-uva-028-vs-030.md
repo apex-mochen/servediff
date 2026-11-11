@@ -70,7 +70,10 @@ cuda_graph.profiling             <absent>                                 enable
 engine.init_s                    <absent>                                 109.17                                   only_candidate
 engine.version                   0.28.0                                   0.30.0                                   changed
 gpu.budget_gib                   <absent>                                 3.6                                      only_candidate
+gpu.consumed_gib                 <absent>                                 1.44                                     only_candidate
+gpu.cudagraph_gib                <absent>                                 0.17                                     only_candidate
 gpu.free_gib                     <absent>                                 6.93                                     only_candidate
+gpu.peak_activation_gib          <absent>                                 0.53                                     only_candidate
 gpu.total_gib                    <absent>                                 8.0                                      only_candidate
 gpu.utilization                  <absent>                                 0.45                                     only_candidate
 gpu.utilization_effective        <absent>                                 0.4151                                   only_candidate
@@ -100,7 +103,7 @@ weights.filesystem               <absent>                                 EXT4  
 weights.load_s                   <absent>                                 10.49                                    only_candidate
 weights.prefetch                 <absent>                                 disabled (EXT4 is not a network FS)      only_candidate
 
-48 difference(s); 14 fact(s) identical. Absent means the log did not print it, not that it was off.
+51 difference(s); 14 fact(s) identical. Absent means the log did not print it, not that it was off.
 ```
 
 Exit code `1` here means "the two logs differ", not "the tool failed". `2` would mean it

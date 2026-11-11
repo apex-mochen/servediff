@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.4.51 — 2026-11-11
+
+The one line a real OOM report turns on was unreadable.
+
+- **The post-capture breakdown is now a fact.** After the graph capture, vLLM prints
+  `Actual usage is 45.05 GiB for consumed memory (weights + non-torch), 14.16 GiB for peak
+  activation, and 10.32 GiB for CUDAGraph memory`. Only the head of that sentence was read
+  (`gpu.free_gib` / `gpu.total_gib` / `gpu.utilization` / `gpu.budget_gib`); the triple that
+  answers "where did the memory go" was dropped. It is now `gpu.consumed_gib`,
+  `gpu.peak_activation_gib` and `gpu.cudagraph_gib`.
+- **`gpu.utilization_effective` no longer needs the trailing clause.** The rule required
+  `... without CUDA graph memory profiling`; real reports paste the same sentence as
+  `--gpu-memory-utilization=0.9700 is equivalent to --gpu-memory-utilization=0.7715` and stop
+  there, so the fact was absent exactly in the logs people hand over.
+- Found by reading a real case, not by guessing: in
+  [vllm#65907](https://github.com/vllm-project/vllm/issues/65907) the reporter's whole
+  argument is that consumed memory stayed ~45 GiB while peak activation fell 14.16 → 8.97 GiB.
+  `servediff diff` over his two verbatim excerpts now prints exactly that:
+
+  ```text
+  gpu.consumed_gib                 45.05   44.82   changed  -0.5%
+  gpu.peak_activation_gib          14.16    8.97   changed  -36.7%
+  gpu.cudagraph_gib                10.32     3.7   changed  -64.1%
+  ```
+
+- Numbers in the README's worked example moved with the parser, so they were re-measured and
+  corrected rather than left standing: 0.28.0 vs 0.30.0 is now **51 differences / 14 identical**
+  (`--skip-absent`: 3 rows, 48 hidden) and the forced-V1 pair is **33 / 33**. The unverifiable
+  "19 facts / 5 190 B" claim in the Chinese README was replaced with a measured range.
+
+117 tests (one new: both real line shapes from that report).
+
 ## 0.4.50 — 2026-11-11
 
 Positioning only — no code change.
