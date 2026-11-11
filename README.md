@@ -287,6 +287,8 @@ kernel.ir_op.gelu_and_mul_sparse <absent>                                 triton
 kv_cache.layout                  <absent>                                 LBNHC                                    only_candidate
 kv_cache.max_concurrency         <absent>                                 69.3                                     only_candidate
 kv_cache.memory_gib              <absent>                                 1.62                                     only_candidate
+kv_cache.suggested_bytes         <absent>                                 1402454528                               only_candidate
+kv_cache.suggested_gib           <absent>                                 1.31                                     only_candidate
 kv_cache.tokens                  <absent>                                 141936                                   only_candidate
 model_loading.gib                <absent>                                 0.93                                     only_candidate
 model_loading.seconds            <absent>                                 19.122619                                only_candidate
@@ -306,7 +308,7 @@ weights.filesystem               <absent>                                 EXT4  
 weights.load_s                   <absent>                                 10.49                                    only_candidate
 weights.prefetch                 <absent>                                 disabled (EXT4 is not a network FS)      only_candidate
 
-51 difference(s); 14 fact(s) identical. Absent means the log did not print it, not that it was off.
+53 difference(s); 14 fact(s) identical. Absent means the log did not print it, not that it was off.
 ```
 
 0.28.0 does not start on WSL2 with default settings; 0.30.0 does, because it falls
@@ -343,6 +345,8 @@ kernel.module_missing            ["deep_gemm", "vllm.third_party.deep_... <absen
 kv_cache.layout                  <absent>                                 LBNHC                                    only_candidate
 kv_cache.max_concurrency         60.52                                    69.3                                     changed
 kv_cache.memory_gib              1.42                                     1.62                                     changed
+kv_cache.suggested_bytes         980078592                                1402454528                               changed  +43.1%
+kv_cache.suggested_gib           0.91                                     1.31                                     changed  +44.0%
 kv_cache.tokens                  123952                                   141936                                   changed
 model_loading.seconds            13.191946                                19.122619                                changed
 model_runner                     V1                                       V2                                       changed
@@ -354,7 +358,7 @@ weights.available_ram_gib        4.94                                     4.23  
 weights.cache                    <absent>                                 miss (from scratch)                      only_candidate
 weights.load_s                   7.86                                     10.49                                    changed
 
-33 difference(s); 33 fact(s) identical. Absent means the log did not print it, not that it was off.
+35 difference(s); 33 fact(s) identical. Absent means the log did not print it, not that it was off.
 ```
 
 Rows of that kind are the reason this exists, and none of them shows up in a bug report.
@@ -373,6 +377,12 @@ a flag. It is also what a real report (`vllm#65907`) turned on — consumed memo
 ~45 GiB while peak activation went 14.16 → 8.97 GiB.
 `weights.prefetch` is the same story on the loading side: the loader skips prefetch on a
 filesystem it does not recognise as a network FS, and startup time changes with it.
+`kv_cache.suggested_gib` / `kv_cache.transient_gib` are the extensible-KV-cache half of the
+same question: after warmup the engine prints what it committed to the cache, what it held
+back for transient activations, which `--kv-cache-memory` would fit the requested budget, and
+what torch may still reserve. "KV was cut 2.4x" then becomes arithmetic on the facts instead
+of a number to take on trust: in `vllm#66193` the 3.49 GiB suggestion against the 1.46 GiB the
+error reports available is 2.39x, with a 28.65 GiB reservation against a 26.75 GiB budget.
 
 ## When one of the two runs died
 
@@ -386,14 +396,14 @@ same code path, and says how many it hid instead of quietly recounting them as i
 $ servediff diff vllm-0.28.0.log vllm-0.30.0.log --skip-absent
 warning: baseline server failed to start: RuntimeError: UVA is not available; facts after the failure are absent because startup stopped, not because they were off
 
-note: 45 difference(s) hidden by --skip-absent: one side never printed those lines, so they can only be listed, not compared
+note: 50 difference(s) hidden by --skip-absent: one side never printed those lines, so they can only be listed, not compared
 
 fact                             baseline                                 candidate                                status
 engine.version                   0.28.0                                   0.30.0                                   changed
 parallel.roles                   DP rank 0, PP rank 0, PCP rank 0, TP ... DP rank 0, PP rank 0, PCP rank 0, TP ... changed
 startup                          failed                                   ["ready", "failed (output handler)"]     changed
 
-3 difference(s); 14 fact(s) identical. 45 difference(s) skipped because one side never printed those lines (--skip-absent). Absent means the log did not print it, not that it was off.
+3 difference(s); 14 fact(s) identical. 50 difference(s) skipped because one side never printed those lines (--skip-absent). Absent means the log did not print it, not that it was off.
 ```
 
 The exit code is still 1: the inputs do differ. `--json` reports both counts
@@ -675,7 +685,7 @@ prove, are in [writeups/audit-noise-real-logs.md](writeups/audit-noise-real-logs
   is still reported as unread, because it is — accepted once, not read.
 - One worked example end to end: [writeups/wsl-uva-028-vs-030.md](writeups/wsl-uva-028-vs-030.md)
   — same flags on a laptop GPU under WSL2, 0.28.0 dies with `RuntimeError: UVA is not
-  available`, 0.30.0 starts; the startup-log diff is 51 differences and 14 identical facts,
+  available`, 0.30.0 starts; the startup-log diff is 53 differences and 14 identical facts,
   and the one line that explains it is the pinned-memory fallback from vllm#56908.
 
 ## License

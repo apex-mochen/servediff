@@ -84,6 +84,8 @@ kernel.ir_op.gelu_and_mul_sparse <absent>                                 triton
 kv_cache.layout                  <absent>                                 LBNHC                                    only_candidate
 kv_cache.max_concurrency         <absent>                                 69.3                                     only_candidate
 kv_cache.memory_gib              <absent>                                 1.62                                     only_candidate
+kv_cache.suggested_bytes         <absent>                                 1402454528                               only_candidate
+kv_cache.suggested_gib           <absent>                                 1.31                                     only_candidate
 kv_cache.tokens                  <absent>                                 141936                                   only_candidate
 model_loading.gib                <absent>                                 0.93                                     only_candidate
 model_loading.seconds            <absent>                                 19.122619                                only_candidate
@@ -103,7 +105,7 @@ weights.filesystem               <absent>                                 EXT4  
 weights.load_s                   <absent>                                 10.49                                    only_candidate
 weights.prefetch                 <absent>                                 disabled (EXT4 is not a network FS)      only_candidate
 
-51 difference(s); 14 fact(s) identical. Absent means the log did not print it, not that it was off.
+53 difference(s); 14 fact(s) identical. Absent means the log did not print it, not that it was off.
 ```
 
 Exit code `1` here means "the two logs differ", not "the tool failed". `2` would mean it

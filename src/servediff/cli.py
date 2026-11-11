@@ -142,6 +142,33 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
      lambda m: [("kv_cache.tokens", int(m[1].replace(",", "")))]),
     (re.compile(r"Maximum concurrency for (\d[\d,]*) tokens per request: ([\d.]+)x"),
      lambda m: [("kv_cache.max_concurrency", float(m[2]))]),
+    # The extensible KV cache (v0.33.x) sizes itself at warmup and prints the split it
+    # settled on: what stayed free, what went to the cache, what it held back for transient
+    # activations, and what torch may still reserve. This line is where vllm#66193's
+    # "cutting KV 2.4x" lives — the ratio is the `--kv-cache-memory` the engine suggests on
+    # the line above against the KV memory the error below says is actually available —
+    # so the block size and the suggestion are kept as numbers, not prose.
+    (re.compile(r"Memory after warmup: ([\d.]+) GiB free, ([\d.]+) GiB committed to the KV cache, "
+                r"([\d.]+) GiB kept for transient activations; (\d+) KV cache blocks "
+                r"\(([\d.]+) GiB\) fit within the requested ([\d.]+) GiB\. "
+                r"Torch may reserve up to ([\d.]+) GiB"),
+     lambda m: [("kv_cache.after_warmup_free_gib", float(m[1])),
+                ("kv_cache.committed_gib", float(m[2])),
+                ("kv_cache.transient_gib", float(m[3])),
+                ("kv_cache.blocks", int(m[4])),
+                ("kv_cache.blocks_gib", float(m[5])),
+                ("torch.may_reserve_gib", float(m[7]))]),
+    (re.compile(r"Replace gpu_memory_utilization config with `--kv-cache-memory=(\d+)` \(([\d.]+) GiB\)"),
+     lambda m: [("kv_cache.suggested_bytes", int(m[1])),
+                ("kv_cache.suggested_gib", float(m[2]))]),
+    # The failure mode that follows: what the model's context needs, what was left, and the
+    # length the engine says it can still serve. Two versions that disagree here differ in
+    # what they reserve, not in what was asked for.
+    (re.compile(r"\(([\d.]+) GiB KV cache is needed, which is larger than the available KV cache "
+                r"memory \(([\d.]+) GiB\)"),
+     lambda m: [("kv_cache.needed_gib", float(m[1])),
+                ("kv_cache.available_gib", float(m[2]))]),
+    (re.compile(r"the estimated maximum model length is (\d+)"), lambda m: [("model.max_len_fit", int(m[1]))]),
     # Engine init covers profiling, KV-cache allocation and warmup; the parenthesised
     # part is torch.compile alone, recorded separately as compile.total_s.
     (re.compile(r"init engine .*? took ([\d.]+) s"), lambda m: [("engine.init_s", float(m[1]))]),

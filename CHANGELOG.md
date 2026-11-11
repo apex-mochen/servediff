@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.4.52 — 2026-11-11
+
+The extensible KV cache's own accounting, and the number a "KV dropped 2.4x" claim is made of.
+
+- **`kv_cache.suggested_gib` / `kv_cache.suggested_bytes`.** The engine prints
+  ``Replace gpu_memory_utilization config with `--kv-cache-memory=3746943079` (3.49 GiB)``
+  whenever the requested utilization cannot fit the context. That suggestion is the number the
+  loss is measured against, and it was not read.
+- **The after-warmup split.** `Memory after warmup: 8.66 GiB free, 0.78 GiB committed to the
+  KV cache, 3.83 GiB kept for transient activations; 28 KV cache blocks (1.51 GiB) fit within
+  the requested 26.75 GiB. Torch may reserve up to 28.65 GiB.` → `kv_cache.after_warmup_free_gib`,
+  `kv_cache.committed_gib`, `kv_cache.transient_gib`, `kv_cache.blocks`, `kv_cache.blocks_gib`,
+  `torch.may_reserve_gib`.
+- **The shortfall that follows it.** `kv_cache.needed_gib`, `kv_cache.available_gib` and
+  `model.max_len_fit` from the `ValueError: To serve at least one request with the model's max
+  seq len …` line.
+- Which makes a real report checkable: in
+  [vllm#66193](https://github.com/vllm-project/vllm/issues/66193) the headline is "cutting KV
+  2.4x", and that ratio is 3.49 GiB suggested / 1.46 GiB available = **2.39x**, with a 28.65 GiB
+  reservation against a 26.75 GiB budget. All four numbers are now facts in a 4-line excerpt.
+
+The same rule change is visible in the README's worked example, so its counts were re-measured
+again rather than carried over: 0.28.0 vs 0.30.0 is now **53 differences / 14 identical**
+(`--skip-absent`: 3 rows, 50 hidden) and the forced-V1 pair is **35 / 33**. 118 tests.
+
 ## 0.4.51 — 2026-11-11
 
 The one line a real OOM report turns on was unreadable.

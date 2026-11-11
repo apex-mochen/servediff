@@ -137,6 +137,40 @@ def test_the_memory_breakdown_of_a_real_oom_report_is_read():
     assert f["gpu.cudagraph_gib"].value == 10.32
 
 
+def test_the_extensible_kv_cache_accounting_of_a_real_report_is_read():
+    # Verbatim lines from vllm#66193 (v0.33.x extensible KV cache, 0.85 utilization). The
+    # report's headline — "cutting KV 2.4x" — is the ratio of the suggested --kv-cache-memory
+    # against the KV memory the error says is available, so both sides must be facts.
+    text = (
+        "INFO [gpu_worker.py:1213] Free memory on device (30.8/31.46 GiB) on startup. Desired "
+        "GPU memory utilization is (0.85, 26.75 GiB). Actual usage is 21.14 GiB for consumed "
+        "memory (weights + non-torch), 1.79 GiB for peak activation, and 0.18 GiB for CUDAGraph "
+        "memory. Replace gpu_memory_utilization config with `--kv-cache-memory=3746943079` "
+        "(3.49 GiB) to fit into requested memory.\n"
+        "INFO [extensible_kv_cache.py:598] Memory after warmup: 8.66 GiB free, 0.78 GiB committed "
+        "to the KV cache, 3.83 GiB kept for transient activations; 28 KV cache blocks "
+        "(1.51 GiB) fit within the requested 26.75 GiB. Torch may reserve up to 28.65 GiB.\n"
+        "ERROR [core.py:1707] ValueError: To serve at least one request with the model's max seq "
+        "len (36000), (3.35 GiB KV cache is needed, which is larger than the available KV cache "
+        "memory (1.46 GiB). Based on the available memory, the estimated maximum model length "
+        "is 7488.\n"
+    )
+    f = servediff.parse(text)["facts"]
+    assert f["kv_cache.transient_gib"].value == 3.83
+    assert f["kv_cache.after_warmup_free_gib"].value == 8.66
+    assert f["kv_cache.blocks"].value == 28
+    assert f["kv_cache.blocks_gib"].value == 1.51
+    assert f["torch.may_reserve_gib"].value == 28.65
+    assert f["kv_cache.suggested_gib"].value == 3.49
+    assert f["kv_cache.available_gib"].value == 1.46
+    assert f["kv_cache.needed_gib"].value == 3.35
+    assert f["model.max_len_fit"].value == 7488
+    # The claim, recomputed from facts: 3.49 / 1.46 = 2.39x, and the reservation overshoots
+    # the requested budget (28.65 > 26.75) — that is the 5.2 GiB story in another checkout.
+    assert round(f["kv_cache.suggested_gib"].value / f["kv_cache.available_gib"].value, 2) == 2.39
+    assert f["torch.may_reserve_gib"].value > f["gpu.budget_gib"].value
+
+
 # --- Synthetic lines in the formats of the user's real logs -----------------------
 
 VLLM = """\
