@@ -44,10 +44,21 @@ servediff audit tests/fixtures      # 给目录就审计里面所有 *.log
 
 从 PyPI 安装（`pip install servediff`）。另有一个同名但无关的工具放在第三方 Homebrew tap 里，`pip` 装到的这个才是本项目。
 
-## 采自己的两份日志
+## 用你自己的日志
 
-多数人手里只有一份日志和一个疑问，而不是现成的两个文件。`capture` 会跑起 server、把输出同时
-转存，并在启动**之前**拍下环境快照，于是下一次运行天然可对比：
+**手上已经有一份日志** —— 从 issue 里复制来的，或者上周那次运行留在磁盘上的 —— 从这里开始，
+什么都不用先 capture：
+
+```bash
+servediff show serve.log                      # 这一次运行实际用了什么
+servediff show serve.log --json > facts.json  # 记下来，之后可以用它当基线做门禁
+servediff diff today.log --against facts.json
+```
+
+`show` 不需要第二份日志，也不需要 GPU；对比是第二步，等你有了可比的东西之后再做。
+
+**故障还在前面** —— 你正要升级，或者必须复现出来 —— `capture` 会跑起 server、把输出同时转存，
+并在启动**之前**拍下环境快照，于是两次运行天然可对比：
 
 ```bash
 # 升级前，用你实际在用的参数
@@ -71,10 +82,10 @@ Ctrl-C 会停掉 server、保留日志、退出码 `130`；server 自己结束�
 | 子命令 | 读什么 | 退出码 |
 |---|---|---|
 | `servediff show <log>` | 一份启动日志（`-` 表示读 stdin），输出它打印出来的每条 fact 及其行号；`--json` | `0` 读到了；`2` 路径读不了，或一行都认不出来 |
-| `servediff diff <a> <b>` | 两份启动日志，或两份 `servediff env` 快照；`--json` / `--markdown` / `--all` / `--raw-args` / `--skip-absent` / `--only PREFIX`（可重复）；`servediff diff <log> --against facts.json` 用 `show --json` 记下的事实当作基线；把日志换成目录则一次门禁目录里所有 `*.log`（每份一行） | `0` 一致；`1` 至少有一处不同；`2` 用法错误、路径读不了、那个文件不是 facts 基线、某个 `--only` 前缀一条事实都没匹配到，或一份日志配一份快照 |
+| `servediff diff <a> <b>` | 两份启动日志，或两份 `servediff env` 快照；`--json` / `--markdown` / `--all` / `--raw-args` / `--skip-absent` / `--only PREFIX`（可重复）；`servediff diff <log> --against facts.json` 用 `show --json` 记下的事实当作基线；把日志换成目录则一次门禁目录里所有 `*.log`（每份一行） | `0` 一致；`1` 至少有一处不同；`2` 用法错误、路径读不了、那个文件不是 facts 基线、某个 `--only` 前缀一条事实都没匹配到、只给一份日志而没有可比的东西，或一份日志配一份快照 |
 | `servediff series <a> <b> <c> ...` | 三份及以上日志，按你给的顺序排列成列，每条 fact 一行；`--json` / `--markdown` / `--all` / `--raw-args` | `0` 各份全同；`1` 有 fact 不同；`2` 少于三份 |
-| `servediff env [--python P] [-o snap.json]` | 该解释器的包、GPU 信息，以及名字以 `VLLM_` / `SGLANG_` / `SGL_` / `CUDA_` / `NCCL_` / `TORCH_` / `PYTORCH_` / `FLASHINFER_` / `TRITON_` 开头的环境变量和 `HF_HUB_OFFLINE` / `TRANSFORMERS_OFFLINE`；看起来像密钥的名字一律写成 `<redacted>` | `0` 已写出；`2` 快照失败 |
-| `servediff capture [-o run.log] -- <启动命令>` | 跑起 server、把日志同时输出到终端和文件，并在启动**之前**写出 `<out>.env.json`。命令里自带 python 启动器时（`capture -- python -m vllm...`），快照的就是那个解释器；否则用 `--python` 指到 server 所在的环境 | server 自己的退出码 |
+| `servediff env [--python P] [-o snap.json]` | 该解释器的包、GPU 信息，以及名字以 `VLLM_` / `SGLANG_` / `SGL_` / `CUDA_` / `NCCL_` / `TORCH_` / `PYTORCH_` / `FLASHINFER_` / `TRITON_` 开头的环境变量和 `HF_HUB_OFFLINE` / `TRANSFORMERS_OFFLINE`；看起来像密钥的名字一律写成 `<redacted>` | `0` 已写出；`2` 快照失败，或那个路径写不进去 |
+| `servediff capture [-o run.log] -- <启动命令>` | 跑起 server、把日志同时输出到终端和文件，并在启动**之前**写出 `<out>.env.json`。命令里自带 python 启动器时（`capture -- python -m vllm...`），快照的就是那个解释器；否则用 `--python` 指到 server 所在的环境 | server 自己的退出码；路径写不进去或命令起不来时是 `2` |
 | `servediff demo` | 用包内自带的 vllm#47047 摘录跑一次 diff，不需要任何现成日志 | `1`（这两份日志确实有差异，那是结果） |
 | `servediff audit <log|dir>...` | 列出没有任何规则读到的行，分成噪声（只报数量）和「值得看一眼」的形状（逐条列出）；给目录（或给多个路径）时按一个语料整体跑，每份日志一行结论；`--top N` / `--everything` / `--markdown` / `--json` / `--max-shapes N` / `--baseline JSON` / `--write-baseline JSON` | `0` 已读；`1` 值得看一眼的形状超过 `--max-shapes`（带 `--baseline` 时只算基线里没有的）；`2` 读不了，或给的不是基线文件 |
 
