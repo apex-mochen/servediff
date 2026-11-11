@@ -384,10 +384,11 @@ what torch may still reserve. "KV was cut 2.4x" then becomes arithmetic on the f
 of a number to take on trust: in `vllm#66193` the 3.49 GiB suggestion against the 1.46 GiB the
 error reports available is 2.39x, with a 28.65 GiB reservation against a 26.75 GiB budget.
 `torch.oom_requested_mib` / `torch.oom_free_mib` come from the allocator's own failure line —
-the one place a run records how much it asked for and what was free at that instant. A death
-that reads as `No available shared memory broadcast block found in 60 seconds` can still be a
-shortfall of 10.81 MiB on a 79.14 GiB card (`vllm#54559`), which is a different fix from
-running out of budget.
+the one place a run records how much it asked for and what was free at that instant. Where
+those lines sit matters as much as what they say: in `vllm#54559` all 39 of them fall inside
+the model-loading window and stop the moment loading reports 63.31 GiB, so they are a
+near-miss (20 MiB asked, 9.19 MiB free on a 79.14 GiB card) rather than the cause of the
+`shm_broadcast` messages that start a minute later and outlive graph capture.
 
 ## When one of the two runs died
 

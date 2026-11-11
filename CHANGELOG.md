@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.54 — 2026-11-11
+
+Docs correction, no code change.
+
+0.4.53 added four facts from the allocator's failure line and then overstated what they meant.
+Re-read against `vllm#54559`'s own timestamps, all 39 of those lines fall inside the
+**model-loading window** (11:33:26-11:33:28) and stop the moment both ranks report
+`Model loading took 63.31 GiB memory` at 11:33:29. On a 79.14 GiB card that is a near-miss
+(20 MiB asked with 9.19 MiB free), not the cause. What keeps failing is the `shm_broadcast`
+message: first at 11:34:32, then every 60 s through 11:50:31 — it outlives torch.compile
+(40.21 s, finished 11:34:51) and graph capture (85 s, finished 11:37:55), so whatever hangs does
+so after startup.
+
+The 0.4.53 facts stay as they are; the CHANGELOG paragraph and the README paragraph that
+pointed at this issue now say that instead.
+
 ## 0.4.53 — 2026-11-11
 
 The allocator's own failure line, which no rule read.
@@ -13,10 +29,14 @@ OOM on device 0 while trying to allocate 20971520 bytes (free: 9633792, total: 8
 ```
 
 Now four facts — `torch.oom_device`, `torch.oom_requested_mib`, `torch.oom_free_mib`,
-`torch.oom_total_gib` — and the run's real story becomes readable: on a 79.14 GiB card packed
-by a 75.18 GiB budget with 64.46 GiB consumed and 9.45 GiB of KV, what failed was an
-**11 MiB** shortfall (20 MiB asked, 9.19 MiB free, 2.18x what was available). That is a
-different fix from "the budget is too small".
+`torch.oom_total_gib` — and where they sit becomes readable instead of guessed. All 39 fall
+inside the **model-loading window**, 11:33:26 to 11:33:28, and stop the moment loading reports
+`Model loading took 63.31 GiB memory` on both ranks: on a 79.14 GiB card the allocator came
+within **9.19 MiB** of empty while asking for 20 MiB, then recovered. They are a near-miss, not
+the cause — the `shm_broadcast` messages begin at 11:34:32 and keep coming every 60 s to
+11:50:31, i.e. they outlive compile (11:34:51) and graph capture (11:37:55), so what hangs is
+after startup, not memory. Facts that let a reader see that shape are worth having even when
+they turn out to clear the run rather than convict it.
 
 119 tests. Five corpora still `0 with shapes worth a look`; the README's worked examples are
 unchanged (53 / 14 and 35 / 33), since no shipped log carries this line.
