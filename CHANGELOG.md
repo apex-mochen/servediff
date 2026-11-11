@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.49 — 2026-11-11
+
+Documentation only — no code change.
+
+- **The exit-code table now matches what 0.4.46–0.4.48 actually do.** `diff` gained *one log
+  with nothing to compare it to* as a documented `2`; `env` gained *or the path cannot be
+  written*; `capture` now says `2` when the paths cannot be written or the command cannot
+  start. Each of these was already true in the code, and the table was the part that lied.
+- **`README.zh-CN.md` gets the one-log path.** Its "use your own log" section started with
+  `capture`, which needs a server and a Ctrl-C, while most people already have a log. It now
+  starts with `show serve.log` / `show serve.log --json > facts.json` /
+  `diff today.log --against facts.json`, and leaves `capture` to *the failure is ahead of you*.
+  Re-ran all three against the published 0.4.48 wheel: exit `0`, `0 difference(s); 56 fact(s)
+  identical`.
+
 ## 0.4.48 — 2026-11-10
 
 - **A single-byte console no longer turns a report into exit 1.** `audit` echoes log lines
