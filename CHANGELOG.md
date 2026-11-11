@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.4.53 — 2026-11-11
+
+The allocator's own failure line, which no rule read.
+
+`vllm#54559` dies with `No available shared memory broadcast block found in 60 seconds` and
+carries **39** of these underneath, untouched:
+
+```text
+[rank0]:[W831 11:33:26.640394862 CUDACachingAllocator.cpp:3933] memory allocation failed with
+OOM on device 0 while trying to allocate 20971520 bytes (free: 9633792, total: 84974239744).
+```
+
+Now four facts — `torch.oom_device`, `torch.oom_requested_mib`, `torch.oom_free_mib`,
+`torch.oom_total_gib` — and the run's real story becomes readable: on a 79.14 GiB card packed
+by a 75.18 GiB budget with 64.46 GiB consumed and 9.45 GiB of KV, what failed was an
+**11 MiB** shortfall (20 MiB asked, 9.19 MiB free, 2.18x what was available). That is a
+different fix from "the budget is too small".
+
+119 tests. Five corpora still `0 with shapes worth a look`; the README's worked examples are
+unchanged (53 / 14 and 35 / 33), since no shipped log carries this line.
+
 ## 0.4.52 — 2026-11-11
 
 The extensible KV cache's own accounting, and the number a "KV dropped 2.4x" claim is made of.

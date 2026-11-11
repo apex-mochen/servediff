@@ -383,12 +383,17 @@ back for transient activations, which `--kv-cache-memory` would fit the requeste
 what torch may still reserve. "KV was cut 2.4x" then becomes arithmetic on the facts instead
 of a number to take on trust: in `vllm#66193` the 3.49 GiB suggestion against the 1.46 GiB the
 error reports available is 2.39x, with a 28.65 GiB reservation against a 26.75 GiB budget.
+`torch.oom_requested_mib` / `torch.oom_free_mib` come from the allocator's own failure line —
+the one place a run records how much it asked for and what was free at that instant. A death
+that reads as `No available shared memory broadcast block found in 60 seconds` can still be a
+shortfall of 10.81 MiB on a 79.14 GiB card (`vllm#54559`), which is a different fix from
+running out of budget.
 
 ## When one of the two runs died
 
 The most common real pair is a run that crashed against the same flags that now work. The
 crash stops the log early, so every fact printed after it is `<absent>` on one side — on the
-0.28.0-vs-0.30.0 pair that is 45 of the 48 rows, and they bury the three that explain the
+0.28.0-vs-0.30.0 pair that is 49 of the 53 rows, and they bury the three that explain the
 outcome. `--skip-absent` keeps only the facts both logs printed, i.e. what changed on the
 same code path, and says how many it hid instead of quietly recounting them as identical:
 

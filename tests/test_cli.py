@@ -171,6 +171,24 @@ def test_the_extensible_kv_cache_accounting_of_a_real_report_is_read():
     assert f["torch.may_reserve_gib"].value > f["gpu.budget_gib"].value
 
 
+def test_the_allocator_shortfall_under_a_real_oom_is_read():
+    # Verbatim line from vllm#54559 (39 of these under a "No available shared memory
+    # broadcast block found in 60 seconds" headline): the allocator is the only place in the
+    # log that says how much was asked for and what was actually free at that instant.
+    text = (
+        "[rank0]:[W831 11:33:26.640394862 CUDACachingAllocator.cpp:3933] memory allocation "
+        "failed with OOM on device 0 while trying to allocate 20971520 bytes "
+        "(free: 9633792, total: 84974239744).\n"
+    )
+    f = servediff.parse(text)["facts"]
+    assert f["torch.oom_device"].value == 0
+    assert f["torch.oom_requested_mib"].value == 20.0
+    assert f["torch.oom_free_mib"].value == 9.19
+    assert f["torch.oom_total_gib"].value == 79.14
+    # The shortfall in the allocator's own units: it wanted 2.2x what was left.
+    assert round(f["torch.oom_requested_mib"].value / f["torch.oom_free_mib"].value, 2) == 2.18
+
+
 # --- Synthetic lines in the formats of the user's real logs -----------------------
 
 VLLM = """\

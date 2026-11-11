@@ -375,6 +375,18 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
      lambda m: [("startup", "failed")]),
     (re.compile(r"AsyncLLM output_handler failed"),
      lambda m: [("startup", "failed (output handler)")]),
+    # torch's allocator says why its last allocation failed, in its own words: how much it
+    # asked for, what was free at that instant, and how big the device is. A run that dies
+    # with a higher-level message ("No available shared memory broadcast block found") still
+    # carries these lines underneath — vllm#54559 has 39 of them, unread until now, and they
+    # are the only place the actual shortfall (20 MiB asked, 9.19 MiB free, 79.14 GiB card)
+    # appears.
+    (re.compile(r"memory allocation failed with OOM on device (\d+) while trying to allocate "
+                r"(\d+) bytes \(free: (\d+), total: (\d+)\)"),
+     lambda m: [("torch.oom_device", int(m[1])),
+                ("torch.oom_requested_mib", round(int(m[2]) / 2**20, 2)),
+                ("torch.oom_free_mib", round(int(m[3]) / 2**20, 2)),
+                ("torch.oom_total_gib", round(int(m[4]) / 2**30, 2))]),
     # Exception classes arrive fully qualified in some versions
     # (`vllm.v1.engine.exceptions.EngineDeadError: …`), so the type may be mid-line.
     (re.compile(r"((?:RuntimeError|ValueError|IndexError|torch\.OutOfMemoryError|AssertionError|AttributeError|KeyError|TypeError|EngineDeadError): .+)$"),
