@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.4.50 — 2026-11-11
+
+Positioning only — no code change.
+
+- **The first sentence now leads with one log.** It said *"Same flags, different server"* and
+  put the two-log comparison at the door. Measured over 200 open issues (100 vLLM + 100
+  SGLang, created 2026-10-20..11-05, all comments read): exactly **1** thread carried anything
+  `servediff` can read, and **0** carried two. The old pitch was asking for raw material that
+  issue threads do not contain. It now reads *"One startup log in — the settings the server
+  actually ran with come out"*, and the two-log comparison is the second step.
+- `demo` stays as the zero-input first command (it needs no log at all); a second block,
+  **"Already have a log? `servediff show serve.log`"**, now sits right under it, because that
+  is the path a reader with a crash behind them actually takes. `show` prints each fact with
+  its line number and exits `0` as soon as it read something — verified against the shipped
+  0.33.0 log.
+- `README.zh-CN.md` carries the same change.
+
 ## 0.4.49 — 2026-11-11
 
 Documentation only — no code change.

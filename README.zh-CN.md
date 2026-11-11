@@ -1,6 +1,6 @@
 # servediff（中文说明）
 
-**参数一样，server 却不一样。** `servediff` 告诉你 vLLM / SGLang server **实际**用了什么配置，以及两次运行之间哪里变了。
+**一份启动日志进去，server 实际跑的数值出来。** `servediff` 把 vLLM / SGLang 启动日志读成一条条有名字的 fact（`kv_cache.tokens`、`gpu.utilization_effective`、`backend.moe`）；再读第二份，「参数一样，server 却不一样」就变成一张哪里变了的表。
 
 ![servediff demo：vllm#47047 的两份摘录日志，参数相同，MoE backend 从 VLLM_CUTLASS 变成 MARLIN](https://raw.githubusercontent.com/apex-mochen/servediff/main/assets/demo.svg)
 
@@ -20,6 +20,14 @@ servediff demo
 ```
 
 `demo` 直接 diff 包内自带的两份摘录日志，不需要你先找到日志。它返回 `1`，因为这两份日志确实有差异 —— 那是结果，不是失败。
+
+**手上已经有一份日志？** 那条路径更短，而且不需要第二份日志就能开始：
+
+```bash
+servediff show serve.log
+```
+
+`show` 把这份日志里带的行号一条条打出来，读到东西就返回 `0`。第二份日志是后面的事，不是前提条件。
 
 同一对日志，从仓库里跑：
 

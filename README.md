@@ -5,8 +5,10 @@
 [![License](https://img.shields.io/github/license/apex-mochen/servediff)](https://github.com/apex-mochen/servediff/blob/main/LICENSE)
 [![ci](https://github.com/apex-mochen/servediff/actions/workflows/ci.yml/badge.svg)](https://github.com/apex-mochen/servediff/actions/workflows/ci.yml)
 
-**Same flags, different server.** `servediff` shows what your vLLM or SGLang server
-*actually* ran with — and what changed between two runs.
+**One startup log in — the settings the server actually ran with come out.** `servediff`
+reads a vLLM or SGLang startup log into named facts (`kv_cache.tokens`,
+`gpu.utilization_effective`, `backend.moe`), and reading two of them turns "same flags,
+different server" into a table of what changed.
 
 ![servediff demo: two excerpt logs from vllm#47047, same flags, the MoE backend differs and one log never prints the KV cache concurrency line](https://raw.githubusercontent.com/apex-mochen/servediff/main/assets/demo.svg)
 
@@ -49,6 +51,15 @@ servediff demo
 `demo` diffs two excerpt logs that ship inside the package, so your first command
 produces real output without you finding logs first. It exits `1`, because the two
 logs do differ — that is the result, not a failure.
+
+**Already have a log?** That is the shorter path, and it needs no second log to start:
+
+```bash
+servediff show serve.log
+```
+
+`show` prints the settings that log carries, each with its line number, and exits `0` as
+soon as it read something. A second log is a later step, not a prerequisite.
 
 The same pair, from the repo (the excerpt is public, from [vllm#47047](https://github.com/vllm-project/vllm/issues/47047)):
 
