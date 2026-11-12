@@ -148,7 +148,7 @@ names a python launcher, that interpreter is the one snapshotted; for entry poin
 | Command | What it reads | Exit codes |
 |---|---|---|
 | `servediff show <log>` | one startup log (or `-` for stdin) → the facts it printed, each with its line number; `--json` | `0` read something; `2` unreadable path or no line recognised |
-| `servediff diff <a> <b>` | two startup logs, or two `servediff env` snapshots; `--json`, `--markdown`, `--all`, `--raw-args`, `--skip-absent`, `--only PREFIX` (repeatable); `servediff diff <log> --against facts.json` diffs one log with facts recorded by `show --json`; give it a directory instead of a log to gate every `*.log` inside (one line each) | `0` identical; `1` at least one difference; `2` usage error, unreadable path, a facts file that is not one, a `--only` prefix that matched nothing, one log with nothing to compare it to, or one log mixed with one snapshot |
+| `servediff diff <a> <b>` | two startup logs, or two `servediff env` snapshots; `--json`, `--markdown`, `--all`, `--raw-args`, `--skip-absent`, `--only MATCH` (repeatable; prefix or substring of the fact name, `_`/`-` ignored); `servediff diff <log> --against facts.json` diffs one log with facts recorded by `show --json`; give it a directory instead of a log to gate every `*.log` inside (one line each) | `0` identical; `1` at least one difference; `2` usage error, unreadable path, a facts file that is not one, a `--only` pattern that matched nothing, one log with nothing to compare it to, or one log mixed with one snapshot |
 | `servediff series <a> <b> <c> ...` | three or more startup logs, in the column order you give → one fact per row; `--json`, `--markdown`, `--all`, `--raw-args` | `0` same across every log; `1` at least one fact differs; `2` fewer than three inputs |
 | `servediff env [--python P] [-o snap.json]` | that interpreter's packages, GPU info, and env vars whose names start with `VLLM_` / `SGLANG_` / `SGL_` / `CUDA_` / `NCCL_` / `TORCH_` / `PYTORCH_` / `FLASHINFER_` / `TRITON_` or are `HF_HUB_OFFLINE` / `TRANSFORMERS_OFFLINE`; secret-looking names become `<redacted>` | `0` written; `2` snapshot failed or the path cannot be written |
 | `servediff capture [-o run.log] -- <server command>` | runs the server, tees its log to stdout and to the file, and writes `<out>.env.json` **before** launch. If the command names a python launcher (`capture -- python -m vllm...`), that interpreter is the one snapshotted; otherwise pass `--python` to point at the server's venv | the server's own exit code; `2` when the paths cannot be written or the command cannot start |
@@ -216,14 +216,24 @@ so a narrowed comparison never reads as a clean one.
 
 A gate that fails on every row is a gate someone switches off: package pins move every week,
 while the startup decisions are what a version bump actually changes. `--only` narrows the
-comparison to the prefixes you own, and the note says how many facts were left out:
+comparison to the facts you name, and the note says how many facts were left out:
 
 ```bash
 servediff diff run.log --against facts.json --skip-absent \
   --only backend. --only cuda_graph. --only parallel.
 # exit 0: none of those changed, whatever moved in env.pip.*
-# exit 2: a prefix matched no fact at all — a gate on nothing is not a pass
+# exit 2: a pattern matched no fact at all — a gate on nothing is not a pass
 ```
+
+The pattern is matched against the fact name as a prefix *or* anywhere inside it, with `_`
+and `-` ignored, because the word you have is the one from the log line and not the fact
+name this tool chose. `--only all_reduce`, `--only all-reduce` and `--only allreduce` all
+find `backend.allreduce_dispatch`, whose name never contains a hyphen. If the pair you are
+comparing has no all-reduce line at all — the 0.28.0-vs-0.30.0 pair below does not, it is a
+single-GPU run — the pattern still matches nothing and still exits 2, because "I asked about
+the all-reduce chain and got a green line" is the silent failure this exit code prevents.
+Neither the key nor the value is searched: `--only FLASHINFER` matches nothing either, since
+a gate pinned to a value would move with whatever the version printed that week.
 
 A CI matrix writes one log per row, so give `diff` the directory instead of running it six
 times — one line per log, one exit code, and the failing row named:

@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.4.57 — 2026-11-12
+
+The word in the log now finds the fact it means.
+
+`diff --only` matched fact names by prefix only. The word a reader has is never the fact
+name — it is what the log printed. `#63705` is the case in point: someone grepped two
+startup logs, found the TP all-reduce chain go from `['PYNCCL']` to
+`['FLASHINFER', 'PYNCCL']`, and that chain is `backend.allreduce_dispatch` here. Typing
+`--only all_reduce` — the log's own spelling — matched nothing and exited 2:
+
+```text
+$ servediff diff a.log b.log --only all_reduce
+diff: --only all_reduce matched no fact in either input; a gate on nothing is not a pass
+```
+
+A pattern now matches as a prefix or anywhere inside the fact name, with `_` and `-` ignored
+on both sides, so `all_reduce`, `all-reduce` and `allreduce` reach `backend.allreduce_*`. The
+loud exit stays where it was and the boundary stays where it was: a pattern that matches
+nothing still exits 2, and values are still never searched — `--only FLASHINFER` matches
+nothing, because a gate pinned to a value moves with whatever that week's version printed.
+
+`123 tests` (one new: three spellings each find the dispatch row and leave
+`parallel.world_size` out, plus the two boundaries above). `21/21`, `53 / 14`, `35 / 33`,
+the demo's `2 difference(s)` and all five corpora at 0 shapes are unchanged.
+
 ## 0.4.56 — 2026-11-12
 
 The dropped flag becomes a sentence, not a row.

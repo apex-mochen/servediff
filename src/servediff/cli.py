@@ -781,6 +781,29 @@ def config_notes(parsed: dict) -> list[str]:
             f" ({', '.join(names)}): the run is not configured the way the command reads"]
 
 
+def _only_key(text: str) -> str:
+    return text.replace("_", "").replace("-", "").lower()
+
+
+def only_matches(key: str, patterns) -> bool:
+    """Does this fact key answer the --only pattern the user actually typed?
+
+    The documented form was a prefix of the fact name (`backend.`), but the word a
+    user has in hand is the one printed in the log line (`all_reduce`, `all-reduce`,
+    `FLASHINFER`), never the fact name. `--only allreduce` therefore matched nothing
+    and exited 2 — the most natural question about a startup log failed loudly.
+    A pattern now matches as a prefix or as any part of the name, with `_` and `-`
+    ignored on both sides so the log's spelling reaches the fact's spelling.
+    """
+    lowered = _only_key(key)
+    for p in patterns:
+        if not _only_key(p):
+            continue  # an empty pattern matches everything, which a gate cannot mean
+        if key.startswith(p) or _only_key(p) in lowered:
+            return True
+    return False
+
+
 def _fmt(value) -> str:
     text = json.dumps(value, ensure_ascii=False) if not isinstance(value, str) else value
     return text if len(text) <= 60 else text[:57] + "..."
@@ -954,7 +977,7 @@ def _gate_corpus(args) -> int:
         if not args.all:
             rows = [r for r in rows if not r["key"].startswith("after_ready.")]
         if args.only is not None:
-            kept = [r for r in rows if any(r["key"].startswith(p) for p in args.only)]
+            kept = [r for r in rows if only_matches(r["key"], args.only)]
             if not kept:
                 print(f"diff: --only {', '.join(args.only)} matched no fact in either input;"
                       " a gate on nothing is not a pass", file=sys.stderr)
@@ -1023,9 +1046,10 @@ def main(argv=None) -> int:
     d.add_argument("--skip-absent", action="store_true",
                    help="hide facts one side never printed, so a failed run's tail does not"
                         " bury the rows that both logs can be compared on")
-    d.add_argument("--only", action="append", metavar="PREFIX", default=None,
-                   help="compare only facts whose key starts with PREFIX (repeatable), so a gate"
-                        " can watch the startup decisions while package versions drift")
+    d.add_argument("--only", action="append", metavar="MATCH", default=None,
+                   help="compare only facts whose key starts with, or contains, MATCH (repeatable;"
+                        " `_` and `-` are ignored, so `--only all_reduce` finds backend.allreduce_*),"
+                        " so a gate can watch the startup decisions while package versions drift")
     s = sub.add_parser("series", help="compare three or more server logs in one table")
     s.add_argument("logs", type=Path, nargs="+", help="server logs, in the column order you want; - reads stdin")
     s.add_argument("--raw-args", action="store_true", help="also compare every raw argument (same engine only)")
@@ -1475,11 +1499,11 @@ def main(argv=None) -> int:
         rows = [r for r in rows if not r["key"].startswith("after_ready.")]
     # A gate that fails on every row is a gate nobody keeps: package pins move weekly, while
     # the startup decisions (backend, graph mode, parallelism) are what a version bump
-    # actually changes. --only narrows the comparison, and a prefix that matches nothing is
-    # a broken gate rather than a pass, so it exits 2.
+    # actually changes. --only narrows the comparison, and a pattern that matches nothing
+    # is a broken gate rather than a pass, so it exits 2.
     narrowed = args.only is not None
     if narrowed:
-        kept = [r for r in rows if any(r["key"].startswith(p) for p in args.only)]
+        kept = [r for r in rows if only_matches(r["key"], args.only)]
         if not kept:
             print(f"diff: --only {', '.join(args.only)} matched no fact in either input;"
                   " a gate on nothing is not a pass", file=sys.stderr)

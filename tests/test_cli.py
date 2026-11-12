@@ -1715,6 +1715,44 @@ def test_a_prefix_that_matches_nothing_is_exit_2(tmp_path, capsys):
     assert "matched no fact" in err and "a gate on nothing is not a pass" in err
 
 
+ALLREDUCE_A = (
+    "INFO [parallel_state.py:961] world_size=4 rank=0 local_rank=0\n"
+    "INFO [cuda_communicator.py:112] Using ['PYNCCL'] all-reduce backends "
+    "(in dispatch order) for group 'tp:0' out of potential backends: ['PYNCCL']\n"
+)
+ALLREDUCE_B = (
+    "INFO [parallel_state.py:961] world_size=4 rank=0 local_rank=0\n"
+    "INFO [cuda_communicator.py:112] Using ['FLASHINFER', 'PYNCCL'] all-reduce backends "
+    "(in dispatch order) for group 'tp:0' out of potential backends: ['PYNCCL', 'FLASHINFER']\n"
+)
+
+
+def test_the_word_from_the_log_finds_the_fact_it_means(tmp_path, capsys):
+    # The question an outside reader actually asks — "did the all-reduce chain change?" —
+    # is spelled the way the log spells it (`all-reduce`), never the way the fact name is
+    # spelled (`backend.allreduce_dispatch`). A prefix-only match answered that question
+    # with exit 2, i.e. "matched nothing", which reads as a broken gate rather than a miss.
+    a, b = tmp_path / "a.log", tmp_path / "b.log"
+    a.write_text(ALLREDUCE_A, encoding="utf-8")
+    b.write_text(ALLREDUCE_B, encoding="utf-8")
+    for spelling in ("all_reduce", "all-reduce", "allreduce"):
+        assert servediff.main(["diff", str(a), str(b), "--only", spelling]) == 1, spelling
+        out = capsys.readouterr().out
+        assert "backend.allreduce_dispatch" in out, spelling
+        assert "changed" in out, spelling
+        assert "parallel.world_size" not in out, spelling
+
+    # The boundary stays where it was: --only names facts, never values. A word that only
+    # appears in a value (`FLASHINFER`) still matches nothing, so a gate cannot accidentally
+    # pin itself to whatever a version printed that week.
+    assert servediff.main(["diff", str(a), str(b), "--only", "FLASHINFER"]) == 2
+    assert "a gate on nothing is not a pass" in capsys.readouterr().err
+
+    # A pattern that still matches nothing keeps the loud exit: the gate is broken, not clean.
+    assert servediff.main(["diff", str(a), str(b), "--only", "cu_graph_magic"]) == 2
+    assert "a gate on nothing is not a pass" in capsys.readouterr().err
+
+
 def test_only_is_rejected_on_env_snapshots(tmp_path, capsys):
     snap = {"schema": "servediff-env/1", "python": "3.12.3", "gpus": [], "packages": {"vllm": "0.30.0"}, "env": {}}
     a, b = tmp_path / "a.json", tmp_path / "b.json"
