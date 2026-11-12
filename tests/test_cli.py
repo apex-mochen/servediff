@@ -1585,7 +1585,10 @@ def test_single_rank_log_explains_the_missing_allreduce_path(tmp_path):
         "INFO 10-28 11:28:12 [parallel_state.py:1827] world_size=1 rank=0 local_rank=0\n",
         encoding="utf-8")
     notes = servediff.absence_notes(servediff.parse(log.read_text(encoding="utf-8")))
-    assert len(notes) == 1 and "world_size=1" in notes[0] and "TP>1" in notes[0]
+    assert len(notes) == 1
+    key, text = notes[0]
+    assert key == "backend.allreduce_dispatch"
+    assert "world_size=1" in text and "TP>1" in text
 
 
 def test_flashinfer_absence_is_explained_only_from_029(tmp_path):
@@ -1600,7 +1603,7 @@ def test_flashinfer_absence_is_explained_only_from_029(tmp_path):
             f"INFO [core.py:122] Initializing a V1 LLM engine (v{version}) with config: model='m'\n" + chain,
             encoding="utf-8")
         notes = servediff.absence_notes(servediff.parse(log.read_text(encoding="utf-8")))
-        assert any("DEBUG" in n for n in notes) is expected
+        assert any("DEBUG" in text for _, text in notes) is expected
 
 
 def test_markdown_reports_absence_notes(tmp_path, capsys):
@@ -1612,6 +1615,28 @@ def test_markdown_reports_absence_notes(tmp_path, capsys):
     assert servediff.main(["diff", str(a), str(b), "--markdown"]) == 0
     out = capsys.readouterr().out
     assert "ℹ️" in out and "world_size=1" in out
+
+
+def test_only_drops_the_notes_about_facts_it_excluded(tmp_path, capsys):
+    # `--only attention` narrowed the comparison to one row, and the note about the
+    # all-reduce path it excluded was still printed above the table: three paragraphs
+    # explaining a fact the reader had just said they were not comparing.
+    body = ("INFO [core.py:123] Initializing a V1 LLM engine (v0.30.0) with config: model='m'\n"
+            "INFO [parallel_state.py:1827] world_size=1 rank=0 local_rank=0\n"
+            "INFO [cuda.py:538] Using FLASH_ATTN attention backend out of potential backends: ['FLASH_ATTN']\n")
+    a, b = tmp_path / "a.log", tmp_path / "b.log"
+    a.write_text(body, encoding="utf-8")
+    b.write_text(body.replace("FLASH_ATTN attention backend out of potential backends: ['FLASH_ATTN']",
+                              "TRITON_ATTN attention backend out of potential backends: ['TRITON_ATTN']"),
+                 encoding="utf-8")
+    assert servediff.main(["diff", str(a), str(b), "--only", "attention"]) == 1
+    out = capsys.readouterr().out
+    assert "world_size=1" not in out, out  # the all-reduce note is about an excluded fact
+    assert "backend.attention" in out and "changed" in out
+
+    # Naming the all-reduce path again brings its note back, unchanged.
+    assert servediff.main(["diff", str(a), str(b), "--only", "backend."]) == 1
+    assert "world_size=1" in capsys.readouterr().out
 
 
 def test_a_facts_file_gates_one_log_without_shipping_the_other(tmp_path, capsys):

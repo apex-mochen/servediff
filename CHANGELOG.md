@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.4.58 — 2026-11-12
+
+`--only` no longer explains the facts it excluded.
+
+A narrowed comparison is a statement about one decision, and the absence notes kept
+explaining the decisions next to it. With `--only attention` over the 0.28.0-vs-0.30.0
+pair, two paragraphs about the all-reduce path the reader had just said they were not
+comparing ran above the single-row table:
+
+```text
+note: baseline: no all-reduce facts: world_size=1, so there is no all-reduce group and no backend
+note: candidate: no all-reduce facts: world_size=1, so there is no all-reduce group and no backend
+```
+
+The notes now name the fact they are about, and a note is kept only if `--only` kept that
+fact. Asking for the same pair with `--only backend.` prints them unchanged — the point of
+the note is still to keep "absent" from being read as "off", it just no longer volunteers
+that about a fact outside the gate.
+
+`124 tests` (one new: the all-reduce note disappears under `--only attention`, returns
+under `--only backend.`, and the excluded-fact row never appears either way). `21/21`,
+`53 / 14`, `35 / 33`, the demo's `2 difference(s)` and all five corpora at 0 shapes are
+unchanged.
+
 ## 0.4.57 — 2026-11-12
 
 The word in the log now finds the fact it means.

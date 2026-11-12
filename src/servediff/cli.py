@@ -736,7 +736,7 @@ def _is_single_rank(fact) -> bool:
     return all(v == 1 for v in values)
 
 
-def absence_notes(parsed: dict) -> list[str]:
+def absence_notes(parsed: dict) -> list[tuple[str, str]]:
     """Name the reason a log cannot yield a fact, where the tool can actually tell.
 
     A fact absent from *both* logs leaves no diff row at all, so the summary says
@@ -745,23 +745,30 @@ def absence_notes(parsed: dict) -> list[str]:
     a backend for, and since v0.29.0 the FlashInfer auto-selection line is logged
     at DEBUG, so a default INFO log never contains it. Leaving the reader to guess
     is how "absent" gets read as "off".
+
+    Each note names the fact it is about, because `--only attention` should not have
+    to read three paragraphs about the all-reduce path it did not ask to compare.
     """
     facts = parsed["facts"]
     if "backend.allreduce_dispatch" not in facts:
         world = facts.get("parallel.world_size")
         if world is None:
-            return ["no all-reduce facts and no rank line: cannot tell whether this run had more than "
-                    "one rank, so an absent all-reduce path here is inconclusive"]
+            return [("backend.allreduce_dispatch",
+                     "no all-reduce facts and no rank line: cannot tell whether this run had more than "
+                     "one rank, so an absent all-reduce path here is inconclusive")]
         if _is_single_rank(world):
-            return ["no all-reduce facts: world_size=1, so there is no all-reduce group and no backend "
-                    "is chosen; a TP>1 run is what makes this path observable"]
-        return [f"no all-reduce facts although world_size={world.value}: the selection is printed once per "
-                "group at engine init, so a log that starts after initialisation cannot show it"]
+            return [("backend.allreduce_dispatch",
+                     "no all-reduce facts: world_size=1, so there is no all-reduce group and no backend "
+                     "is chosen; a TP>1 run is what makes this path observable")]
+        return [("backend.allreduce_dispatch",
+                 f"no all-reduce facts although world_size={world.value}: the selection is printed once per "
+                 "group at engine init, so a log that starts after initialisation cannot show it")]
     version = _version_tuple(facts)
     if "backend.allreduce_flashinfer" not in facts and version and version >= (0, 29, 0):
-        return ["backend.allreduce_flashinfer is absent although the dispatch chain printed: since "
-                f"v{'.'.join(map(str, version))} that line is logged at DEBUG, so a default INFO log never "
-                "contains it; the dispatch chain is the signal, not this fact"]
+        return [("backend.allreduce_flashinfer",
+                 "backend.allreduce_flashinfer is absent although the dispatch chain printed: since "
+                 f"v{'.'.join(map(str, version))} that line is logged at DEBUG, so a default INFO log never "
+                 "contains it; the dispatch chain is the signal, not this fact")]
     return []
 
 
@@ -1526,7 +1533,12 @@ def main(argv=None) -> int:
         notes.extend(f"{side}: {note}" for note in config_notes(parsed))
         if args.against is not None and side == "baseline":
             continue  # recorded facts cannot say why a fact was never written down
-        notes.extend(f"{side}: {note}" for note in absence_notes(parsed))
+        for key, note in absence_notes(parsed):
+            # `--only attention` did not ask about the all-reduce path, and three
+            # paragraphs explaining its absence read as the tool changing the subject.
+            if narrowed and not only_matches(key, args.only):
+                continue
+            notes.append(f"{side}: {note}")
     if args.against is not None:
         notes.append(f"the baseline is {len(a['facts'])} fact(s) recorded from an earlier log,"
                      " not a log: anything it never recorded cannot be compared, so it shows as <absent>")
