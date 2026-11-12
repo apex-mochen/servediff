@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.4.59 — 2026-11-12
+
+A typo names the command you typed, not a file you never wrote.
+
+Running from a wheel but inside a module (`python -m servediff dif`) answered the
+mistyped subcommand with `usage: __main__.py [-h] [--version] ...`. The console script
+said `servediff` all along, so the same mistake produced two different first lines, and
+the one a reader hit named a file that only exists inside an installed package. The parser
+now declares its own program name; both invocations print `usage: servediff`.
+
+The Chinese README is brought forward to what the tool now does: `--only MATCH` (prefix or
+substring, `_`/`-` ignored, values never searched), the dropped-flag note with a real
+`note:` line captured from a published wheel on someone else's log, the corrected
+`53 → 3 + 50 hidden` split, and that a narrowed comparison only explains its own facts.
+
+`125 tests` (one new: a mistyped subcommand exits 2 and its first stderr line is
+`usage: servediff`, with no `__main__.py` anywhere in it). `21/21`, `53 / 14`,
+`35 / 33` and all five corpora at 0 shapes are unchanged.
+
 ## 0.4.58 — 2026-11-12
 
 `--only` no longer explains the facts it excluded.

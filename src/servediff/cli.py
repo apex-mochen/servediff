@@ -1033,7 +1033,13 @@ def _keep_console_printable() -> None:
 
 def main(argv=None) -> int:
     _keep_console_printable()
-    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    parser = argparse.ArgumentParser(
+        prog="servediff",
+        description=__doc__.split("\n\n")[0],
+    )
+    # Without prog=, `python -m servediff dif` answered `usage: __main__.py ...` — the
+    # first line a newcomer sees after a typo named a file they never wrote, not the
+    # command they typed. The console script said `servediff`; both now agree.
     parser.add_argument("--version", action="version", version=f"servediff {_version()}")
     sub = parser.add_subparsers(dest="command", required=True)
     show = sub.add_parser("show", help="effective config facts in one log")

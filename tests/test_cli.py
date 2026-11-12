@@ -1787,6 +1787,18 @@ def test_only_is_rejected_on_env_snapshots(tmp_path, capsys):
     assert "env snapshots are compared whole" in capsys.readouterr().err
 
 
+def test_a_typo_names_the_command_not_the_module(capsys):
+    # A first-timer mistypes the subcommand, and the fix-it line said `usage: __main__.py
+    # ...` — a file they never created. `servediff` is what they typed and what the console
+    # script is called; both invocations must say the same thing.
+    with __import__("pytest").raises(SystemExit) as exc:
+        servediff.main(["dif"])
+    assert exc.value.code == 2
+    err = capsys.readouterr().err
+    assert err.startswith("usage: servediff "), err[:80]
+    assert "__main__.py" not in err
+
+
 CORPUS_BASE = ("INFO [core.py:122] Initializing a V1 LLM engine (v0.29.0) with config: model='m'\n"
                "Using FLASH_ATTN attention backend out of potential backends: ['FLASH_ATTN']\n"
                "[pip3] numpy==2.4.6\n")

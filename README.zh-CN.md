@@ -90,7 +90,7 @@ Ctrl-C 会停掉 server、保留日志、退出码 `130`；server 自己结束�
 | 子命令 | 读什么 | 退出码 |
 |---|---|---|
 | `servediff show <log>` | 一份启动日志（`-` 表示读 stdin），输出它打印出来的每条 fact 及其行号；`--json` | `0` 读到了；`2` 路径读不了，或一行都认不出来 |
-| `servediff diff <a> <b>` | 两份启动日志，或两份 `servediff env` 快照；`--json` / `--markdown` / `--all` / `--raw-args` / `--skip-absent` / `--only PREFIX`（可重复）；`servediff diff <log> --against facts.json` 用 `show --json` 记下的事实当作基线；把日志换成目录则一次门禁目录里所有 `*.log`（每份一行） | `0` 一致；`1` 至少有一处不同；`2` 用法错误、路径读不了、那个文件不是 facts 基线、某个 `--only` 前缀一条事实都没匹配到、只给一份日志而没有可比的东西，或一份日志配一份快照 |
+| `servediff diff <a> <b>` | 两份启动日志，或两份 `servediff env` 快照；`--json` / `--markdown` / `--all` / `--raw-args` / `--skip-absent` / `--only MATCH`（可重复；按事实名做前缀或子串匹配，忽略 `_` / `-`）；`servediff diff <log> --against facts.json` 用 `show --json` 记下的事实当作基线；把日志换成目录则一次门禁目录里所有 `*.log`（每份一行） | `0` 一致；`1` 至少有一处不同；`2` 用法错误、路径读不了、那个文件不是 facts 基线、某个 `--only` 匹配一条事实都没匹配到、只给一份日志而没有可比的东西，或一份日志配一份快照 |
 | `servediff series <a> <b> <c> ...` | 三份及以上日志，按你给的顺序排列成列，每条 fact 一行；`--json` / `--markdown` / `--all` / `--raw-args` | `0` 各份全同；`1` 有 fact 不同；`2` 少于三份 |
 | `servediff env [--python P] [-o snap.json]` | 该解释器的包、GPU 信息，以及名字以 `VLLM_` / `SGLANG_` / `SGL_` / `CUDA_` / `NCCL_` / `TORCH_` / `PYTORCH_` / `FLASHINFER_` / `TRITON_` 开头的环境变量和 `HF_HUB_OFFLINE` / `TRANSFORMERS_OFFLINE`；看起来像密钥的名字一律写成 `<redacted>` | `0` 已写出；`2` 快照失败，或那个路径写不进去 |
 | `servediff capture [-o run.log] -- <启动命令>` | 跑起 server、把日志同时输出到终端和文件，并在启动**之前**写出 `<out>.env.json`。命令里自带 python 启动器时（`capture -- python -m vllm...`），快照的就是那个解释器；否则用 `--python` 指到 server 所在的环境 | server 自己的退出码；路径写不进去或命令起不来时是 `2` |
@@ -99,7 +99,17 @@ Ctrl-C 会停掉 server、保留日志、退出码 `130`；server 自己结束�
 
 `1` 只表示「输入不同」，不表示「出错」，所以 `servediff diff old.log new.log` 可以直接当 CI 门禁。`-` 至多出现一次：stdin 只能读一遍。
 
-最常见的真实场景是「一次崩了、一次同样的参数能起来」。崩掉的那份日志提前结束，之后每条 fact 在它那侧都是 `<absent>`——0.28.0 对 0.30.0 这一对里 53 行差异有 49 行都是这一类，正好把解释结果的那三行埋掉。`servediff diff a.log b.log --skip-absent` 只保留两份日志都打印过的事实，也就是同一条代码路径上真正变了的东西，并明确报出它隐藏了多少行，而不是把它们悄悄算成「相同」（真实的 0.28/0.30 一对：53 差异 → 3 行 + 「50 行被隐藏」）。退出码仍是 `1`，`--json` 里 `differences` 和 `compared_both_sides` 两个数字都在。
+最常见的真实场景是「一次崩了、一次同样的参数能起来」。崩掉的那份日志提前结束，之后每条 fact 在它那侧都是 `<absent>`——0.28.0 对 0.30.0 这一对里 53 行差异有 50 行都是这一类，正好把解释结果的那几行埋掉。`servediff diff a.log b.log --skip-absent` 只保留两份日志都打印过的事实，也就是同一条代码路径上真正变了的东西，并明确报出它隐藏了多少行，而不是把它们悄悄算成「相同」（真实的 0.28/0.30 一对：53 差异 → 3 行 + 「50 行被隐藏」）。退出码仍是 `1`，`--json` 里 `differences` 和 `compared_both_sides` 两个数字都在。
+
+## 命令行说的，和实际跑的不是一回事
+
+最不让人安心、也最值得有的一条事实是 `frontend.ignored_arg`：server 接受了这个 flag，然后把它丢了。`vllm#58580` 里那行命令带着 `--enable-auto-tool-choice` 和 `--structured-outputs-config`，Rust frontend 却打出 `argument 'enable_auto_tool_choice' currently has no effect in Rust frontend, ignoring` ——命令行读起来像配好了，实际上没有。`servediff` 把它记成一条事实，所以「两次运行只差哪些 flag 活下来」是一行，而不是要你自己在 80 行里翻出来；自 0.4.56 起它还在表下面把那句后果直接说出来，因为十八行里的一行仍可能被读成杂项：
+
+```text
+note: the command line named 1 flag(s) this frontend accepted and never applied (enable_auto_tool_choice): the run is not configured the way the command reads
+```
+
+`show` 打一次、`diff` 两侧各打一次（两侧都丢同一个 flag 时那对照是 `same`、退出码 `0`，note 就是在解释为什么这个「相同」不是你想要的那种相同），退出码不变。上面那行是在发布包上、对一份别人的真实日志（vllm#66989 的第 1 个 fenced block）实跑出来的输出，不是示意。没有 dropped flag 的日志不会打出这一行。
 
 ## 只要一份日志就能守
 
@@ -112,14 +122,16 @@ servediff diff run.log --against facts.json --skip-absent # 每次 CI，只要�
 
 `--against` 的行、`<absent>` 语义、退出码都和两份日志的 diff 一样：`0` 没变，`1` 同一条代码路径上的事实变了，`2` 基线读不了——那是坏门禁，不是发现。facts 那一侧不会输出 absence note（事实文件说不出「这行为什么从没打印」），改成报「基线里有 N 条事实」。`show --json` 同时输出 `values`（无损列表），因为 `value` 在单值/多值之间会塌成标量或列表。
 
-每行都红的门禁迟早被关掉：包版本每周都在动，而一次升级真正改变的是启动决策。`--only` 按前缀收窄到你自己负责的那几项，并在输出里报出漏掉了多少条：
+每行都红的门禁迟早被关掉：包版本每周都在动，而一次升级真正改变的是启动决策。`--only` 把比较收窄到你负责的那几项，并在输出里报出漏掉了多少条：
 
 ```bash
 servediff diff run.log --against facts.json --skip-absent \
   --only backend. --only cuda_graph. --only parallel.
 # 0：这几项没变，env.pip.* 怎么动都无所谓
-# 2：某个前缀一条事实都没匹配到——守着一个空集合不算通过
+# 2：某个模式一条事实都没匹配到——守着一个空集合不算通过
 ```
+
+模式按事实名匹配，前缀或名字里任意位置都算，两侧都忽略 `_` 和 `-`，因为**你手里的词是日志里的那个词**，不是工具起的 fact 名：`--only all_reduce`、`--only all-reduce`、`--only allreduce` 都能命中 `backend.allreduce_dispatch`（这个 fact 名里根本没有连字符）。两条边界不变：零匹配仍 `2`；值不参与匹配，`--only FLASHINFER` 也 `2`——把门禁钉在值上，它就跟着这周打印什么而漂移。收窄之后，表上的 `note:` 也只谈你收窄到的那些事实，不再解释你没在比较的那几项为什么缺席。
 
 CI 矩阵每一行都会产出一份日志，所以直接把目录交给 `diff`，不必跑六次——每份日志一行、一个退出码，红的那份点名：
 
