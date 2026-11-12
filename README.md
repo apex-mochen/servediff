@@ -395,7 +395,18 @@ server accepted and then dropped. In `vllm#58580` the run passes `--enable-auto-
 and `--structured-outputs-config`, and the Rust frontend logs
 `argument 'enable_auto_tool_choice' currently has no effect in Rust frontend, ignoring` — the
 command line reads as configured and nothing is. `servediff` keeps that as a fact, so two runs
-that differ only in which flags survived is a row, not a footnote you have to spot in 80 lines.
+that differ only in which flags survived is a row, not a footnote you have to spot in 80 lines —
+and since 0.4.56 it also states the consequence under the table, because a row of eighteen can
+still be read as trivia while the run is not what you launched:
+
+```text
+$ servediff show vllm-58580.log
+...
+note: the command line named 2 flag(s) this frontend accepted and never applied (structured_outputs_config, enable_auto_tool_choice): the run is not configured the way the command reads
+```
+
+`diff` carries the same note per side, which is how two runs that both dropped a flag — every
+fact `same`, exit 0 — still say why they are not the pair you meant to compare.
 Same family: `spec.draft_max_len` records the draft model's context as the speculative path
 bounded it (`262144 -> 131072`), because a version can halve it with no flag to show for it.
 

@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.4.56 — 2026-11-12
+
+The dropped flag becomes a sentence, not a row.
+
+0.4.55 read `argument 'x' currently has no effect in Rust frontend, ignoring` as
+`frontend.ignored_arg`. Reading it is not the same as saying it: in a table of 18 facts a
+flag the server accepted and then dropped looks like trivia, and a pair of runs that both
+dropped the same flag compares as `same` with exit 0 — every fact identical, neither run
+configured the way its command line reads.
+
+`show` now ends with the consequence when the fact is there:
+
+```text
+note: the command line named 2 flag(s) this frontend accepted and never applied (structured_outputs_config, enable_auto_tool_choice): the run is not configured the way the command reads
+```
+
+and `diff` carries the same note per side, including when the baseline is a recorded facts
+file — a dropped flag is the one thing a facts file can still report, because the frontend's
+own line was written down. Two runs that both dropped it still exit 0 (nothing differs),
+but the note says why that pair is not the comparison you meant to make.
+
+No new fact names, no change to counts: `53 / 14`, `35 / 33`, the demo's `2 difference(s)`
+and all five corpora at 0 shapes are unchanged, `tools/verify_readme_exit_codes.py` is 21/21,
+and 122 tests (two new: the note appears on `show`, appears on both sides of `diff`, and a
+log without a dropped flag gains no note so the documented output holds).
+
 ## 0.4.55 — 2026-11-11
 
 Two facts for the flags a run did not get.

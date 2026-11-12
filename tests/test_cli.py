@@ -210,6 +210,53 @@ def test_the_flags_a_frontend_dropped_and_the_draft_len_it_halved_are_read():
     assert f["spec.draft_max_len"].value == "262144 -> 131072"
 
 
+DROPPED_FLAGS = (
+    "(RustFrontend pid=1185) WARNING 09-24 15:00:44 [unsupported.rs:67] argument "
+    "'structured_outputs_config' currently has no effect in Rust frontend, ignoring\n"
+    "(RustFrontend pid=1185) WARNING 09-24 15:00:44 [unsupported.rs:67] argument "
+    "'enable_auto_tool_choice' currently has no effect in Rust frontend, ignoring\n"
+)
+
+
+def test_a_dropped_flag_is_stated_as_a_consequence_not_as_a_row(tmp_path, capsys):
+    # `show` lists eighteen facts; the dropped flag is the only one that means the run
+    # is not what its command line says. As a plain row it reads as trivia, and two runs
+    # that both dropped it diff as `same` — so the verdict has to be printed separately.
+    log = tmp_path / "dropped.log"
+    log.write_text(
+        "INFO 09-24 15:00:40 [api_utils.py:347]  version 0.28.0\n"
+        "(RustFrontend pid=1185) WARNING 09-24 15:00:44 [unsupported.rs:67] argument "
+        "'enable_auto_tool_choice' currently has no effect in Rust frontend, ignoring\n"
+    )
+    assert servediff.main(["show", str(log)]) == 0
+    out = capsys.readouterr().out
+    assert "frontend.ignored_arg" in out  # the row is still there, unchanged
+    assert ("the command line named 1 flag(s) this frontend accepted and never applied "
+            "(enable_auto_tool_choice): the run is not configured the way the command reads"
+            in out)
+
+    # A log with no dropped flag gains no note, so the documented `show` output holds.
+    plain = tmp_path / "plain.log"
+    plain.write_text("INFO 09-24 15:00:40 [api_utils.py:347]  version 0.28.0\n")
+    assert servediff.main(["show", str(plain)]) == 0
+    assert "note:" not in capsys.readouterr().out
+
+
+def test_a_dropped_flag_survives_into_the_diff_notes(tmp_path, capsys):
+    a = tmp_path / "a.log"
+    a.write_text(DROPPED_FLAGS)
+    b = tmp_path / "b.log"
+    b.write_text(DROPPED_FLAGS)
+    # Both sides dropped the same two flags: every fact is `same`, yet the run is not
+    # configured as asked, and the note is the only place that can say so.
+    assert servediff.main(["diff", str(a), str(b)]) == 0
+    out = capsys.readouterr().out
+    assert "0 difference(s)" in out
+    assert "baseline: the command line named 2 flag(s)" in out
+    assert "candidate: the command line named 2 flag(s)" in out
+    assert "structured_outputs_config, enable_auto_tool_choice" in out
+
+
 # --- Synthetic lines in the formats of the user's real logs -----------------------
 
 VLLM = """\

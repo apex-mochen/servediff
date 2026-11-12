@@ -765,6 +765,22 @@ def absence_notes(parsed: dict) -> list[str]:
     return []
 
 
+def config_notes(parsed: dict) -> list[str]:
+    """Name a fact that says the run did not do what its command line asked.
+
+    A dropped flag is unlike every other fact: it is present, it is correct, and it
+    means the run ignored a part of its own configuration. Listed as one row among
+    eighteen it reads as trivia, and a diff of two runs that both dropped the same
+    flag reports `same`. So the tool states the consequence, not just the string.
+    """
+    ignored = parsed["facts"].get("frontend.ignored_arg")
+    if not ignored:
+        return []
+    names = ignored.values
+    return [f"the command line named {len(names)} flag(s) this frontend accepted and never applied"
+            f" ({', '.join(names)}): the run is not configured the way the command reads"]
+
+
 def _fmt(value) -> str:
     text = json.dumps(value, ensure_ascii=False) if not isinstance(value, str) else value
     return text if len(text) <= 60 else text[:57] + "..."
@@ -1358,6 +1374,11 @@ def main(argv=None) -> int:
             for key, fact in sorted(parsed["facts"].items()):
                 where = fact.evidence[0][0]
                 print(f"{key:32s} {_fmt(fact.value):60s} line {where if where else '-'}")
+            notes = config_notes(parsed)
+            if notes:
+                print()
+                for note in notes:
+                    print(f"note: {note}")
         return 0
 
     if args.against is not None and args.candidate is not None:
@@ -1476,6 +1497,9 @@ def main(argv=None) -> int:
     identical = len(rows) - len(all_differing)
     notes = []
     for side, parsed in (("baseline", a), ("candidate", b)):
+        # A dropped flag is the one thing a recorded facts file can still report:
+        # the frontend's own line was written down, so `--against` is not blind here.
+        notes.extend(f"{side}: {note}" for note in config_notes(parsed))
         if args.against is not None and side == "baseline":
             continue  # recorded facts cannot say why a fact was never written down
         notes.extend(f"{side}: {note}" for note in absence_notes(parsed))
