@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.60 — 2026-11-12
+
+The other engine says the kv-cache dtype differently, and half of that was unread.
+
+`kv_cache.dtype` was produced by one phrasing only: SGLang's `KV Cache is allocated.
+dtype: fp8, size: …`. vLLM writes the same decision as `Using fp8 data type to store kv
+cache.`, which no rule read, so it fell out of `show` entirely and showed up in `audit`
+as a shape worth a look. Found by running `audit` over a log pasted into vllm#66423 — a
+segfault report with no fixture of ours anywhere near it — not by reading the code.
+
+The new rule feeds the same fact name, so a log carrying both phrasings still reads as
+one value instead of two rows that disagree about nothing.
+
 ## 0.4.59 — 2026-11-12
 
 A typo names the command you typed, not a file you never wrote.

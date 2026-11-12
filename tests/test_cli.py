@@ -1799,6 +1799,26 @@ def test_a_typo_names_the_command_not_the_module(capsys):
     assert "__main__.py" not in err
 
 
+def test_the_other_phrasing_of_the_kv_cache_dtype_is_read(tmp_path):
+    # Audit over a stranger's log (vllm#66423, a segfault report we never shipped a
+    # fixture for) flagged `Using fp8 data type to store kv cache.` as a shape worth a
+    # look: the rule that produced kv_cache.dtype wanted SGLang's wording. Two engines
+    # phrase the same decision differently, and only one phrasing was covered.
+    log = tmp_path / "a.log"
+    log.write_text(
+        "INFO [core.py:123] Initializing a V1 LLM engine (v0.31.0) with config: model='m'\n"
+        "INFO [cache.py:245] Using fp8 data type to store kv cache.\n",
+        encoding="utf-8")
+    facts = servediff.parse(log.read_text(encoding="utf-8"))["facts"]
+    assert facts["kv_cache.dtype"].values == ["fp8"]
+
+    # The SGLang wording still lands in the same fact, so a cross-engine comparison of
+    # the same decision does not split into two rows.
+    other = tmp_path / "b.log"
+    other.write_text("INFO  KV Cache is allocated. dtype: fp8, size: 1.5 GB\n", encoding="utf-8")
+    assert servediff.parse(other.read_text(encoding="utf-8"))["facts"]["kv_cache.dtype"].values == ["fp8"]
+
+
 CORPUS_BASE = ("INFO [core.py:122] Initializing a V1 LLM engine (v0.29.0) with config: model='m'\n"
                "Using FLASH_ATTN attention backend out of potential backends: ['FLASH_ATTN']\n"
                "[pip3] numpy==2.4.6\n")

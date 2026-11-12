@@ -129,6 +129,12 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
     (re.compile(r"rank \d+ in world size \d+ is assigned as (DP rank \d+, PP rank \d+, PCP rank \d+, TP rank \d+(?:, ETP rank \S+)?, EP rank \S+, EPLB rank \S+)"),
      lambda m: [("parallel.roles", m[1])]),
     (re.compile(r"Using (\S+) KV cache layout"), lambda m: [("kv_cache.layout", m[1])]),
+    # The same decision in the other phrasing, and the one a newer log prints: the
+    # SGLang rule further down wants `KV Cache is allocated. dtype: fp8,`, while vLLM
+    # says `Using fp8 data type to store kv cache.`. Only one of the two phrasings was
+    # covered, so the other fell to `audit` as a shape worth a look — on a stranger's
+    # log (vllm#66423), not on anything we had a fixture for.
+    (re.compile(r"Using (\S+) data type to store kv cache"), lambda m: [("kv_cache.dtype", m[1])]),
     # Model identity as the engine resolved it, and the context length it settled on.
     # Both can differ from the requested args (auto-derivation, --max-model-len caps),
     # so a diff that only shows args moving does not explain the run.
