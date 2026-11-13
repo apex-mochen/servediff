@@ -97,6 +97,39 @@ Increase /dev/shm (e.g. --shm-size or --ipc=host).
 A small `/dev/shm` therefore fails startup at that line and never reaches the 60-second watchdog.
 Checked against the `v0.28.0` tag and `main`; a code search for the claim returns nothing.
 
+## Prior art: this exact line has been diagnosed elsewhere as a UVM livelock
+
+Two public notes, written by teams who hit the same string, are worth reading before blaming
+Python:
+
+- [`MiaAI-Lab/GLM-5.3-Flash-EXL3-2x-DGX-Sparks`, `docs/uvm-livelock-gb10.md`](https://github.com/MiaAI-Lab/GLM-5.3-Flash-EXL3-2x-DGX-Sparks/blob/main/docs/uvm-livelock-gb10.md)
+  reports that when the kernel pages vLLM memory out under pressure on GB10 (unified memory),
+  the UVM driver enters an unrecoverable spin: every engine step stalls and `shm_broadcast.py`
+  logs this line every 60 s. Their incident is dated **2026-08-31 — the same day as this log**.
+- [`steveseguin/b70-optimization-lab`, `2026-05-10-minimax-xpusmi-live-trace.md`](https://github.com/steveseguin/b70-optimization-lab/blob/main/notes/2026-05-10-minimax-xpusmi-live-trace.md)
+  hit the same line mid-benchmark and had to kill the run, i.e. it is not a startup-only artefact.
+
+The fingerprint they give is much cheaper to read than a stack:
+
+| signal | healthy | UVM spin |
+|---|---|---|
+| `nvidia-smi` utilization | tracks the workload | **~96 %** while **power draw is idle (~12–20 W)** |
+| `/health` | probes the engine | stays **200** (vLLM V1 only reports an errored flag) |
+| `/metrics` tokens | advance | `prompt_tokens_total + generation_tokens_total` **frozen** while requests are queued |
+| `VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS` | fires on a hang | **does not fire** |
+
+Reading utilization as "the workers are busy, so they are computing" is exactly the trap this
+fingerprint breaks: 96 % util at 12 W means the driver is spinning, not the SM doing work.
+
+**This is a candidate, not this log's conclusion.** The notes are about GB10 unified memory; this
+log's device reports `gpu.total_gib 79.14`, and the reporter never states the hardware. A single
+`nvidia-smi dmon` line sampled during the stall separates the two readings:
+
+- util ≈ 96 % with power ≈ 12–20 W → the workers are not reading because the driver is stuck
+  (UVM/livelock reading), and `py-spy` will show them parked outside the compute path;
+- util low with power normal → the ring is blocked by scheduling, and the `py-spy` comparison
+  below is the answer.
+
 ## What to check next
 
 `py-spy dump` on **both** workers, `pid 356` and `pid 408`. EngineCore (260) is the writer, so a
