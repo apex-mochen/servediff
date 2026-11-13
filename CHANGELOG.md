@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.4.61 — 2026-11-13
+
+Sixteen waiting lines were one wait, and nine characters of readme said "16 stalls".
+
+`servediff show` compresses a log into facts, so the copies disappear: 39 allocator OOM
+lines and 16 ring-buffer warnings each came out as one fact, and the only signal that
+separated one wait from sixteen failures — the gap between them — was thrown away.
+`servediff repeats` keeps it. It groups each message shape that appears more than once,
+reads the clock on every copy, and reports the span, the median gap and whether the gaps
+hold: `regular` (even gaps, at least a second apart — a watchdog re-logging one wait),
+`burst` (millisecond gaps — a retry loop), `untimed` (no clock on the line).
+
+Measured on the log from vllm#54559: 39 OOM lines are one burst inside 2.32 s (median
+gap 0.010 s), and the 16 `No available shared memory broadcast block found` lines are one
+959 s wait re-logged every 60 s. `--min`, `--top`, `--markdown` and `--json` behave like
+`audit`'s, and both readings are spelled out in the README.
+
+Two log shapes had to survive before the counts were honest. A tqdm progress bar carries
+no newline of its own, so a captured log put the next process's warning on the same
+physical line — that line's shape then held the bar's digits and the warning counted as
+15, not 16. And two ranks interleave their timestamps, so one line arrives out of order:
+read as a sequence it produced `max gap 86399.589 s` (a negative delta wrapped to a day),
+read as a set of moments it is 0.9 s. Both are now the first two tests of the command.
+
 ## 0.4.60 — 2026-11-12
 
 The other engine says the kv-cache dtype differently, and half of that was unread.

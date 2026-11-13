@@ -1103,6 +1103,17 @@ def main(argv=None) -> int:
     a.add_argument("--write-baseline", type=Path, default=None, metavar="JSON",
                    help="record the shapes worth a look in this run, so a later --baseline"
                         " accepts them and a pipeline fails only on what is new")
+    r = sub.add_parser("repeats", help="lines that repeat, with the gap between them"
+                                        " (a fixed gap is one wait being re-logged)")
+    r.add_argument("logs", type=Path, nargs="+", help="server logs, or - to read stdin")
+    r.add_argument("--min", type=int, default=2, dest="min_count", metavar="N",
+                   help="only shapes that appear at least N times (default 2)")
+    r.add_argument("--top", type=int, default=0, metavar="N",
+                   help="only the N most frequent shapes")
+    r.add_argument("--markdown", action="store_true",
+                   help="wrap the report in a code fence, ready to paste into an issue")
+    r.add_argument("--json", action="store_true",
+                   help="emit one JSON object per log, so a pipeline does not parse the report text")
     args = parser.parse_args(argv)
 
     if args.command == "audit":
@@ -1396,6 +1407,34 @@ def main(argv=None) -> int:
                   f" {len(rows) - len(differing)} identical. <absent> means the log did not print it,"
                   " not that it was off.")
         return 1 if differing else 0
+
+    if args.command == "repeats":
+        if sum(1 for path in args.logs if str(path) == "-") > 1:
+            print("repeats: stdin can be read once, so at most one entry may be '-'",
+                  file=sys.stderr)
+            return 2
+        from servediff import repeats as repeatsmod
+
+        blocks = []
+        payload = []
+        for path in _expand_logs(args.logs):
+            try:
+                text = _read_log(path)
+            except InputError as exc:
+                print(f"repeats: {exc}", file=sys.stderr)
+                return 2
+            lines, found, block = repeatsmod.report(Path(_label(path)), text,
+                                                    min_count=args.min_count, top=args.top)
+            blocks.append(block)
+            payload.append({"log": _label(path), "lines": lines, "repeated": found})
+        if args.json:
+            # The report text is for a person; this is the same data for a gate that
+            # wants to fail when a shape starts repeating at a new cadence.
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+        else:
+            out = "\n\n".join(blocks)
+            print(f"```text\n{out}\n```" if args.markdown else out)
+        return 0
 
     if args.command == "show":
         try:

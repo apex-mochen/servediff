@@ -101,6 +101,8 @@ def main():
             ("audit <unreadable path>", ["audit", str(tmp / "nope.log")], 2),
             ("audit <log> --baseline <not a baseline>",
              ["audit", str(log), "--baseline", str(bad)], 2),
+            ("repeats <log>", ["repeats", str(log)], 0),
+            ("repeats <unreadable path>", ["repeats", str(tmp / "nope.log")], 2),
         ]
 
         failures = 0

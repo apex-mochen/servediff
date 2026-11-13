@@ -154,6 +154,7 @@ names a python launcher, that interpreter is the one snapshotted; for entry poin
 | `servediff capture [-o run.log] -- <server command>` | runs the server, tees its log to stdout and to the file, and writes `<out>.env.json` **before** launch. If the command names a python launcher (`capture -- python -m vllm...`), that interpreter is the one snapshotted; otherwise pass `--python` to point at the server's venv | the server's own exit code; `2` when the paths cannot be written or the command cannot start |
 | `servediff demo` | two excerpt logs shipped inside the package → a real diff with no log files of your own; run this first after installing | `1` always (the bundled logs differ; see the note it prints) |
 | `servediff audit <log|dir>` | the lines no rule reads, split into noise (counted) and shapes worth a look (listed); a directory (or several paths) is audited as one corpus, one line per log; `--top N`, `--everything`, `--markdown`, `--json`, `--max-shapes N`, `--baseline JSON`, `--write-baseline JSON` | `0` reported; `1` more shapes worth a look than `--max-shapes` allows (with `--baseline`, only shapes not in it); `2` unreadable path or a file that is not a baseline |
+| `servediff repeats <log|dir>` | the message shapes that appear more than once, each with its span, median gap and whether the gaps hold: `regular` (a watchdog re-logging one wait), `burst` (a retry loop), `untimed`; `--min N`, `--top N`, `--markdown`, `--json` | `0` reported, including a log that repeats nothing; `2` unreadable path, or more than one `-` |
 
 `1` always means *the inputs differ* — never *something went wrong* — so
 `servediff diff old.log new.log` works directly as a CI gate. At most one input may be
@@ -661,6 +662,51 @@ servediff diff run1.log.env.json run2.log.env.json
 ```
 
 Exit codes: `0` no differences, `1` differences, `2` nothing recognised.
+
+### One waiting line, sixteen copies
+
+A startup log repeats itself. The same allocator line can appear 39 times inside 2.3 s,
+and the same ring-buffer warning 16 times over 16 minutes. Counting them says "39
+problems" and "16 stalls" for what is one retry burst and one wait. `repeats` groups
+every message shape that appears more than once and reports the gap between the copies:
+
+```bash
+servediff repeats serve.log
+```
+
+```text
+serve.log: 102 line(s), 14 shape(s) repeated 2+ time(s), 85 line(s) in them
+    39x burst    11:33:26.640 -> 11:33:28.959  span 2.32 s
+        gaps 0.010 s median, 0.900 s max
+        [rank0]:[W831 11:33:26.640394862 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 20971520 bytes
+    16x regular  11:34:32 -> 11:50:31  span 959 s
+        gap 60.000 s median, 118.000 s max
+        No available shared memory broadcast block found in 60 seconds. This typically happens when some processes are hanging or doing some time-consuming wo
+```
+
+`regular` means the gaps hold their value — 90 % of them within 5 % of the median — **and**
+the median is at least a second. That is a watchdog re-logging one continuous wait, not
+N stalls: 16 lines, one 959 s wait. `burst` is a retry loop, with millisecond gaps and
+usually one much longer gap between bursts. `untimed` is a shape that carries no clock,
+so only its count is reported.
+
+The two readings decide different fixes. A warning that repeats every 60 s points at one
+blocked reader holding a ring buffer; a burst of OOM lines points at one allocator budget
+being hit repeatedly, and the free memory elsewhere in the log decides which. The
+[#54559 analysis](https://github.com/apex-mochen/servediff/blob/main/ISSUE-54559-analysis.md)
+is that reading worked out end to end.
+
+Progress bars are split off first: tqdm rewrites one terminal row with `\r` and carries
+no newline, so a captured log can glue the next process's line onto the bar's. Without
+that split the warning hides behind the bar's digits and never groups with its own copies.
+Timestamps are read as a set of moments, not a sequence, because two ranks interleave
+their lines and a captured log can carry them out of order.
+
+`--min N` hides shapes below the bar, `--top N` keeps the most frequent, `--markdown`
+wraps the report in a fence for an issue, and `--json` emits
+`{log, lines, repeated: [{count, first, last, span_s, median_gap_s, max_gap_s, regular}]}`
+so a pipeline does not parse the text. Exit codes: `0` reported — a log that repeats
+nothing is a valid answer; `2` unreadable path, or more than one `-`.
 
 ## Limits
 

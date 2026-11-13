@@ -1890,3 +1890,110 @@ def test_one_log_without_against_is_an_input_error(tmp_path, capsys):
     assert "one log is not a comparison" in err
     assert "--against" in err
     assert "Traceback" not in err
+
+
+WAIT = ("No available shared memory broadcast block found in 60 seconds."
+        " This typically happens when some processes are hanging or doing some"
+        " time-consuming work (e.g. compilation, weight/kv cache quantization).")
+
+
+def _write_log(tmp_path, lines, name="repeats.log"):
+    log = tmp_path / name
+    log.write_text("".join(line + "\n" for line in lines), encoding="utf-8")
+    return log
+
+
+def test_repeats_reads_a_fixed_gap_as_one_wait(tmp_path, capsys):
+    # Sixteen copies of vLLM's ring-buffer warning are one wait re-logged every
+    # VLLM_RINGBUFFER_WARNING_INTERVAL, not sixteen stalls. The gap is the only signal that
+    # separates the two, and counting lines throws it away.
+    log = _write_log(tmp_path, [
+        f"(EngineCore pid=260) INFO 08-31 11:{minute:02d}:32 shm_broadcast.py:801] {WAIT}"
+        for minute in (34, 35, 36, 37, 38)])
+    assert servediff.main(["repeats", str(log)]) == 0
+    out = capsys.readouterr().out
+    assert "5x" in out
+    assert "regular" in out
+    assert "span 240 s" in out
+    assert "60.000 s median" in out
+    assert "one wait being re-logged" in out
+
+
+def test_repeats_reads_a_tight_burst_as_retries(tmp_path, capsys):
+    # An allocator retrying an allocation prints the same line every few milliseconds:
+    # regular it is not, and the median gap says so.
+    log = _write_log(tmp_path, [
+        f"(Worker_TP0_EP0 pid=356) WARNING 08-31 11:33:26.{ms:03d} cuda.py:1] "
+        "memory allocation failed with OOM while trying to allocate 20971520 bytes"
+        for ms in (100, 112, 124, 136)])
+    assert servediff.main(["repeats", str(log)]) == 0
+    out = capsys.readouterr().out
+    assert "4x" in out
+    assert "burst" in out
+    assert "0.012 s median" in out
+    assert "one wait being re-logged" not in out
+
+
+def test_repeats_splits_a_warning_spliced_onto_a_progress_bar(tmp_path, capsys):
+    # A tqdm bar rewrites one terminal row with \r and carries no newline, so a captured log
+    # puts the next process's line on the same physical line. Left unsplit, the warning hides
+    # behind the bar's digits and never groups with its own copies.
+    spliced = ("Capturing CUDA graphs (PIECEWISE):  100%|##########| 51/51 [00:01<00:00, 3.2s/it]"
+               f"(EngineCore pid=260) INFO 08-31 11:37:30 shm_broadcast.py:801] {WAIT}")
+    log = _write_log(tmp_path, [
+        spliced,
+        f"(EngineCore pid=260) INFO 08-31 11:38:30 shm_broadcast.py:801] {WAIT}"])
+    assert servediff.main(["repeats", str(log)]) == 0
+    out = capsys.readouterr().out
+    assert "2x" in out
+    assert "span 60" in out
+    # the reported sample is the warning itself, not the progress bar it was glued to
+    assert "########" not in out.split("No available")[0].splitlines()[-1]
+
+
+def test_repeats_says_untimed_when_a_line_carries_no_clock(tmp_path, capsys):
+    # A merged multi-process log keeps lines from files that never printed a timestamp;
+    # the count is still useful, the gap is not invented.
+    log = _write_log(tmp_path, [
+        "[transformers] Unrecognized keys in `rope_parameters`",
+        "[transformers] Unrecognized keys in `rope_parameters`"])
+    assert servediff.main(["repeats", str(log)]) == 0
+    out = capsys.readouterr().out
+    assert "2x" in out
+    assert "untimed" in out
+    assert "gap unknown" in out
+
+
+def test_repeats_json_carries_the_span_and_the_median(tmp_path, capsys):
+    log = _write_log(tmp_path, [
+        f"(EngineCore pid=260) INFO 08-31 11:{minute:02d}:00 core.py:1] {WAIT}"
+        for minute in (10, 11, 12)])
+    assert servediff.main(["repeats", str(log), "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    group = payload[0]["repeated"][0]
+    assert group["count"] == 3
+    assert group["regular"] is True
+    assert group["span_s"] == 120.0
+    assert group["median_gap_s"] == 60.0
+    assert group["first"] == 11 * 3600 + 10 * 60  # the log quotes 11:10:00
+
+
+def test_repeats_min_hides_a_shape_below_the_bar(tmp_path, capsys):
+    log = _write_log(tmp_path, [
+        f"(EngineCore pid=260) INFO 08-31 11:{minute:02d}:00 core.py:1] {WAIT}"
+        for minute in (10, 11)])
+    assert servediff.main(["repeats", str(log), "--min", "3"]) == 0
+    out = capsys.readouterr().out
+    assert "nothing repeats 3 or more times." in out
+
+
+def test_repeats_reads_a_log_from_stdin(monkeypatch, capsys):
+    text = "".join(
+        f"(EngineCore pid=260) INFO 08-31 11:{minute:02d}:00 core.py:1] {WAIT}\n"
+        for minute in (10, 11, 12))
+    raw = text.encode("utf-8")
+    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(raw), encoding="utf-8"))
+    assert servediff.main(["repeats", "-"]) == 0
+    out = capsys.readouterr().out
+    assert "3x" in out
+    assert "regular" in out
