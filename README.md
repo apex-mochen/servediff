@@ -525,6 +525,11 @@ servediff capture -o v029.log -- docker run ... vllm/vllm-openai:v0.29.0 ...
 servediff diff v026.log v029.log --markdown
 ```
 
+One log can also hold said-and-done failures that look like many. The
+[#54559 analysis](https://github.com/apex-mochen/servediff/blob/main/ISSUE-54559-analysis.md)
+counts them by cadence instead: 39 allocator OOM lines turn out to be two retry bursts inside
+2.3 s, and 16 broadcast-wait lines turn out to be one wait of 959 s re-logged every minute.
+
 ## Dependency versions: `servediff env`
 
 Logs do not print torch / triton / flashinfer versions, and upgrades of those change
