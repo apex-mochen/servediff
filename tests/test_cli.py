@@ -2230,3 +2230,15 @@ def test_a_request_field_the_server_ignored_is_a_fact():
     assert f["api.tool_parser"].value == "Qwen3CoderToolParser"
     assert f["api.ignored_request_fields"].value == "{'enable_thinking'}"
     assert f["engine.version"].value == "0.14.0"
+
+
+def test_a_pure_traceback_says_what_it_is_instead_of_exiting_silently():
+    # sglang#52318 is a stack with no startup lines at all. "not recognised" alone reads as
+    # a bug in the reader; the hint names the difference and says there is nothing to compare.
+    log = Path(__file__).parent / "fixtures" / "sglang-2026-11" / "sglang-52318-assertion.log"
+    out = subprocess.run([sys.executable, "-m", "servediff", "show", str(log)],
+                         capture_output=True, text=True)
+    assert out.returncode == 2
+    assert "no vLLM or SGLang configuration lines recognised" in out.stderr
+    assert "this looks like a traceback, not a startup log" in out.stderr
+    assert "31 line(s) of stack" in out.stderr

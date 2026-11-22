@@ -39,7 +39,8 @@ jobs:
           for d in tests/fixtures tests/fixtures/held-out-2026-10 \
                    tests/fixtures/held-out-2026-11 tests/fixtures/held-out-2026-11b \
                    tests/fixtures/full-cpu-2026-11 tests/fixtures/sglang-2026-10 \
-                   tests/fixtures/vllm-forum-2026-06 tests/fixtures/vllm-forum-2026-05; do
+                   tests/fixtures/vllm-forum-2026-06 tests/fixtures/vllm-forum-2026-05 \
+                   tests/fixtures/sglang-2026-11; do
             servediff audit "$d" --max-shapes 0
           done
       - name: Check the exit codes the README promises

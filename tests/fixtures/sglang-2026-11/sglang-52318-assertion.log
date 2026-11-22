@@ -1,0 +1,31 @@
+$ PYTHONPATH=<main @ 448764da63>/python python3 -m sglang.launch_server --model-path cyankiwi/Qwen3-Omni-30B-A3B-Instruct-AWQ-4bit --port 30000 --mem-fraction-static 0.85 --context-length 8192
+  File "/root/main/python/sglang/srt/model_executor/model_runner.py", line 753, in initialize
+    self.load_model()
+  File "/root/main/python/sglang/srt/model_executor/model_runner.py", line 1411, in load_model
+    loaded = load_model_with_memory_saver(
+  File "/root/main/python/sglang/srt/model_executor/model_runner_components/load_model_utils.py", line 440, in load_model_with_memory_saver
+    model = loader.load_model(
+  File "/root/main/python/sglang/srt/model_loader/loader.py", line 1067, in load_model
+    model = _initialize_model(
+  File "/root/main/python/sglang/srt/model_loader/loader.py", line 325, in _initialize_model
+    model = model_class(**kwargs)
+  File "/root/main/python/sglang/srt/models/qwen3_omni_moe.py", line 537, in __init__
+    self.thinker = Qwen3OmniMoeThinkerForConditionalGeneration(
+  File "/root/main/python/sglang/srt/models/qwen3_omni_moe.py", line 483, in __init__
+    self.visual = Qwen3OmniMoeVisionEncoder(
+  File "/root/main/python/sglang/srt/models/qwen3_omni_moe.py", line 428, in __init__
+    super().__init__(
+  File "/root/main/python/sglang/srt/models/qwen3_vl.py", line 437, in __init__
+    Qwen3_VisionBlock(
+  File "/root/main/python/sglang/srt/models/qwen3_vl.py", line 245, in __init__
+    self.mlp = Qwen3_VisionMLP(
+  File "/root/main/python/sglang/srt/models/qwen3_vl.py", line 161, in __init__
+    self.linear_fc2 = RowParallelLinear(
+  File "/root/main/python/sglang/srt/layers/linear.py", line 1637, in __init__
+    self.quant_method.create_weights(
+  File "/root/main/python/sglang/srt/layers/quantization/compressed_tensors/compressed_tensors.py", line 1478, in create_weights
+    layer.scheme.create_weights(
+  File "/root/main/python/sglang/srt/layers/quantization/compressed_tensors/schemes/compressed_tensors_wNa16.py", line 176, in create_weights
+    assert input_size_per_partition % group_size == 0
+AssertionError
+[2026-11-22 12:23:07] Received sigquit from a child process. It usually means the child failed.

@@ -1180,6 +1180,28 @@ def _gate_corpus(args) -> int:
     return 1 if changed_logs else 0
 
 
+def _no_facts_hint(text: str) -> str:
+    """Why a paste produced nothing, said in terms of what the tool reads.
+
+    A traceback is the most common input that has no startup lines: people paste the part
+    that scared them. Saying so is better than a bare "not recognised", which reads as a
+    bug in the reader.
+    """
+    lines = [l for l in text.splitlines() if l.strip()]
+    traceback = "Traceback (most recent call last)" in text or any(
+        l.lstrip().startswith('File "') for l in lines)
+    if traceback:
+        head = ("hint: this looks like a traceback, not a startup log. servediff reads the lines "
+                "a server prints while starting — `[module.py:line]` with a resolved value, "
+                "e.g. `[kv_cache_utils.py:851] kv lcm block sizes 640`.")
+        if len(lines) <= 40:
+            head += f" This paste is {len(lines)} line(s) of stack, so there is nothing to compare."
+        return head
+    if len(lines) <= 6:
+        return ("hint: only {} line(s) here; a startup log carries a few hundred lines, including "
+                "the resolved configuration after `Initializing a V1 LLM engine`.")
+    return "hint: run `servediff audit <log>` to see which lines are noise and which it could not read."
+
 def _non_none_pairs(literal: str) -> str:
     """`{'A': None, 'B': '4194304'}` -> `{B: 4194304}`; the None entries are not overrides."""
     inner = literal.strip("{} ")
@@ -1633,7 +1655,12 @@ def _run(argv=None) -> int:
             print(f"show: {exc}", file=sys.stderr)
             return 2
         if not parsed["facts"]:
-            print(f"{_label(args.log)}: no vLLM or SGLang configuration lines recognised", file=sys.stderr)
+            text = _read_log(args.log)
+            print(f"{_label(args.log)}: no vLLM or SGLang configuration lines recognised",
+                  file=sys.stderr)
+            hint = _no_facts_hint(text)
+            if hint:
+                print(hint, file=sys.stderr)
             return 2
         if args.json:
             # `values` is the lossless list: `value` collapses to a scalar when a fact
