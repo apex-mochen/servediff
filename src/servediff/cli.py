@@ -257,6 +257,11 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
     # own init timing. On a vision model this is a startup step you cannot see anywhere else.
     (re.compile(r"Multi-modal warmup completed in ([\d.]+)s"),
      lambda m: [("mm.warmup_s", float(m[1]))]),
+    # Vision tokenisation: transformers skips the per-frame pixel cap the reference
+    # implementation applies, so the same video costs more tokens here. The warning names
+    # the switch that would change it; nothing in the server flags does.
+    (re.compile(r"does not apply the per-frame pixel cap the reference implementation"),
+     lambda m: [("mm.pixel_cap", "not applied (cap_pixels_per_frame unset)")]),
     # torch.compile outcome: artifact count/size reflects compile behaviour; total
     # wall time is comparable between versions on the same machine.
     (re.compile(r"collected artifacts: (.+?) total"),
@@ -350,6 +355,20 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
      lambda m: [("cpu.torch_parallelism", f"{m[1]} -> {m[2]}")]),
     (re.compile(r"We must use the `spawn` multiprocessing start method"),
      lambda m: [("worker.mp_method", "spawn")]),
+    # CPU serving pins each worker to a core list derived at runtime, and OMP_NUM_THREADS
+    # from the outside environment can override the cut. Neither value is in the command
+    # line, and a box with a smaller cgroup sees a different list for the same flags.
+    (re.compile(r"VLLM_CPU_OMP_THREADS_BIND='([\w-]+)', auto_setup=(\w+), skip_setup=(\w+)"),
+     lambda m: [("cpu.threads_bind_mode", f"{m[1]} (auto_setup={m[2]}, skip_setup={m[3]})")]),
+    (re.compile(r"local_rank=(\d+), core ids=\[([\d, ]+)\]"),
+     lambda m: [("cpu.core_ids", f"[{m[2]}]")]),
+    (re.compile(r"OMP_NUM_THREADS=(\d+) is set; leaving Torch threads at (\d+) for serving"),
+     lambda m: [("cpu.omp_threads", f"{m[1]} (torch left at {m[2]})")]),
+    # Hybrid models cannot use the default block size: the attention page has to be at least
+    # the mamba page, so the engine raises it, and the group sizes it reports follow from
+    # that. No flag asks for 640.
+    (re.compile(r"Setting attention block size to (\d+) tokens to ensure that attention page size is >= mamba page size"),
+     lambda m: [("kv_cache.attention_block_size", f"{m[1]} (page >= mamba page)")]),
     # Which attention backend the platform actually picked. A flag asks for one; this
     # line says what was chosen after the check, and FlashInfer vs FlashAttention is a
     # different kernel set for the same command line.

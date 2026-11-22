@@ -13,7 +13,7 @@ Run: vLLM `0.34.0rc1.dev398+g153dc0464`, one AVX2 CPU (no CUDA), `vadery/Qwen3.5
 
 `test_a_directory_is_audited_as_one_corpus_with_a_line_per_log` asserts that every root
 fixture parses with **zero** shapes worth a look. This log is the first *full* noisy one
-from a GPU-less build and does not meet that bar yet: 9 shapes remain unread. Keeping it
+from a GPU-less build and does not meet that bar yet: 4 shapes remain unread. Keeping it
 here keeps that invariant honest instead of lowering it, and the remainder is written down
 below rather than discovered later.
 
@@ -35,14 +35,19 @@ backend. The facts now read from it:
 | `mm.warmup_s` | `9.45` | 33 |
 | `compile.recompile_reason` | `cache load failure (backbone)` | 76 |
 | `kv_cache.group_sizes` | `[640, 640, 640, 640]` | 83 |
+| `cpu.threads_bind_mode` | `auto (auto_setup=True, skip_setup=False)` | 25 |
+| `cpu.core_ids` | `[1, 3, 5, 7, 9, 11, 13]` | 27 |
+| `cpu.omp_threads` | `7 (torch left at 7)` | 55 |
+| `kv_cache.attention_block_size` | `640 (page >= mamba page)` | 56 |
+| `mm.pixel_cap` | `not applied (cap_pixels_per_frame unset)` | 32 |
 
 The last row is the one worth keeping: oneDNN refused a primitive descriptor, so the run
 silently fell back to torch linear. Nothing on the command line says so, and a benchmark
 only shows the slower result.
 
-## Remaining 9 shapes (audit at 0.4.63)
+## Remaining 4 shapes (audit at 0.4.64)
 
-0.4.63 took four of them over as facts — `kv_cache.group_sizes`, `kv_cache.mamba_mode`,
+0.4.63 and 0.4.64 took nine of them over as facts — `kv_cache.group_sizes`, `kv_cache.mamba_mode`,
 `mm.warmup_s`, `compile.recompile_reason` — and taught the noise table the two progress-bar
 variants. What is left is CPU deployment detail:
 

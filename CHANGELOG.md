@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.4.64 — 2026-11-22
+
+CPU serving was only half readable: the log pins each worker to a core list and lets
+`OMP_NUM_THREADS` from outside override the torch cut, and neither value is in the flags.
+
+Five facts read from a real 0.34 CPU log: `cpu.threads_bind_mode` (`auto (auto_setup=True,
+skip_setup=False)`), `cpu.core_ids` (`[1, 3, 5, 7, 9, 11, 13]`), `cpu.omp_threads`
+(`7 (torch left at 7)`), `kv_cache.attention_block_size` (`640 (page >= mamba page)` — hybrid
+models raise the block size so the attention page fits the mamba page, and the reported group
+sizes follow from that), and `mm.pixel_cap` (`not applied` — transformers skips the per-frame
+pixel cap, so the same video costs more tokens than the reference implementation).
+
+The full CPU log's unread remainder is now **4** (22 two releases ago): two
+`torch.set_num_threads` skip warnings and the NUMA pair, where the API layer and the C++
+layer disagree about whether binding happened, so a single fact would have to pick a side.
+`PROVENANCE.md` says so instead of dropping them.
+
+Also: the README now points at the rendered notes site
+(<https://apex-mochen.github.io/servediff/>) and lists `writeups/same-box-twice.md`.
+
 ## 0.4.63 — 2026-11-22
 
 The hybrid cache on 0.34 was invisible, and a lost compile-cache hit had no line.

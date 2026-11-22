@@ -137,6 +137,14 @@ def test_real_cpu_log_from_034_keeps_the_backend_choices():
     # Two startup steps that only exist on this kind of run.
     assert f["mm.warmup_s"].value == 9.45
     assert f["compile.recompile_reason"].value == "cache load failure (backbone)"
+    # CPU serving: where the worker was pinned, and whether OMP came from outside.
+    assert f["cpu.threads_bind_mode"].value == "auto (auto_setup=True, skip_setup=False)"
+    assert f["cpu.core_ids"].value == "[1, 3, 5, 7, 9, 11, 13]"
+    assert f["cpu.omp_threads"].value == "7 (torch left at 7)"
+    # Hybrid cache: the block size is raised so the attention page fits the mamba page.
+    assert f["kv_cache.attention_block_size"].value == "640 (page >= mamba page)"
+    # Vision tokenisation runs without the reference pixel cap.
+    assert f["mm.pixel_cap"].value == "not applied (cap_pixels_per_frame unset)"
     assert f["startup"].value == "ready"
     # The GPU-only fact stays absent rather than being inferred from a CPU default.
     assert "backend.attention" not in f
@@ -165,7 +173,7 @@ def test_the_cpu_log_keeps_its_remainder_on_the_record(capsys):
     d = FIX / "full-cpu-2026-11"
     assert servediff.main(["audit", str(d)]) == 0
     out = capsys.readouterr().out
-    assert "9 line(s) worth a look" in out
+    assert "4 line(s) worth a look" in out
     # What is left is CPU deployment detail (thread binding, NUMA policy), not a backend
     # choice that already has a fact.
     assert "NUMA binding" in out

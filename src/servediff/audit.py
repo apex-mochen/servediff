@@ -77,6 +77,9 @@ NOISE = (
     # Compile phase markers: they say the step began, never with what settings it ran — the
     # same reason "JIT kernel warmup starting" is noise below.
     re.compile(r"^Warming up model for the compilation\.\.\.$|^Warming up done\.$"),
+    # Header of the OpenMP binding block whose detail lines now carry cpu.threads_bind_mode
+    # and cpu.core_ids; the header alone says nothing.
+    re.compile(r"^OpenMP thread binding info:"),
     re.compile(r'"(GET|POST) /[^"]*" \d{3}'),  # uvicorn access log
     re.compile(r"INFO:\s+(Started server process|Waiting for application startup)"),
     re.compile(r"Available routes are:"),
