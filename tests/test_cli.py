@@ -2061,3 +2061,29 @@ def test_repeats_reads_a_log_from_stdin(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "3x" in out
     assert "regular" in out
+
+def test_no_fact_key_disappears_from_the_corpus():
+    """A rule that stops matching fails nothing on its own — the table just gets shorter.
+
+    Removing the `worker.mp_method` rule by accident while inserting a new one left the
+    suite green on every test that did not happen to assert that key. This compares the
+    keys produced by the whole bundled corpus against a checked-in inventory, so any loss
+    or addition has to be acknowledged (`python tools/fact_keys.py --write`). Scope: keys
+    that only exist in an inline test string (like `worker.mp_method`) are guarded by the
+    test that writes that string, not by this inventory.
+    """
+    produced = set()
+    for log in sorted(FIX.parent.rglob("*.log")):
+        produced |= set(servediff.parse(log.read_text(encoding="utf-8"))["facts"])
+    expected = {
+        line.strip()
+        for line in (FIX / "expected_fact_keys.txt").read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.startswith("#")
+    }
+    missing = sorted(expected - produced)
+    added = sorted(produced - expected)
+    assert missing == [], f"fact keys no longer produced: {missing}"
+    assert added == [], (
+        f"new fact keys {added} — add a test that pins them, then run "
+        "`python tools/fact_keys.py --write`"
+    )
