@@ -41,3 +41,15 @@ def test_readme_names_the_facts_it_ships():
         "cpu.numa_membind",
     ):
         assert fact in text, fact
+
+
+def test_the_chinese_readme_points_at_the_english_one_and_the_notes_site():
+    """The Chinese page is an introduction, not a translation, so it drifts silently.
+
+    Two things must not drift: where the full list lives, and where the rendered writeups
+    are. Both were missing while the English page had gained a section on the notes site.
+    """
+    text = (ROOT / "README.zh-CN.md").read_text(encoding="utf-8")
+    assert "blob/main/README.md" in text
+    assert "apex-mochen.github.io/servediff" in text
+    assert "sglang-2026-10" in text

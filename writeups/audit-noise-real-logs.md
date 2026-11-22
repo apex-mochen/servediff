@@ -1,4 +1,4 @@
-# What `servediff audit` is for, measured on four full logs
+# What `servediff audit` is for, measured on five full logs
 
 `servediff diff` answers "what changed between these two startups". `servediff audit`
 answers the question that makes `diff` trustworthy: **which lines did the parser fail to
@@ -17,7 +17,8 @@ startup that broke.
 
 ## Before and after, on real logs
 
-Four full startup logs, all of them live-server output rather than excerpts. Counts are
+Four full startup logs, all of them live-server output rather than excerpts; a fifth
+arrived with vLLM 0.34 on a GPU-less box (see below). Counts are
 "shapes worth a look", the only group the report lists.
 
 | log | engine · version | before 0.4.22 | after 0.4.25 |
@@ -38,6 +39,15 @@ became facts in 0.4.25 instead of being classified away:
 
 A bare `AssertionError` under a failed import check stays noise: the detail is the line
 above, which is now read, so counting it again would double-report one condition.
+
+The fifth full log is a CPU-only vLLM 0.34 startup (vllm#67598, 173 lines, no CUDA at all).
+At 0.4.63 it had four shapes left; 0.4.64 read them (`cpu.numa_auto`,
+`cpu.numa_membind`, `cpu.numa_migrate`, `cpu.set_num_threads`) and it reports zero. It also
+caught the audit lying: the "prose" classifier was eating engine messages that happen to be
+English sentences — `Padding mamba page size by 20.75% …`, `Encoder cache will be
+initialized …`, `Explicitly set (4.0/30.69) GiB …`, `kv lcm block sizes 640` — so a log could
+report `nothing worth a look` while four settings sat unread underneath. Those are facts now
+and the rule only applies to lines with no log preamble.
 
 The TP=8 log reaching zero is the stricter result: every one of those 190 lines was either a
 traceback frame or a configuration line, and the configuration lines are now facts
