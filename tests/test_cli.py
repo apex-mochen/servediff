@@ -1169,6 +1169,19 @@ def test_demo_diffs_the_logs_it_ships():
     assert "demo: exit 1" in out.stderr  # says why 1 is a result, not a failure
 
 
+def test_a_reader_that_stops_early_is_not_a_traceback():
+    # `servediff show server.log | head` is how a long fact list gets read. head closes
+    # the pipe, our write fails with EPIPE, and the interpreter used to print a
+    # traceback over the facts the user was reading.
+    log = Path(__file__).parent / "fixtures" / "vllm-forum-2026-06" / "vllm-cpu-2x-epyc-9655.log"
+    out = subprocess.run(f'{sys.executable} -m servediff show "{log}" | head -2',
+                         shell=True, capture_output=True, text=True)
+    assert out.returncode == 0, out
+    assert "cpu.core_ids" in out.stdout
+    assert "BrokenPipeError" not in out.stderr
+    assert "Traceback" not in out.stderr
+
+
 def test_audit_names_the_lines_nothing_reads():
     # The report is what an external user pastes when a fact comes out <absent>.
     from servediff import audit

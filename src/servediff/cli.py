@@ -29,6 +29,7 @@ import json
 import re
 import shlex
 import subprocess
+import os
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -1164,6 +1165,21 @@ def _keep_console_printable() -> None:
 
 
 def main(argv=None) -> int:
+    """Console entry point. Wraps the real body so that a closed pipe is not a traceback."""
+    try:
+        return _run(argv)
+    except BrokenPipeError:
+        # `servediff show server.log | head` is ordinary use. The reader stops after a few
+        # lines and the write fails; that is the reader's decision, not our error. Point
+        # stdout at devnull so the interpreter's own flush at exit stays silent too.
+        try:
+            os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+        except OSError:
+            pass
+        return 0
+
+
+def _run(argv=None) -> int:
     _keep_console_printable()
     parser = argparse.ArgumentParser(
         prog="servediff",
