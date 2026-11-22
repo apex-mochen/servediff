@@ -1,0 +1,442 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What servediff audit is for, measured on four full logs</title>
+<meta name="description" content="servediff diff answers &quot;what changed between these two startups&quot;. servediff audit answers the question that makes diff trustworthy: which lines did the parser fail to read? Without it, a fact missing after an upgrade is ">
+<link rel="canonical" href="https://apex-mochen.github.io/servediff/audit-noise-real-logs.html">
+<style>
+:root { --fg:#1c1c1e; --muted:#6b6b70; --line:#e4e4e7; --code:#f6f6f7; }
+body { margin:0 auto; max-width:44rem; padding:2.5rem 1.25rem 6rem;
+  font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  color:var(--fg); }
+h1 { font-size:1.9rem; line-height:1.25; margin:0 0 1rem; letter-spacing:-0.01em; }
+h2 { font-size:1.25rem; margin:2.2rem 0 .6rem; }
+h3 { font-size:1.05rem; margin:1.6rem 0 .4rem; }
+p, li { color:var(--fg); }
+pre { background:var(--code); border:1px solid var(--line); border-radius:6px;
+  padding:.85rem 1rem; overflow-x:auto; font-size:.86rem; line-height:1.5; }
+code { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:.9em; }
+p code, li code { background:var(--code); padding:.1em .3em; border-radius:3px; }
+a { color:#0b62d0; }
+.note { color:var(--muted); font-size:.9rem; }
+nav { border-bottom:1px solid var(--line); padding-bottom:.75rem; margin-bottom:2rem;
+  font-size:.9rem; }
+nav a { margin-right:1rem; }
+ul.index li { margin:.5rem 0; }
+</style>
+</head>
+<body>
+<nav><a href="./index.html">servediff notes</a><a href="https://github.com/apex-mochen/servediff">source</a><a href="https://pypi.org/project/servediff/">pip install servediff</a></nav>
+<h1>What <code>servediff audit</code> is for, measured on four full logs</h1>
+<p><code>servediff diff</code> answers "what changed between these two startups". <code>servediff audit</code>
+answers the question that makes <code>diff</code> trustworthy: <strong>which lines did the parser fail to
+read?</strong> Without it, a fact missing after an upgrade is indistinguishable from a setting the
+server never printed — servediff reports both as <code>&lt;absent&gt;</code>, and that ambiguity is the
+failure this tool exists to remove.</p>
+<p>So the audit has one job: take a log nobody wrote rules for and separate</p>
+<ul>
+<li><strong>noise</strong> — route tables, banner art, progress bars, access logs, tracebacks, shutdown
+  chatter: lines that could never be a setting;</li>
+<li><strong>shapes worth a look</strong> — lines that look like configuration and no rule reads them.</li>
+</ul>
+<p>If that split is wrong, the report is useless in exactly the situation people need it: a
+startup that broke.</p>
+<h2>Before and after, on real logs</h2>
+<p>Four full startup logs, all of them live-server output rather than excerpts. Counts are
+"shapes worth a look", the only group the report lists.</p>
+<table>
+<thead>
+<tr>
+<th>log</th>
+<th>engine · version</th>
+<th>before 0.4.22</th>
+<th>after 0.4.25</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>vllm-0.28.0.log</code> (died at startup, UVA unavailable)</td>
+<td>vLLM 0.28.0, 1 GPU, WSL2</td>
+<td>146</td>
+<td><strong>0</strong></td>
+</tr>
+<tr>
+<td><code>vllm-0.28.0-v1runner.log</code> (same flags, V1 model runner)</td>
+<td>vLLM 0.28.0</td>
+<td>66</td>
+<td><strong>0</strong></td>
+</tr>
+<tr>
+<td><code>vllm-0.30.0.log</code> (started, then killed)</td>
+<td>vLLM 0.30.0</td>
+<td>89</td>
+<td><strong>0</strong></td>
+</tr>
+<tr>
+<td><code>vllm-0.23.1-tp8.log</code> (from vllm#48591)</td>
+<td>vLLM 0.23.1, 8 GPUs, DP+EP, Eagle3</td>
+<td>190</td>
+<td><strong>0</strong></td>
+</tr>
+</tbody>
+</table>
+<p>The last three shapes standing after 0.4.23 were real conditions rather than noise, so they
+became facts in 0.4.25 instead of being classified away:</p>
+<table>
+<thead>
+<tr>
+<th>line</th>
+<th>fact</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Casting torch.bfloat16 to torch.float32</code></td>
+<td><code>model.cast</code> — the checkpoint dtype was coerced; nothing in the flags says so and every result changes</td>
+</tr>
+<tr>
+<td><code>Module deep_gemm was found but failed to import</code> / <code>ImportError: libnvrtc.so.3</code></td>
+<td><code>kernel.module_missing</code>, <code>kernel.missing_lib</code> — an optional kernel library is installed but unimportable, which changes the kernel set a run can choose</td>
+</tr>
+<tr>
+<td><code>AsyncLLM output_handler failed</code> / <code>EngineDeadError</code></td>
+<td><code>startup: failed (output handler)</code>, <code>startup.error</code></td>
+</tr>
+</tbody>
+</table>
+<p>A bare <code>AssertionError</code> under a failed import check stays noise: the detail is the line
+above, which is now read, so counting it again would double-report one condition.</p>
+<p>The TP=8 log reaching zero is the stricter result: every one of those 190 lines was either a
+traceback frame or a configuration line, and the configuration lines are now facts
+(<code>attn.backend</code>, <code>scheduler.chunked_prefill</code>, <code>scheduler.async</code>, <code>worker.mp_method</code>,
+<code>cpu.torch_parallelism</code>, <code>spec_decode.eagle_layers</code>, <code>compile.cached_range</code>,
+<code>sampling.topk_topp_backend</code>, <code>kernel.flashinfer_dtypes</code>, <code>nccl.version</code>,
+<code>parallel.dp_leader</code>, <code>kernel.cuda_error</code>, <code>startup: failed (worker died)</code>).</p>
+<h2>The log from a stack nobody had seen</h2>
+<p>Everything above was measured on one machine's WSL2 runs — NVIDIA, CUDA, one GPU. So the
+first honest test of the claim came from a log nobody here produced: the <code>collect_env</code> block
+pasted into <a href="https://github.com/vllm-project/vllm/issues/65034">vllm#65034</a>, a ROCm box
+(AMD Radeon AI PRO R9700, torch 2.13.0+rocm10.1.0, vLLM 0.29.1.dev, Python 3.14). 176 lines.</p>
+<p><code>audit</code> said <strong>175 lines worth a look, 112 shapes</strong> — essentially the whole block. Not a
+single rule in the tool matched a single line of it. That is the failure mode the section
+above says to expect, and it is also the strongest argument for the audit existing: a tool
+whose noise table only describes its author's stack is one stack wide.</p>
+<p>The fixes were both mechanical:</p>
+<ul>
+<li><strong>What the block states as fact, read as fact.</strong> <code>engine.version</code> + <code>engine.git_sha</code>
+  (<code>vLLM Version : 0.29.1.dev0+g98dff2a81.d20261002 (git sha: 98dff2a81, date: 20261002)</code>),
+  <code>env.torch</code>, <code>env.torch_rocm</code>, <code>env.rocm</code>, <code>env.hip</code>, <code>env.os</code>, <code>env.python</code>,
+  <code>gpu.model</code>, <code>env.pip.{torch,triton,transformers,numpy}</code>, and
+  <code>env.var.{TORCHINDUCTOR_CACHE_DIR,PYTORCH_ROCM_ARCH,MAX_JOBS,LD_LIBRARY_PATH,…}</code>. These
+  are the facts that decide which kernels a run can even choose: a torch built against a
+  different ROCm is a different server, whatever the flags say.</li>
+<li><strong>What the block states as machine inventory, counted as noise.</strong> The section rules
+  (<code>====</code>), the CPU model and mitigation list, the wrapped CPU flag dump (including lines
+  that start at column 0 with <code>3dnowprefetch</code> and carry digits), one
+  <code>[pip3] amd-torch-device-gfx*</code> wheel per GPU architecture (~40 identical lines), the
+  wrapped tail of <code>LD_LIBRARY_PATH</code>, <code>CMake version :</code>.</li>
+</ul>
+<p>Result: <strong>158 unread lines, 95 shapes, nothing worth a look.</strong> Two regressions the same run
+caught, both now pinned by tests:</p>
+<ul>
+<li>the generic <code>version X.Y.Z</code> banner rule took <code>CMake version : version 3.31.10</code> as the
+  engine version, so <code>engine.version</code> held two values from two different tools;</li>
+<li>a launch command pasted into a report (<code>vllm serve … \</code> + <code>--flag value \</code>) is the user's
+  shell history, not output — the server prints its args itself as "non-default args".</li>
+</ul>
+<h2>Eleven more logs, and a second engine</h2>
+<p>One unfamiliar log proves the failure mode; it does not show its size. So the next pass was
+twelve more report pastes, picked from issue searches rather than from anything this machine
+ran: six vLLM and six SGLang.</p>
+<table>
+<thead>
+<tr>
+<th>log</th>
+<th>what it is</th>
+<th>worth a look, before</th>
+<th>after</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>vllm#65611</td>
+<td>eight MI355X cards, vLLM 0.33.0rc1</td>
+<td>61</td>
+<td>0</td>
+</tr>
+<tr>
+<td>vllm#65250</td>
+<td>gVisor, vLLM 0.30.0</td>
+<td>51</td>
+<td>0</td>
+</tr>
+<tr>
+<td>vllm#63505</td>
+<td>production image, vLLM 0.32.0, CUDA 13.0</td>
+<td>45</td>
+<td>0</td>
+</tr>
+<tr>
+<td>vllm#63536</td>
+<td>RTX PRO 5000, prose pasted between the logs</td>
+<td>44</td>
+<td>0</td>
+</tr>
+<tr>
+<td>sglang#41654</td>
+<td>SGLang 0.5.20 environment dump</td>
+<td>39</td>
+<td>0</td>
+</tr>
+<tr>
+<td>sglang#42684</td>
+<td>NIXL backend, scheduler dies at startup</td>
+<td>12</td>
+<td>0</td>
+</tr>
+<tr>
+<td>sglang#43741 / #49206 / #48502 / #46756</td>
+<td>four shorter SGLang reports</td>
+<td>11 / 3 / 2 / 0</td>
+<td>0</td>
+</tr>
+<tr>
+<td>vllm#66192</td>
+<td>GB200 NVL node, aarch64, SM100</td>
+<td>9</td>
+<td>0</td>
+</tr>
+<tr>
+<td>vllm#66193</td>
+<td>RTX PRO 6000 Blackwell, aggregate line repeats the card prefix</td>
+<td>13</td>
+<td>0</td>
+</tr>
+</tbody>
+</table>
+<p>Three classes of miss, none of which is a single bad regex:</p>
+<ul>
+<li><strong>An inventory read as a setting.</strong> A CUDA container prints ~35 <code>[pip3] nvidia-*==</code> lines;
+  only a few wheels decide which kernels load. The rule now reads <code>flashinfer-python</code> too and
+  the rest of the inventory is noise. The same problem one level up: the block ends with the
+  environment, and the tool had whitelisted six variables out of it, so <code>CUDA_VERSION</code>,
+  <code>TORCH_CUDA_ARCH_LIST</code>, <code>VLLM_BUILD_COMMIT</code>, <code>VLLM_IMAGE_TAG</code> all read as "unread". It is a
+  general <code>NAME=value</code> rule now — minus <code>CUDA_VISIBLE_DEVICES</code>, <code>NVIDIA_VISIBLE_DEVICES</code> and
+  <code>VLLM_CACHE_ROOT</code>, which differ between two boxes started with identical flags and would
+  otherwise read as differences.</li>
+<li><strong>An absence read as a value.</strong> <code>ROCM Version : Could not collect</code> matched a rule that
+  captured one token, so a CUDA box reported <code>env.rocm = "Could"</code>. Worse than noise: two
+  CUDA boxes agreed on a value neither had, and <code>diff</code> could never show it. <code>Could not
+  collect</code>, <code>N/A</code>, <code>Not Set</code> and <code>unknown</code> now produce no fact at all.</li>
+<li><strong>Another engine's prefix.</strong> SGLang prints <code>[2026-10-06 00:15:19] NIXL KVManager
+  initialized with backend: UCX</code>, and its own <code>name: value</code> dump. The brackets were not
+  stripped, so every message behind them was content, and the dump was package inventory.
+  Both now go through the same normalisation <code>parse</code> uses — the audit had been re-implementing
+  the prefix handling on its own, which is how the two drifted apart.</li>
+</ul>
+<p>The machine-inventory half is the same idea as the ROCm block: an eight-card <code>rocm-smi</code>
+weight / hops / link-type matrix, the GPU topology grid with its <code>Legend:</code>, <code>GPU N:</code> headers,
+Hypervisor lines and the InfiniBand <code>NIC0: mlx5_0</code> grid describe the box, not the run.</p>
+<ul>
+<li><strong>A dependency dump read as settings.</strong> A GB10 box reporting a native-MTP failure
+  (vllm#65873) printed every <code>libcudnn*.so</code> by absolute path — <code>ldd</code> output. Nine lines,
+  nine "settings". A bare shared-library path is now noise; an <code>ImportError: libcudart.so.13:
+  cannot open shared object file</code> is the opposite case and stays a fact.</li>
+<li><strong>An empty value that looks like a fact.</strong> A multi-node image prints
+  <code>GPU models and configuration :</code> and then one <code>GPU 0: NVIDIA GB200</code> per card, so the
+  aggregate yielded <code>gpu.model = ""</code> — a fact that matched another log's empty string instead
+  of being absent. Empty is now an absence, and when the aggregate is silent the per-card
+  line supplies the model (with its own <code>GPU 0:</code> prefix removed, since some images paste the
+  whole card line after the colon).</li>
+</ul>
+<p>Two useful side effects on the way:</p>
+<ul>
+<li><code>diff vllm-65250.log vllm-63505.log</code> — a gVisor run against a production image — reports
+  <strong>23 differences / 5 identical</strong>, and the differences are the ones that decide what the
+  server can do: <code>TORCH_CUDA_ARCH_LIST</code>, <code>VLLM_BUILD_COMMIT</code>, <code>VLLM_IMAGE_TAG</code>, <code>CUDA_HOME</code>,
+  <code>NVIDIA_REQUIRE_CUDA</code>, plus <code>OMP_NUM_THREADS</code> / <code>MKL_NUM_THREADS</code> /
+  <code>VLLM_USE_FLASHINFER_SAMPLER</code> that only one side printed.</li>
+<li><code>diff sg-41654.log sg-42684.log</code> reports <strong>16 differences / 0 identical</strong>, including
+  <code>startup: failed (scheduler)</code> and <code>TypeError: NixlKVManager.set_kv_buffer_tensors() got an
+  unexpected keyword argument 'slot_layer_ids'</code> — a startup failure that no <code>server_args</code>
+  records.</li>
+</ul>
+<h2>What zero does and does not mean</h2>
+<p>Zero here is a claim about <strong>what these twenty-one logs print</strong>, not about log space. The four
+full logs above, two fixtures (a crashed startup and a clean 170-line run) and the fourteen
+issue pastes all report <code>nothing worth a look</code>; a log from a stack none of them covers may
+well print shapes no rule knows — and one did: the ROCm block started at 175 and needed two
+rounds of work before it reached zero, and the pastes after it added four more classes of
+miss before they did. That is precisely why the audit prints the second group at all, and why
+<code>servediff audit --max-shapes 20</code> exists as a gate: zero is measured per log, and the next
+unfamiliar log is expected to break it.</p>
+<h2>Why the first version got it wrong</h2>
+<p>Two separate bugs, both invisible on excerpt fixtures:</p>
+<ol>
+<li><strong>The noise patterns described the message, but were matched against the whole line.</strong>
+   Every line of a real multi-process log looks like</li>
+</ol>
+<p><code>(EngineCore pid=3811) ERROR 10-28 11:26:34 [core.py:1346]   File "/opt/vllm-env/…", line 34</code></p>
+<p>and the patterns were anchored (<code>^\s*File "</code>, <code>^Traceback</code>, <code>\[shutdown\]</code>). Anchored at
+   the start of a line that starts with <code>(EngineCore</code>. So a whole traceback counted as
+   shapes worth a look — the report became a stack trace.</p>
+<p>The fix strips the preamble first — process, level, <code>MM-DD HH:MM:SS</code> (vLLM prints <strong>no
+   year</strong>, which is why the first attempt only halved the count), <code>- INFO -</code>,
+   <code>module.py:line</code> — and then matches the message. A third pass drops a trailing
+   <code># comment</code>, because traceback echoes carry one (<code>_find_cuda_home()  # CUDA home</code>).</p>
+<ol>
+<li><strong>Rules pinned to the newest wording silently lost the older log.</strong> Two found by this
+   same audit:</li>
+<li><code>Model loading took 1.14 GiB and 36.34 seconds</code> — 0.23 prints no <code>memory</code>, and the rule
+     required it. On 0.23 both <code>model_loading.gib</code> and <code>model_loading.seconds</code> vanished, and
+     <code>diff</code> would have called that "not printed".</li>
+<li><code>Filesystem type for checkpoints: FUSE.OFS.</code> — <code>\w+</code> stopped at the dot and took the
+     checkpoint size and available RAM with it: one regex, three facts.</li>
+</ol>
+<h2>What guards it now</h2>
+<ul>
+<li>A 43-line card of a <strong>real crashed startup</strong> is a fixture
+  (<code>tests/fixtures/vllm-crash-traceback.log</code>). The test asserts the audit reports
+  <code>nothing worth a look</code> on it, and that <code>RuntimeError: UVA is not available</code> stays consumed
+  by the <code>startup.error</code> rule rather than appearing as unread.</li>
+<li>The same test asserts three prefixed <strong>real settings</strong> are <em>not</em> noise
+  (<code>Using AttentionBackendEnum.FLASHINFER backend.</code>, <code>Chunked prefill is enabled with
+  max_num_batched_tokens=2048.</code>, <code>Model loading took 1.2 GiB and 1.2 seconds</code>). Widening a
+  noise pattern has to break the suite — a rule that quietly hides a missed fact is worse
+  than a report that lists too much.</li>
+<li>A test asserts the TP=8 lines above become facts <strong>and</strong> that the audit reports none of
+  them as unread, so parser and audit cannot drift apart.</li>
+<li><code>servediff audit --max-shapes N</code> turns this into a gate: it exits <code>1</code> when more shapes need
+  a look than you allow, so a pipeline fails on the upgrade that starts printing
+  configuration the tool still cannot read.</li>
+</ul>
+<h2>A reproducer script is not a log</h2>
+<p>The paste that finally showed where the report was wrong was not a log at all.
+sglang#49123 pastes a 195-line benchmark harness — <code>def run_marlin(...)</code>,
+<code>handles[f] = safe_open(...)</code>, a module docstring — and the audit called 38 of its lines
+"worth a look", every one of them the script itself. A reader who opens that report learns
+the tool cannot read a script: true, and useless.</p>
+<p>The rule that fixes it has to know that a log line <em>states</em> something — <code>name: value</code>, or a
+sentence. It never starts with <code>def</code>, never opens with a bare <code>"""</code>, never ends in a trailing
+comma. Seven conservative patterns on those shapes, plus one stateful pass over the prose
+between two <code>"""</code>, took that paste from 38 lines to 1; the one left is a lambda's
+continuation, which genuinely is a line no rule can read.</p>
+<p>The counter-example had to stay: a shell-style <code>MAX_MODEL_LEN=4096</code> inside the same paste is
+still read as <code>env.var.MAX_MODEL_LEN</code>. A script's code is noise; a script's <em>call</em> is not.</p>
+<p>One bug surfaced while measuring it. The keyword pattern was written
+<code>^\s*(?:if |elif |else |…)\b</code> — the space inside the alternative and <code>\b</code> after it, so
+<code>if "W4A4" in name:</code> failed the boundary test (a space followed by a quote is not a word
+boundary) and stayed in the report, while <code>if x:</code> did not. A pattern that is almost right is
+the quietest kind of wrong: it looks like it covers the class and covers all but one member.</p>
+<h2>A held-out corpus found a rule that only matched the reformatted copy</h2>
+<p>Everything above was measured on the fixtures this repo already carried, which is a closed
+loop: they were hand-copied from issue bodies, and a copy can carry the copyist's formatting.
+So eleven pastes were pulled fresh from vLLM and SGLang issues created after 2026-10-20, and
+audited blind.</p>
+<p>Eight of eleven came back with lines worth a look. Two of those were script pastes covered
+above; the rest were real. The biggest one was not noise at all:</p>
+<pre><code>PyTorch version: 2.10.0+cpu          &lt;- worth a look, and it is a fact
+OS: Debian GNU/Linux 12 (bookworm) (x86_64)
+Python version: 3.12.15 (...) [GCC 12.2.0] (64-bit runtime)
+HIP runtime version: N/A
+</code></pre>
+<p>Every <code>collect_env</code> rule was written <code>^PyTorch version\s+:\s*(\S+)</code> — requiring whitespace
+before the colon. ROCm's own dump aligns its colons with spaces, so the rule worked on that,
+and vLLM's real <code>collect_env</code> prints <code>PyTorch version: 2.10.0+cpu</code> with none, so the rule was
+dead on the output every bug report actually pastes. The audit reporting "worth a look" was
+correct: the tool could not read the torch version on a CPU-only box.</p>
+<p>That is the failure mode this whole writeup is about, one level up: a rule pinned to the
+one copy of the wording its author happened to see. <code>\s*</code> on eight rules fixed it, and the
+same eleven-log corpus dropped from eight files worth a look to two, both script pastes,
+four lines.</p>
+<p>The rest were inventory shapes the table had never seen: SGLang's macOS report (<code>MPS
+available</code>, <code>Apple Silicon</code>, <code>Metal Support</code>, <code>Unified Memory</code>, <code>CPU Cores (…)</code>), a
+multi-GPU row written <code>GPU 0,1,2,3: NVIDIA H20</code>, the container runtime's <code>brand=…driver&gt;=…</code>
+capability list, a topology header row, a reporter's parenthetical note, and a plugin source
+paste (<code>WTYPE = …</code>, <code>tensor.offset</code>, <code>(Path(…) / "config.json").write_text(</code>). None of those
+can be a log line, so each got one narrow pattern.</p>
+<p>The last four lines were the same script in a harder form: an argument list standing alone
+(<code>8, 96, 128, conv_kernel_size=4, num_spec=5</code>, <code>groups, KVCacheLayout.BLHNC</code>) and a
+continuation that closes parentheses without starting a statement
+(<code>…routing_input_mode=…), wp))(ml)</code>). A log line is a statement — it starts with a word and
+says something about it — so it never consists of arguments alone. Those two patterns require
+exactly that and nothing else: the first token must be a bare name, which is what keeps
+<code>NVIDIA_DRIVER_CAPABILITIES=compute,utility</code> readable as a fact. Eleven pastes, then: <strong>none
+worth a look.</strong></p>
+<p>Both corpora ship in the repo, so this section is rerunnable instead of believable:
+<code>servediff audit tests/fixtures</code> (twenty-one logs) and
+<code>servediff audit tests/fixtures/held-out-2026-10</code> (the eleven pastes, with
+<code>PROVENANCE.md</code> naming each issue). Check out <code>v0.4.32</code> and run the second command to watch
+it report eight of eleven. The two later directories work the same way: check out <code>v0.4.38</code> and
+<code>servediff audit tests/fixtures/held-out-2026-11b</code> reports seventeen of twenty-eight.</p>
+<h2>A second month, to see whether the rules learned logs or learned October</h2>
+<p>Eleven pastes from two weeks of one month is one point. The obvious doubt is that the noise
+table was bent until that particular set passed — each rule here was written in front of a
+paste that broke it, which is a good way to write a rule and an excellent way to overfit.</p>
+<p>So the same collection was run again against issues created after 2026-11-01, a month later.
+Twelve blocks qualified; five were already in the October batch, so seven were new.</p>
+<p>Six of the seven were clean on the first try, which is the useful half of the result: the
+table did generalize past the month it was written in. The seventh had one line:</p>
+<pre><code>    run(a) if a.cmd == &quot;run&quot; else compare(a)
+</code></pre>
+<p>A conditional expression used as a statement, lifted out of a reproducer script pasted as the
+issue body. It picks between two values, so unlike a log line it has no subject to say
+anything about — the same principle as the argument lists above, one form further out.</p>
+<p>The first pattern written for it was the obvious shape — contains <code>if</code>, contains <code>else</code>,
+ends in <code>)</code> — and it had to be thrown away, because it also swallowed a warning that merely
+uses both words in a sentence:</p>
+<pre><code>Using FlashInfer all-reduce if available else falling back to the custom kernel
+(set VLLM_ALLREDUCE_USE_FLASHINFER=0 to disable)
+</code></pre>
+<p>That line is a statement about a decision, and it is exactly what this tool exists to find.
+The adopted pattern requires the line to <em>begin</em> with a call
+(<code>^[A-Za-z_][\w.]*\([^()]*\)\s+if\s+…\s+else\s+…\)$</code>), which the sentence does not. It
+matches one line across all four corpora — the one it was written for — and the guard test
+pins the difference between the two.</p>
+<p>Seven pastes, then: <strong>none worth a look.</strong> At 0.4.36 that directory reports one of seven.</p>
+<h2>A third batch, five days later, that the rules did not recognize</h2>
+<p>A second clean month still leaves a way to be wrong: the two batches were collected by the
+calendar, and the rules were written in between, so a shape that appeared in neither window looks
+like no shape at all. So the same command was run once more, against issues created after
+2026-11-05 — five days of output rather than a month, which is the harder test, because the
+rules had no time to learn anything about it.</p>
+<p>Twenty-eight pastes qualified. <strong>Seventeen of them had shapes worth a look, 191 in total.</strong> A
+month's worth of rules, written against two windows, and five days defeated them.</p>
+<p>The largest class was one table. <code>collect_env</code> lists every installed wheel twice — once as
+<code>[pip3] name==version</code>, once as a <code>[conda]</code> row:</p>
+<pre><code>[conda] torch                     2.13.0+cu130             pypi_0    pypi
+[conda] nvidia-cublas             13.1.1.3                 pypi_0    pypi
+</code></pre>
+<p>164 of the 191 shapes were rows of that table: four reports carried ~41 rows each. The pip form
+was covered because it is what the reporter's own tool printed; the conda form is the same
+inventory in a different column layout, and it had never been in the corpus before. Every row
+reads like a version fact — which is precisely why it drowns a report.</p>
+<p>The rest was the same reproducer-script family the earlier batches taught, in shapes that
+individual rules had each missed: an f-string, a tuple assignment with qualified names, a one-line
+call chain, a nested call closed twice, a bare name closing a parenthesis, a lone <code>[</code>, an
+annotation-only assignment, a <code>!= (…)</code> continuation, a tuple of layer specs ending a <code>for … in (</code>
+header, <code>async def</code>, and <code>finally:</code>.</p>
+<p>And one pattern was written, measured, and thrown away again — the third time in this file:</p>
+<pre><code>^\(.*\)$        # any line that is one parenthesized thing
+</code></pre>
+<p>It covers the reproducer's Path expression, and it ate <strong>31 real vLLM log lines</strong>, every one of
+them a <code>(EngineCore pid=…)</code> entry. vLLM prefixes log entries with the process that emitted them,
+so a parenthesis at the start of a line is normal there. The adopted pattern requires the closing
+<code>)</code> to be followed by <code>.name</code> — how a value built in brackets is actually used — and the engine
+line is now a control in the test suite, so the rejected version cannot come back quietly.</p>
+<p>Twenty-eight pastes, then: <strong>none worth a look</strong>, and the four earlier corpora still at zero.
+Twenty-one fixtures, eleven October pastes, seven November pastes, twenty-eight from the
+first week of November, six logs from a real machine.</p>
+<h2>Limits of the claim</h2>
+<p>These four logs are from one machine's WSL2 runs plus one posted TP=8 log, plus eleven pastes
+taken fresh from vLLM and SGLang issues in October 2026, seven more in November, and twenty-eight
+from the first week of that month.
+<code>nvcc</code>, other engines, and other parallelism layouts are unmeasured, and a log from a
+different stack may well print shapes none of these rules know. That is what the audit is
+for: run it on your own log, and paste the report into
+<a href="https://github.com/apex-mochen/servediff/issues/new?template=missed-log-line.yml">the issue form</a>
+— the second group is the useful half.</p>
+</body>
+</html>

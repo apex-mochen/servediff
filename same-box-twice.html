@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The same box, measured twice: why a diff has to agree with itself</title>
+<meta name="description" content="A diff tool earns trust the first time it tells you something you did not know, and loses it the first time it tells you that two identical runs differ. This note is about the second case, because it is the one that neve">
+<link rel="canonical" href="https://apex-mochen.github.io/servediff/same-box-twice.html">
+<style>
+:root { --fg:#1c1c1e; --muted:#6b6b70; --line:#e4e4e7; --code:#f6f6f7; }
+body { margin:0 auto; max-width:44rem; padding:2.5rem 1.25rem 6rem;
+  font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  color:var(--fg); }
+h1 { font-size:1.9rem; line-height:1.25; margin:0 0 1rem; letter-spacing:-0.01em; }
+h2 { font-size:1.25rem; margin:2.2rem 0 .6rem; }
+h3 { font-size:1.05rem; margin:1.6rem 0 .4rem; }
+p, li { color:var(--fg); }
+pre { background:var(--code); border:1px solid var(--line); border-radius:6px;
+  padding:.85rem 1rem; overflow-x:auto; font-size:.86rem; line-height:1.5; }
+code { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:.9em; }
+p code, li code { background:var(--code); padding:.1em .3em; border-radius:3px; }
+a { color:#0b62d0; }
+.note { color:var(--muted); font-size:.9rem; }
+nav { border-bottom:1px solid var(--line); padding-bottom:.75rem; margin-bottom:2rem;
+  font-size:.9rem; }
+nav a { margin-right:1rem; }
+ul.index li { margin:.5rem 0; }
+</style>
+</head>
+<body>
+<nav><a href="./index.html">servediff notes</a><a href="https://github.com/apex-mochen/servediff">source</a><a href="https://pypi.org/project/servediff/">pip install servediff</a></nav>
+<h1>The same box, measured twice: why a diff has to agree with itself</h1>
+<p>A diff tool earns trust the first time it tells you something you did not know, and loses
+it the first time it tells you that two identical runs differ. This note is about the second
+case, because it is the one that never shows up in a demo on one machine.</p>
+<h2>Eight numbers where there is one measurement</h2>
+<p>An 8-way tensor-parallel vLLM start logs this once per worker:</p>
+<pre><code>(Worker_TP2 pid=2717794) INFO [model_runner.py:302] Model loading took 1.14 GiB and 36.339381 seconds
+(Worker_TP3 pid=2717795) INFO [model_runner.py:302] Model loading took 1.14 GiB and 36.384071 seconds
+(Worker_TP7 pid=2717799) INFO [model_runner.py:302] Model loading took 1.14 GiB and 36.395200 seconds
+(Worker_TP0 pid=2717792) INFO [model_runner.py:302] Model loading took 1.14 GiB and 36.312437 seconds
+(Worker_TP1 pid=2717793) INFO [model_runner.py:302] Model loading took 1.14 GiB and 36.446548 seconds
+</code></pre>
+<p>Physically there is one number here — roughly 36.3 seconds — plus 0.13 s of scheduling
+jitter spread across the ranks. Read literally, there are eight, and the tool used to store
+all eight, in the order they happened to land in the file.</p>
+<p>That has a consequence which is easy to miss until it bites: compare two runs of <em>the same</em>
+box, same image, same flags, and the two value lists almost never match, because worker 3
+was 0.4% slower this time and worker 5 was 0.3% faster. The row says <code>changed</code>. Nothing
+changed. The reader now has to decide whether to distrust the tool or the machine, and the
+answer is: the tool.</p>
+<h2>What it reads now</h2>
+<p>The four facts that every worker measures for itself — <code>model_loading.seconds</code>,
+<code>model_loading.gib</code>, <code>weights.load_s</code>, <code>weights.available_ram_gib</code> — are read from the
+lowest rank present in the log, and the other ranks' numbers are kept in the evidence line
+rather than dropped:</p>
+<pre><code>model_loading.seconds            36.312437                                            line 94
+  evidence: (rank 0 of 5 workers read; other workers: [36.339381, 36.384071, ...])
+</code></pre>
+<p>The distinction that keeps this honest is <em>which rank</em>, not <em>how many lines</em>. TP0 in the
+same log also prints two genuinely different weight loads — a backbone and a draft head:</p>
+<pre><code>(Worker_TP0 ...) Loading weights took 28.64 seconds
+(Worker_TP0 ...) Loading weights took 5.66 seconds
+</code></pre>
+<p>Same rank, two measurements, so both stay. Collapsing by count alone would have deleted the
+second model's load time, which is exactly the kind of silent loss this project refuses.</p>
+<h2>A magnitude, not just a word</h2>
+<p>The other half of the same problem is the word itself. <code>changed</code> on <code>compile.total_s</code> reads
+identically at 32.58 s → 31.08 s (−4.6%) and at 32.58 s → 130 s (+299%). Only one of those
+is worth a paragraph in a bug report. Numeric rows now carry the relative move:</p>
+<pre><code>compile.total_s                  32.58                           31.08                 changed  -4.6%
+engine.init_s                    74.0                            109.17                changed  +47.5%
+model_loading.seconds            13.191946                       19.122619             changed  +45.0%
+</code></pre>
+<p>Text rows keep the bare status — <code>VLLM_CUTLASS (NvFp4)</code> → <code>MARLIN (NvFp4)</code> has no magnitude,
+and inventing one would be a lie.</p>
+<p>Both conventions are additive: the counts do not move. The two comparisons documented in
+the README still report <code>48 difference(s); 14 fact(s) identical</code> and <code>30 / 33</code> after this
+change, which is how you can tell the presentation changed and the measurement did not.</p>
+<h2>Why this is worth a version</h2>
+<p>The failure mode is invisible on one machine and guaranteed on eight. Anyone running TP8
+across four nodes — the reason they are reading startup logs in the first place — hits it on
+their first comparison of two runs. "Two identical runs differ" is a worse bug than "the
+tool misses a line", because missing a line is visible (<code>servediff audit</code> prints it) and a
+false difference is not: it looks like a finding.</p>
+</body>
+</html>

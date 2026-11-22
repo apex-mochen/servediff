@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Same flags, 0.28 dies on WSL and 0.30 starts — what the startup log reveals</title>
+<meta name="description" content="A write-up of one real upgrade, kept in the repo so the diff below has a permanent home instead of living only inside a release note.">
+<link rel="canonical" href="https://apex-mochen.github.io/servediff/wsl-uva-028-vs-030.html">
+<style>
+:root { --fg:#1c1c1e; --muted:#6b6b70; --line:#e4e4e7; --code:#f6f6f7; }
+body { margin:0 auto; max-width:44rem; padding:2.5rem 1.25rem 6rem;
+  font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  color:var(--fg); }
+h1 { font-size:1.9rem; line-height:1.25; margin:0 0 1rem; letter-spacing:-0.01em; }
+h2 { font-size:1.25rem; margin:2.2rem 0 .6rem; }
+h3 { font-size:1.05rem; margin:1.6rem 0 .4rem; }
+p, li { color:var(--fg); }
+pre { background:var(--code); border:1px solid var(--line); border-radius:6px;
+  padding:.85rem 1rem; overflow-x:auto; font-size:.86rem; line-height:1.5; }
+code { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:.9em; }
+p code, li code { background:var(--code); padding:.1em .3em; border-radius:3px; }
+a { color:#0b62d0; }
+.note { color:var(--muted); font-size:.9rem; }
+nav { border-bottom:1px solid var(--line); padding-bottom:.75rem; margin-bottom:2rem;
+  font-size:.9rem; }
+nav a { margin-right:1rem; }
+ul.index li { margin:.5rem 0; }
+</style>
+</head>
+<body>
+<nav><a href="./index.html">servediff notes</a><a href="https://github.com/apex-mochen/servediff">source</a><a href="https://pypi.org/project/servediff/">pip install servediff</a></nav>
+<h1>Same flags, 0.28 dies on WSL and 0.30 starts — what the startup log reveals</h1>
+<p>A write-up of one real upgrade, kept in the repo so the diff below has a permanent home
+instead of living only inside a release note.</p>
+<h2>The situation</h2>
+<ul>
+<li>Laptop GPU: one RTX 4060 Laptop, 8 GB, under WSL2.</li>
+<li>The two <code>vllm serve</code> commands differed in exactly one thing: the version
+  (0.28.0 vs 0.30.0). Flags, model, <code>--gpu-memory-utilization</code>, everything else
+  identical.</li>
+<li>0.30.0 answered <code>/health</code> and a completion. 0.28.0 died during engine init with:</li>
+</ul>
+<p><code>RuntimeError: UVA is not available</code></p>
+<p>Benchmark result files would not have explained this: they record the client side, and
+half of the run never produced a result. The explanation is in the startup log.</p>
+<h2>What the log says</h2>
+<p>Both versions pick the V2 model runner (<code>Using V2 Model Runner</code>). What differs is how
+they react to WSL2 having no pinned memory:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>0.28.0</th>
+<th>0.30.0</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>startup</td>
+<td><code>failed</code></td>
+<td><code>ready</code></td>
+</tr>
+<tr>
+<td>startup.error</td>
+<td><code>RuntimeError: UVA is not available</code></td>
+<td><code>&lt;absent&gt;</code></td>
+</tr>
+<tr>
+<td>uva_buffers</td>
+<td><code>&lt;absent&gt;</code></td>
+<td><code>fallback: device memory</code></td>
+</tr>
+<tr>
+<td>backend.attention</td>
+<td><code>&lt;absent&gt;</code> (init stopped)</td>
+<td><code>FLASH_ATTN</code></td>
+</tr>
+<tr>
+<td>engine.version</td>
+<td><code>0.28.0</code></td>
+<td><code>0.30.0</code></td>
+</tr>
+</tbody>
+</table>
+<p>0.30.0 prints one warning and carries on:</p>
+<pre><code>Pinned memory is not available on this platform; falling back to device memory for UVA buffers
+</code></pre>
+<p>That fallback is vllm#56908, first released in 0.30.0. So the behaviour difference is not
+a misconfiguration on the user's side, and not a benchmark-side effect — it is a
+deliberate change in the engine, visible in one log line.</p>
+<h2>How the diff was produced</h2>
+<pre><code class="language-console">$ servediff diff vllm-0.28.0.log vllm-0.30.0.log
+warning: baseline server failed to start: RuntimeError: UVA is not available; facts after the failure are absent because startup stopped, not because they were off
+
+note: baseline: no all-reduce facts: world_size=1, so there is no all-reduce group and no backend is chosen; a TP&gt;1 run is what makes this path observable
+note: candidate: no all-reduce facts: world_size=1, so there is no all-reduce group and no backend is chosen; a TP&gt;1 run is what makes this path observable
+
+fact                             baseline                                 candidate                                status
+backend.attention                &lt;absent&gt;                                 FLASH_ATTN                               only_candidate
+backend.flash_attn_version       &lt;absent&gt;                                 2                                        only_candidate
+backend.sampling_flashinfer      &lt;absent&gt;                                 disabled                                 only_candidate
+compile.artifacts                &lt;absent&gt;                                 25 entries, 3 artifacts, 4996920 bytes   only_candidate
+compile.autotune_gemm            &lt;absent&gt;                                 disabled (not enough SMs)                only_candidate
+compile.dynamo_s                 &lt;absent&gt;                                 9.43                                     only_candidate
+compile.graph_s                  &lt;absent&gt;                                 13.12                                    only_candidate
+compile.range                    &lt;absent&gt;                                 1,2048                                   only_candidate
+compile.total_s                  &lt;absent&gt;                                 31.08                                    only_candidate
+compile.warmup_s                 &lt;absent&gt;                                 1.02                                     only_candidate
+cpu.torch_threads                &lt;absent&gt;                                 16 -&gt; 1                                  only_candidate
+cuda_graph.capture_gib           &lt;absent&gt;                                 [0.25, 0.17]                             only_candidate
+cuda_graph.capture_s             &lt;absent&gt;                                 [9, 11]                                  only_candidate
+cuda_graph.captures              &lt;absent&gt;                                 [&quot;PIECEWISE x51&quot;, &quot;FULL x2&quot;, &quot;FULL x35&quot;] only_candidate
+cuda_graph.pool_gib              &lt;absent&gt;                                 0.17                                     only_candidate
+cuda_graph.profiling             &lt;absent&gt;                                 enabled (default since v0.21.0)          only_candidate
+engine.init_s                    &lt;absent&gt;                                 109.17                                   only_candidate
+engine.version                   0.28.0                                   0.30.0                                   changed
+gpu.budget_gib                   &lt;absent&gt;                                 3.6                                      only_candidate
+gpu.consumed_gib                 &lt;absent&gt;                                 1.44                                     only_candidate
+gpu.cudagraph_gib                &lt;absent&gt;                                 0.17                                     only_candidate
+gpu.free_gib                     &lt;absent&gt;                                 6.93                                     only_candidate
+gpu.peak_activation_gib          &lt;absent&gt;                                 0.53                                     only_candidate
+gpu.total_gib                    &lt;absent&gt;                                 8.0                                      only_candidate
+gpu.utilization                  &lt;absent&gt;                                 0.45                                     only_candidate
+gpu.utilization_effective        &lt;absent&gt;                                 0.4151                                   only_candidate
+gpu.utilization_to_match_kv_cache &lt;absent&gt;                                 0.4849                                   only_candidate
+jit.monitor_mode                 &lt;absent&gt;                                 warn                                     only_candidate
+jit.warmup_s                     &lt;absent&gt;                                 0.0                                      only_candidate
+kernel.ir_op.gelu_and_mul_sparse &lt;absent&gt;                                 triton|native                            only_candidate
+kv_cache.layout                  &lt;absent&gt;                                 LBNHC                                    only_candidate
+kv_cache.max_concurrency         &lt;absent&gt;                                 69.3                                     only_candidate
+kv_cache.memory_gib              &lt;absent&gt;                                 1.62                                     only_candidate
+kv_cache.suggested_bytes         &lt;absent&gt;                                 1402454528                               only_candidate
+kv_cache.suggested_gib           &lt;absent&gt;                                 1.31                                     only_candidate
+kv_cache.tokens                  &lt;absent&gt;                                 141936                                   only_candidate
+model_loading.gib                &lt;absent&gt;                                 0.93                                     only_candidate
+model_loading.seconds            &lt;absent&gt;                                 19.122619                                only_candidate
+parallel.roles                   DP rank 0, PP rank 0, PCP rank 0, TP ... DP rank 0, PP rank 0, PCP rank 0, TP ... changed
+sampling.overridden              &lt;absent&gt;                                 {'repetition_penalty': 1.1, 'temperat... only_candidate
+server.bind                      &lt;absent&gt;                                 http://0.0.0.0:8031                      only_candidate
+server.scale_out                 &lt;absent&gt;                                 disabled                                 only_candidate
+server.tasks                     &lt;absent&gt;                                 ['generate']                             only_candidate
+serving.chat_template_content_format &lt;absent&gt;                                 string                                   only_candidate
+startup                          failed                                   [&quot;ready&quot;, &quot;failed (output handler)&quot;]     changed
+startup.error                    [&quot;RuntimeError: UVA is not available&quot;... &lt;absent&gt;                                 only_baseline
+uva_buffers                      &lt;absent&gt;                                 fallback: device memory                  only_candidate
+weights.available_ram_gib        &lt;absent&gt;                                 4.23                                     only_candidate
+weights.cache                    &lt;absent&gt;                                 miss (from scratch)                      only_candidate
+weights.checkpoint_gib           &lt;absent&gt;                                 0.92                                     only_candidate
+weights.filesystem               &lt;absent&gt;                                 EXT4                                     only_candidate
+weights.load_s                   &lt;absent&gt;                                 10.49                                    only_candidate
+weights.prefetch                 &lt;absent&gt;                                 disabled (EXT4 is not a network FS)      only_candidate
+
+53 difference(s); 14 fact(s) identical. Absent means the log did not print it, not that it was off.
+</code></pre>
+<p>Exit code <code>1</code> here means "the two logs differ", not "the tool failed". <code>2</code> would mean it
+could not read one of them.</p>
+<p>Most of those <code>only_candidate</code> rows are honest consequences of the baseline dying early:
+init stopped, so it printed nothing after the failure. Reading them as "0.28 had these
+turned off" would be exactly the mistake servediff refuses to make — that is why the
+warning line is printed above the table, and why <code>&lt;absent&gt;</code> is a value rather than a
+blank.</p>
+<h2>What this write-up does not claim</h2>
+<ul>
+<li>It does not say UVA caused a slowdown. Here it caused a crash. The tool reports what
+  the log printed; whether a difference costs throughput is a benchmark question.</li>
+<li>It does not generalise to other GPUs. The fallback is about <em>pinned memory being
+  unavailable</em>, which on a normal Linux host with a real NVIDIA driver is not the case.</li>
+</ul>
+<h2>Reproducing</h2>
+<pre><code class="language-console">$ pip install servediff
+$ servediff demo                       # two excerpt logs shipped with the package
+$ servediff capture -o before.log -- python -m vllm.entrypoints.openai.api_server --model &lt;model&gt; ...
+$ servediff capture -o after.log  -- &lt;the same command&gt;
+$ servediff diff before.log after.log
+</code></pre>
+<p><code>capture</code> runs the server, tees its log, and snapshots the environment <em>before</em> startup,
+so the older version's log does not have to be hunted down after the fact.</p>
+</body>
+</html>

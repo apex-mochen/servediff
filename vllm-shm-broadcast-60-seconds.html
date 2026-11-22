@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>vLLM: &quot;No available shared memory broadcast block found in 60 seconds&quot; — what the line means, and how to tell which failure you have</title>
+<meta name="description" content="This string shows up in dozens of threads, and the two answers that dominate search results are &quot;increase /dev/shm&quot; and &quot;it is still compiling&quot;. Both are sometimes right. Both are wrong often enough that people keep re-p">
+<link rel="canonical" href="https://apex-mochen.github.io/servediff/vllm-shm-broadcast-60-seconds.html">
+<style>
+:root { --fg:#1c1c1e; --muted:#6b6b70; --line:#e4e4e7; --code:#f6f6f7; }
+body { margin:0 auto; max-width:44rem; padding:2.5rem 1.25rem 6rem;
+  font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  color:var(--fg); }
+h1 { font-size:1.9rem; line-height:1.25; margin:0 0 1rem; letter-spacing:-0.01em; }
+h2 { font-size:1.25rem; margin:2.2rem 0 .6rem; }
+h3 { font-size:1.05rem; margin:1.6rem 0 .4rem; }
+p, li { color:var(--fg); }
+pre { background:var(--code); border:1px solid var(--line); border-radius:6px;
+  padding:.85rem 1rem; overflow-x:auto; font-size:.86rem; line-height:1.5; }
+code { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:.9em; }
+p code, li code { background:var(--code); padding:.1em .3em; border-radius:3px; }
+a { color:#0b62d0; }
+.note { color:var(--muted); font-size:.9rem; }
+nav { border-bottom:1px solid var(--line); padding-bottom:.75rem; margin-bottom:2rem;
+  font-size:.9rem; }
+nav a { margin-right:1rem; }
+ul.index li { margin:.5rem 0; }
+</style>
+</head>
+<body>
+<nav><a href="./index.html">servediff notes</a><a href="https://github.com/apex-mochen/servediff">source</a><a href="https://pypi.org/project/servediff/">pip install servediff</a></nav>
+<h1>vLLM: "No available shared memory broadcast block found in 60 seconds" — what the line means, and how to tell which failure you have</h1>
+<p>This string shows up in dozens of threads, and the two answers that dominate search results are
+"increase <code>/dev/shm</code>" and "it is still compiling". Both are sometimes right. Both are wrong often
+enough that people keep re-posting the same log.</p>
+<p>Here is the same question from the other end: instead of guessing the cause, read what the runs
+actually resolved and let the log separate one waiting line from sixteen stalls. Every command
+output below was produced by <code>servediff 0.4.61</code> — except the <code>repeats</code> demo near the top, which is
+labelled as synthetic.</p>
+<h2>Three readings of this line, and how to tell them apart</h2>
+<p>The line is emitted from the writer side of <code>shm_broadcast.py</code>, once every
+<code>VLLM_RINGBUFFER_WARNING_INTERVAL</code> (60 s) while it waits. That much is fixed. What people disagree
+about is <em>why</em> the writer is waiting, and the published answers fall into three groups:</p>
+<table>
+<thead>
+<tr>
+<th>reading</th>
+<th>who publishes it</th>
+<th>what it predicts in the log</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/dev/shm</code> is too small</td>
+<td>most guides, e.g. <a href="https://blog.kubesimplify.com/running-a-big-llm-across-multiple-gpus-with-vllm">kubesimplify</a> ("you probably forgot <code>--ipc=host</code>")</td>
+<td>a <em>different</em> error, raised at buffer creation, before any 60 s wait exists</td>
+</tr>
+<tr>
+<td>workers are still compiling / capturing graphs</td>
+<td>same guide ("shows up while vLLM is busy compiling or capturing CUDA graphs")</td>
+<td>the lines stop once <code>Graph capturing finished</code> appears</td>
+</tr>
+<tr>
+<td>one reader stopped draining, writer pinched</td>
+<td><a href="https://blog.lmcache.ai/en/benchmarking-lmcache-for-multi-turn-agentic-workloads-on-amd-mi300x/">LMCache's MI300X notes</a> ("Both TP workers alive, no preemptions"), <a href="https://github.com/MiaAI-Lab/GLM-5.3-Flash-EXL3-2x-DGX-Sparks/blob/main/docs/uvm-livelock-gb10.md">GB10 UVM livelock notes</a></td>
+<td>the wait outlives capture, and the cadence stays a metronome</td>
+</tr>
+</tbody>
+</table>
+<p>Three cheap checks decide between them, and all three are arithmetic on the log:</p>
+<p><strong>Check 1 — does <code>/dev/shm</code> capacity explain it?</strong> It cannot, if the capacity check passed. That
+check runs at buffer creation and fails loudly, with the fix already in its message:</p>
+<pre><code>RuntimeError: Insufficient space in /dev/shm: N MiB required, M MiB free.
+Increase /dev/shm (e.g. --shm-size or --ipc=host).
+</code></pre>
+<p>You cannot reach the 60-second watchdog with a full <code>/dev/shm</code>; you get this instead. So a run
+that logs the 60 s line had enough shm <strong>at creation</strong>. (<code>--ipc=host</code> remains the right answer to
+a <em>different</em> error.)</p>
+<p><strong>Check 2 — did the wait outlive graph capture?</strong> Count the lines after
+<code>Graph capturing finished</code>. In the log analysed below, <code>Graph capturing finished</code> is at
+<code>11:37:55</code> and <strong>14 of the 16 lines come after it</strong>, through <code>11:50:31</code>. "Still compiling" cannot
+explain a tail that starts 13 minutes after compiling ended.</p>
+<p><strong>Check 3 — is the cadence a metronome?</strong> If the gaps hold at exactly one interval, it is one
+continuous wait re-logging itself, not sixteen independent stalls. Sixteen real stalls are
+irregular; this is not.</p>
+<p>Two of the three checks are pure counting, which is why <code>servediff</code> ships them as a subcommand:</p>
+<pre><code>$ servediff repeats repro.log --top 3
+/tmp/repro.log: 56 line(s), 2 shape(s) repeated 2+ time(s), 55 line(s) in them
+    39x burst    11:33:26 -&gt; 11:33:26.380  span 0.38 s
+        gaps 0.010 s median, 0.010 s max
+        [rank0]:[W113 11:33:26.000 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 20971520 bytes
+    16x regular  11:34:32 -&gt; 11:49:32  span 900 s
+        gap 60.000 s median, 60.000 s max
+        [W113 11:34:32 shm_broadcast.py:801] No available shared memory broadcast block found in 60 seconds.
+
+  A regular gap is one wait being re-logged, not N separate failures: compare that span with
+  anything that could have blocked a reader.
+</code></pre>
+<p>(This demo runs on a 56-line synthetic log carrying the two shapes; on the real log below the same
+two shapes read 2.318 s and 959 s.)</p>
+<h2>The rest: what to compare between two runs</h2>
+<p>The question behind most of these posts is "what changed", and a benchmark number cannot answer it.
+The startup log records what the server <em>resolved</em> on the way there — which attention and all-reduce
+backends it picked, whether CUDA graphs were captured, which fusions ran, what the KV-cache pool
+ended up being, and whether it finished with <code>ready</code> or a traceback. Two logs from two runs
+therefore contain the answer, in plain text, without a profiler.</p>
+<pre><code class="language-bash">pip install servediff
+servediff diff a.log b.log
+</code></pre>
+<h2>One flag: did it take effect?</h2>
+<p>Same vLLM version, same NVFP4 checkpoint, second launch taking the Marlin kernel path instead of
+CUTLASS. The diff is two rows:</p>
+<pre><code>$ servediff diff vllm-47047-v0.23-default.log vllm-47047-v0.23-marlin.log   # excerpt
+fact                             baseline               candidate               status
+backend.moe                      VLLM_CUTLASS (NvFp4)   MARLIN (NvFp4)        changed
+kv_cache.max_concurrency         &lt;absent&gt;               54.14                 only_candidate
+
+2 difference(s); 0 fact(s) identical. Absent means the log did not print it, not that it was off.
+</code></pre>
+<p>Both of these logs are single-rank, so the live command prints two <code>note:</code> lines before the table
+(it cannot tell whether an absent all-reduce path means "single rank" or "not used"); the fact rows
+above are verbatim. The <code>2 difference(s)</code> counter and exit code <code>1</code> are what the run returns.</p>
+<p>That is what "the flag did take effect" looks like. The expensive case is the mirror image: same
+command line, <code>backend.moe</code> <strong>identical</strong> in both logs. A flag that silently did nothing produces
+a diff of zero server-side facts, and no amount of benchmarking will distinguish "the flag is
+neutral" from "the flag never reached the engine". The log diff distinguishes them in one line.</p>
+<h2>Version bump, same flags</h2>
+<p>v0.23 → v0.26 on the same configuration. Nothing on the command line changed:</p>
+<pre><code>$ servediff diff vllm-53472-v0.23.log vllm-53472-v0.26.log   # excerpt
+fact                             baseline                              candidate                              status
+backend.candidates               ['FlashInfer TRTLLM', 'FlashInfer CUT... &lt;absent&gt;                               only_baseline
+backend.moe                      FlashInfer CUTLASS (Unquantized)        TrtLlmBf16ExpertsMonolithic            changed
+backend.moe_prepare_finalize     &lt;absent&gt;                                MoEPrepareAndFinalizeNoDPEPMonolithic  only_candidate
+
+3 difference(s); 0 fact(s) identical.
+</code></pre>
+<p>The MoE backend moved from a CUTLASS path to a TRT-LLM monolithic expert kernel, and a
+prepare/finalize path appeared that the older release never printed. Those are the facts a
+throughput comparison is actually comparing.</p>
+<h2><code>absent</code> is a claim with a meaning</h2>
+<p>The distinction that matters most in practice:</p>
+<ul>
+<li><code>&lt;absent&gt;</code> means <strong>this run never printed the line</strong>. It is not the same as "off", and not the
+  same as "false".</li>
+<li><code>--skip-absent</code> then reports only facts both sides printed, and counts what it left out:</li>
+</ul>
+<pre><code>$ servediff diff a028.log a030.log --skip-absent
+3 difference(s); 14 fact(s) identical. 50 difference(s) skipped because one side never printed those lines (--skip-absent). Absent means the log did not print it, not that it was off.
+</code></pre>
+<p>The unfiltered run of the same pair reports:</p>
+<pre><code>53 difference(s); 14 fact(s) identical. Absent means the log did not print it, not that it was off.
+</code></pre>
+<p>Fifty of those 53 are one-sided, so a naive diff of 53 rows would overstate the change by a
+factor of about 18. The 3 that survive are the ones both engines actually resolved, and only those
+can be compared as values. The full 53-row table for this pair, with the command, exit code and the
+reason the baseline died early, is kept in the repository so it has a permanent home:
+<a href="https://github.com/apex-mochen/servediff/blob/main/writeups/wsl-uva-028-vs-030.md"><code>writeups/wsl-uva-028-vs-030.md</code></a>.</p>
+<h2>One log can contain two different failures</h2>
+<p>From <a href="https://github.com/vllm-project/vllm/issues/54559">vLLM #54559</a> — 102 lines, TP2, single
+GPU, 79.14 GiB:</p>
+<pre><code>$ servediff show 54559.log        # excerpt
+gpu.total_gib           79.14          line 87
+gpu.free_gib            78.46          line 87
+gpu.consumed_gib        [64.46, 64.39] line 87
+gpu.budget_gib          75.18          line 87
+model_loading.gib       63.31          line 40
+cuda_graph.capture_gib  3.26           line 87
+cuda_graph.capture_s    85             line 86
+torch.oom_requested_mib [20.0, 14.0]   line 1
+torch.oom_free_mib      [9.19, 10.75]  line 1
+</code></pre>
+<p>Two things fall out of those numbers, neither of which the issue text says:</p>
+<p><strong>39 OOM lines are two allocator bursts, not 39 failures.</strong> They run from <code>11:33:26.640</code> to
+<code>11:33:28.958</code> — 2.318 s — alternating <code>[rank0]</code>/<code>[rank1]</code>, 7–16 ms apart with one ~1 s gap, the
+request dropping from 20 MiB to 14 MiB. And the card was not full: <code>gpu.free_gib 78.46</code> while the
+allocator saw 9.19 MiB free, because the pool is set to <code>0.95 × 79.14 = 75.18 GiB</code>. The failure
+is inside the allocator's own budget, not on the device.</p>
+<p><strong>16 broadcast-wait lines are one 959 s wait, not sixteen stalls.</strong> All from <code>EngineCore
+pid=260</code>, <code>11:34:32</code> → <code>11:50:31</code>, one line per 60 s interval, a single +118 s step, and 14 of the
+16 arrive <em>after</em> <code>Graph capturing finished</code> at <code>11:37:55</code>. Checks 2 and 3 from the top of the
+post are answered by that sentence alone: the wait outlived capture, and the cadence held.</p>
+<h2>The diff bounds the problem; it does not name the cause</h2>
+<p>From <a href="https://github.com/vllm-project/vllm/issues/63705">vLLM #63705</a> — MiniMax-M2.7, TP4+EP,
+4×H100. The reporter's own table puts the regression entirely in decode: ttft −0.9 / −1.8 / −0.8 %
+on 0.29.0 / 0.31.0 / 0.32.0, tpot +22.7 / +27.9 / +22.1 %, throughput −17.9 / −21.1 / −17.5 %. A
+benchmark table like that cannot say <em>which</em> server-side component moved. The startup logs can:</p>
+<table>
+<thead>
+<tr>
+<th>fact</th>
+<th>v0.26.0</th>
+<th>v0.29.0</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>TP group all-reduce chain</td>
+<td><code>['PYNCCL']</code></td>
+<td><code>['FLASHINFER', 'PYNCCL']</code></td>
+</tr>
+<tr>
+<td>EP group all-reduce chain</td>
+<td><code>['PYNCCL']</code></td>
+<td><code>['PYNCCL']</code></td>
+</tr>
+<tr>
+<td>model runner</td>
+<td>V1 (line absent)</td>
+<td>V2 (<code>Using V2 Model Runner</code>)</td>
+</tr>
+</tbody>
+</table>
+<p>FlashInfer all-reduce entered the <strong>TP</strong> dispatch chain and EP stayed on PYNCCL, so the candidate
+change is TP-side; Model Runner V2 became active on this configuration. Two named variables to
+A/B, from lines that were already being written to disk.</p>
+<p>And the honest part: an external contributor later re-ran that benchmark on 4×H100 with the same
+serve flags and <strong>did not reproduce the regression</strong> — v0.29 came out about 8 % faster. So the
+diff did not solve the issue; it told both sides what to test. A log says what is configured, not
+what it costs. Reading the dispatch list as "every collective used FlashInfer" is specifically
+wrong: it is a candidate set tried in order, falling through when a backend rejects the input.</p>
+<h2>What servediff is, and what it refuses to do</h2>
+<p>It reads startup logs from vLLM and SGLang and answers "what did each server actually run with":</p>
+<pre><code class="language-bash">pip install servediff
+servediff diff a.log b.log              # facts, side by side, each with its source line
+servediff diff a.log b.log --markdown   # same as a table
+servediff show a.log                    # one log's facts with line numbers
+servediff repeats a.log                 # one re-logged wait vs N real failures
+servediff capture -o run.log -- &lt;command&gt;   # run a server and keep its startup log
+servediff demo                          # two bundled logs, if you have none of your own yet
+</code></pre>
+<p>It does not profile, does not judge which change caused the slowdown, and does not guess when a
+line is missing. Its job is to make the 53-row diff collapse into the 3 rows that can actually be
+compared, and to keep <code>absent</code> from being read as <code>off</code>.</p>
+<p>Source, changelog and the two full case analyses:
+<a href="https://github.com/apex-mochen/servediff">https://github.com/apex-mochen/servediff</a></p>
+<hr />
+<p><em>Prepared 2026-11-17; every command re-run 2026-11-22 in a fresh virtualenv with
+<code>pip install servediff==0.4.61</code> (<code>servediff --version</code> → <code>servediff 0.4.61</code>). The two diff blocks,
+the <code>--skip-absent</code> pair, <code>show</code>, <code>demo</code> and the link set were reproduced on that install; two
+exceptions are labelled where they appear — the <code>repeats</code> demo is a synthetic 56-line sample (its
+counters and layout are the tool's real output), and the 0.28/0.30 53-row pair is documented in
+<code>writeups/wsl-uva-028-vs-030.md</code> instead of being re-run here. The numbers in the #54559 section
+come from <code>servediff show</code> on the reporter's log and match <code>ISSUE-54559-analysis.md</code>. Both analyses
+live in the repository, and both threads remain open.</em></p>
+</body>
+</html>

@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>servediff notes: vLLM / SGLang startup logs, read as facts</title>
+<meta name="description" content="Read a vLLM or SGLang startup log as named facts and diff two runs: auto-selected backends, KV cache layout, CUDA graph capture, startup failures.">
+<link rel="canonical" href="https://apex-mochen.github.io/servediff/">
+<style>
+:root { --fg:#1c1c1e; --muted:#6b6b70; --line:#e4e4e7; --code:#f6f6f7; }
+body { margin:0 auto; max-width:44rem; padding:2.5rem 1.25rem 6rem;
+  font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  color:var(--fg); }
+h1 { font-size:1.9rem; line-height:1.25; margin:0 0 1rem; letter-spacing:-0.01em; }
+h2 { font-size:1.25rem; margin:2.2rem 0 .6rem; }
+h3 { font-size:1.05rem; margin:1.6rem 0 .4rem; }
+p, li { color:var(--fg); }
+pre { background:var(--code); border:1px solid var(--line); border-radius:6px;
+  padding:.85rem 1rem; overflow-x:auto; font-size:.86rem; line-height:1.5; }
+code { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:.9em; }
+p code, li code { background:var(--code); padding:.1em .3em; border-radius:3px; }
+a { color:#0b62d0; }
+.note { color:var(--muted); font-size:.9rem; }
+nav { border-bottom:1px solid var(--line); padding-bottom:.75rem; margin-bottom:2rem;
+  font-size:.9rem; }
+nav a { margin-right:1rem; }
+ul.index li { margin:.5rem 0; }
+</style>
+</head>
+<body>
+<nav><a href="./index.html">servediff notes</a><a href="https://github.com/apex-mochen/servediff">source</a><a href="https://pypi.org/project/servediff/">pip install servediff</a></nav>
+<h1>servediff notes: startup logs, read as facts</h1>
+<p><code>servediff</code> reads a vLLM or SGLang <em>startup log</em> into named facts
+(&ldquo;<code>backend.moe</code> was <code>VLLM_CUTLASS</code> in one run and
+<code>MARLIN</code> in the other&rdquo;) so an upgrade can be compared on what the server
+actually ran with, not on the flags you passed.</p>
+<pre><code>pip install servediff
+servediff demo</code></pre>
+<p>These notes are the long-form evidence behind the rules: real logs, the arithmetic, and
+what the popular answer gets wrong.</p>
+<ul class="index">
+<li><a href="audit-noise-real-logs.html">What servediff audit is for, measured on four full logs</a><br><span class="note">servediff diff answers &quot;what changed between these two startups&quot;. servediff audit answers the question that makes diff trustworthy: which lines did the parser fail to read? Without it, a fact missing after an upgrade is </span></li>
+<li><a href="same-box-twice.html">The same box, measured twice: why a diff has to agree with itself</a><br><span class="note">A diff tool earns trust the first time it tells you something you did not know, and loses it the first time it tells you that two identical runs differ. This note is about the second case, because it is the one that neve</span></li>
+<li><a href="vllm-shm-broadcast-60-seconds.html">vLLM: &quot;No available shared memory broadcast block found in 60 seconds&quot; — what the line means, and how to tell which failure you have</a><br><span class="note">This string shows up in dozens of threads, and the two answers that dominate search results are &quot;increase /dev/shm&quot; and &quot;it is still compiling&quot;. Both are sometimes right. Both are wrong often enough that people keep re-p</span></li>
+<li><a href="wsl-uva-028-vs-030.html">Same flags, 0.28 dies on WSL and 0.30 starts — what the startup log reveals</a><br><span class="note">A write-up of one real upgrade, kept in the repo so the diff below has a permanent home instead of living only inside a release note.</span></li>
+</ul>
+<p class="note">Source: <a href="https://github.com/apex-mochen/servediff">github.com/apex-mochen/servediff</a>.
+Pages are generated from <code>writeups/*.md</code> by <code>tools/build_site.py</code>.</p>
+</body>
+</html>
