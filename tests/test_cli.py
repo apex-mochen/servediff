@@ -2153,3 +2153,24 @@ def test_the_sglang_reports_audit_to_zero_and_yield_the_mamba_facts(capsys):
 
     f = facts("sglang-2026-10/sglang-43741.log")
     assert f["kv_cache.fp8_scaling"].value == "defaulted to 1.0. (accuracy risk)"
+
+
+def test_a_384_thread_cpu_forum_report_is_read_without_a_ready_line():
+    # discuss.vllm.ai thread 2708: 384 threads, 1.5 TB RAM, and the poster sees two threads
+    # busy. The paste is a fragment (no ready line), which is the normal shape of a forum
+    # post; the facts still have to come out, and `audit` still has to say zero.
+    f = facts("vllm-forum-2026-06/vllm-cpu-2x-epyc-9655.log")
+    assert f["cpu.core_ids"].value.startswith("[192, 193")
+    assert f["cpu.core_ids"].value.count(",") == 94
+    assert f["cpu.reserved_cpus"].value == "[287]"
+    assert f["cpu.threads_bind_mode"].value == "auto (auto_setup=True, skip_setup=False)"
+    assert f["kv_cache.cpu_node"].value == "675.87/755.19 GiB (node 0, auto)"
+    assert f["kv_cache.requested_gib"].value == 694.77
+    assert f["kv_cache.non_kv_gib"].value == 18.9
+    assert f["kv_cache.tokens"].value == 4921472
+    assert f["kv_cache.max_concurrency"].value == 150.19
+    # Triton finding no driver is why this run is on the v1 model runner.
+    assert f["triton.drivers"].value == "0 active (Triton disabled)"
+    assert f["model_runner"].value == "v1 (v2 requires Triton)"
+    # A fragment: the absence is honest, not inferred.
+    assert "startup" not in f

@@ -44,6 +44,7 @@ cpu.numa_auto
 cpu.numa_membind
 cpu.numa_migrate
 cpu.omp_threads
+cpu.reserved_cpus
 cpu.set_num_threads
 cpu.threads_bind_mode
 cpu.torch_threads
@@ -155,6 +156,8 @@ kv_cache.mamba_mode
 kv_cache.mamba_page_pad
 kv_cache.max_concurrency
 kv_cache.memory_gib
+kv_cache.non_kv_gib
+kv_cache.requested_gib
 kv_cache.suggested_bytes
 kv_cache.suggested_gib
 kv_cache.tokens
@@ -176,6 +179,7 @@ parallel.world_size
 pd.warmup
 sampling.overridden
 sched.max_running_requests
+scheduler.async
 scheduler.exit
 server.bind
 server.command
@@ -185,6 +189,7 @@ serving.chat_template_content_format
 startup
 startup.error
 transfer.nixl_backend
+triton.drivers
 uva_buffers
 weights.available_ram_gib
 weights.cache

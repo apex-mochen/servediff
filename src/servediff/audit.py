@@ -217,6 +217,10 @@ NOISE = (
     re.compile(r"^NIXL INFO|^Initialized NIXL agent|^Backend UCX was instantiated"),
     # The listening banner and the second line of the FP8 warning: the fact is the warning's
     # first line (`kv_cache.fp8_scaling`), the consequence sentence adds nothing to diff.
+    # A pasted launch command is shell history, and the second Triton line is the
+    # consequence of the first (`triton.drivers` is the fact).
+    re.compile(r"^\$ vllm serve|^vllm serve "),
+    re.compile(r"^Triton not installed or not compatible"),
     re.compile(r"^INFO:\s+Uvicorn running on http"),
     re.compile(r"^This may lead to less accurate results!$"),
     re.compile(r"^Start of pd disaggregation warmup"),

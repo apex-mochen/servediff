@@ -384,6 +384,10 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
      lambda m: [("cpu.threads_bind_mode", f"{m[1]} (auto_setup={m[2]}, skip_setup={m[3]})")]),
     (re.compile(r"local_rank=(\d+), core ids=\[([\d, ]+)\]"),
      lambda m: [("cpu.core_ids", f"[{m[2]}]")]),
+    # Which core is kept for the control plane. On a 384-thread box that is one core out of
+    # 96, and the number matters when the user counts threads in htop.
+    (re.compile(r"reserved_cpus=\[([\d, ]+)\]"),
+     lambda m: [("cpu.reserved_cpus", f"[{m[1]}]")]),
     (re.compile(r"OMP_NUM_THREADS=(\d+) is set; leaving Torch threads at (\d+) for serving"),
      lambda m: [("cpu.omp_threads", f"{m[1]} (torch left at {m[2]})")]),
     # Hybrid models cannot use the default block size: the attention page has to be at least
@@ -409,6 +413,18 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
     # CPU KV sizing is reported per node, and the pair is (allocated / total) GiB.
     (re.compile(r"Explicitly set \(([\d.]+)/([\d.]+)\) GiB for KV cache on node (\d+)"),
      lambda m: [("kv_cache.cpu_node", f"{m[1]}/{m[2]} GiB (node {m[3]})")]),
+    # The same CPU KV sizing, chosen automatically rather than from a flag. This is the line
+    # a 384-thread CPU-only report prints, and the numbers are why its KV cache is 675 GiB.
+    (re.compile(r"Auto set \(([\d.]+)/([\d.]+)\) GiB for KV cache on node (\d+), with ([\d.]+) GiB requested memory for the worker\. ([\d.]+) GiB memory was consumed by non-kv usages"),
+     lambda m: [("kv_cache.cpu_node", f"{m[1]}/{m[2]} GiB (node {m[3]}, auto)"),
+                ("kv_cache.requested_gib", float(m[4])),
+                ("kv_cache.non_kv_gib", float(m[5]))]),
+    # Triton is the reason a CPU build drops to the v1 model runner, which changes the
+    # execution path; both lines are one condition, so one fact and one noise rule.
+    (re.compile(r"Triton is installed but (\d+) active driver\(s\) found"),
+     lambda m: [("triton.drivers", f"{m[1]} active (Triton disabled)")]),
+    (re.compile(r"Model runner v(\d+) requires Triton; using the v(\d+) model runner instead"),
+     lambda m: [("model_runner", f"v{m[2]} (v{m[1]} requires Triton)")]),
     # vLLM pads the mamba page so the two page sizes come out equal; the percentage is how
     # much slack the hybrid cache pays for that. It is not decoration: it explains why the
     # KV budget is not exactly the number you configured.
