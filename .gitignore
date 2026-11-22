@@ -10,3 +10,4 @@ dist/
 .venv/
 
 scratch-test*
+_site/
