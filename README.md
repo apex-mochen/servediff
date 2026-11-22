@@ -775,6 +775,11 @@ prove, are in [writeups/audit-noise-real-logs.md](writeups/audit-noise-real-logs
   — same flags on a laptop GPU under WSL2, 0.28.0 dies with `RuntimeError: UVA is not
   available`, 0.30.0 starts; the startup-log diff is 53 differences and 14 identical facts,
   and the one line that explains it is the pinned-memory fallback from vllm#56908.
+- When the log says `No available shared memory broadcast block found in 60 seconds`,
+  [writeups/vllm-shm-broadcast-60-seconds.md](writeups/vllm-shm-broadcast-60-seconds.md) gives
+  the three arithmetic checks that separate a full `/dev/shm`, a capture still running, and
+  one reader that stopped draining — worked through a real 102-line TP2 log, against the two
+  answers that dominate search results.
 
 ## License
 
