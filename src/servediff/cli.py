@@ -369,6 +369,37 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
     # that. No flag asks for 640.
     (re.compile(r"Setting attention block size to (\d+) tokens to ensure that attention page size is >= mamba page size"),
      lambda m: [("kv_cache.attention_block_size", f"{m[1]} (page >= mamba page)")]),
+    # NUMA on CPU builds is reported by two layers that do not agree, so each statement
+    # becomes its own fact instead of one value that would have to pick a side: the Python
+    # layer says automatic binding is unavailable and starts unbound, while the C++ layer
+    # says memory was bound with MEMBIND to the listed nodes after a migrate that failed.
+    (re.compile(r"Automatic NUMA binding unavailable on this host; starting unbound"),
+     lambda m: [("cpu.numa_auto", "unavailable (started unbound)")]),
+    (re.compile(r"NUMA binding: Using (MEMBIND) policy for memory allocation on the NUMA nodes \(([\d, ]+)\)"),
+     lambda m: [("cpu.numa_membind", f"{m[1]} nodes [{m[2]}]")]),
+    (re.compile(r"numa_migrate_pages failed\. errno: (\d+)"),
+     lambda m: [("cpu.numa_migrate", f"failed (errno {m[1]})")]),
+    # The CPU backend refuses to move torch threads after the affinity was bound; that is
+    # why the thread count stays where the binding put it, and it is a warning people
+    # paste into reports without knowing it changes nothing they asked for.
+    (re.compile(r"CPU backend doesn't allow to use `torch.set_num_threads` after the thread binding, skip it"),
+     lambda m: [("cpu.set_num_threads", "skipped (thread binding owns affinity)")]),
+    # CPU KV sizing is reported per node, and the pair is (allocated / total) GiB.
+    (re.compile(r"Explicitly set \(([\d.]+)/([\d.]+)\) GiB for KV cache on node (\d+)"),
+     lambda m: [("kv_cache.cpu_node", f"{m[1]}/{m[2]} GiB (node {m[3]})")]),
+    # vLLM pads the mamba page so the two page sizes come out equal; the percentage is how
+    # much slack the hybrid cache pays for that. It is not decoration: it explains why the
+    # KV budget is not exactly the number you configured.
+    (re.compile(r"Padding mamba page size by ([\d.]+)% to ensure that mamba page size and attention page size"),
+     lambda m: [("kv_cache.mamba_page_pad", f"{m[1]}% (to match attention page)")]),
+    (re.compile(r"kv lcm block sizes (\d+)"),
+     lambda m: [("kv_cache.lcm_block_sizes", m[1])]),
+    (re.compile(r"Encoder cache will be initialized with a budget of (\d+) tokens, and profiled with (\d+) image items?"),
+     lambda m: [("mm.encoder_cache", f"{m[1]} tokens, {m[2]} image item(s)")]),
+    (re.compile(r"Inductor compilation was disabled by user settings"),
+     lambda m: [("compile.inductor_disabled", "user settings")]),
+    (re.compile(r"The chat template requires system-first ordering"),
+     lambda m: [("api.chat_template_order", "system-first required (inline system messages rewritten)")]),
     # Which attention backend the platform actually picked. A flag asks for one; this
     # line says what was chosen after the check, and FlashInfer vs FlashAttention is a
     # different kernel set for the same command line.

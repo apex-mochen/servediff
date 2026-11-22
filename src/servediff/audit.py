@@ -206,13 +206,20 @@ NOISE = (
     re.compile(r"^`"),
     re.compile(r"^(?:I have tried|I tried|Steps to reproduce|Expected behavior"
                r"|Actual behavior|Additional context|Environment)\s*:"),
-    re.compile(r"^[A-Z][a-z']+\s[^:=]{40,}[.]$"),
+    # NOTE: the "prose sentence" rule below is applied only to lines that carry no log
+    # preamble (see is_noise). Engine messages are English sentences too, so matching them
+    # as prose silently hid real settings: `Padding mamba page size by 20.75% …` and
+    # `Explicitly set (4.0/30.69) GiB for KV cache on node 0.` were both swallowed.
     # SGLang's own housekeeping: package inventory lines (`name: Module Not Found`), per-NIC
     # staging buffers with their addresses, NIXL agent chatter, and the kill sequence.
     re.compile(r"^[a-z][a-z0-9_.+-]*: (?:Module Not Found|\d)"),
     re.compile(r"^StagingBuffer allocated: |^Staging buffer using cudaMalloc"),
     re.compile(r"^NIXL INFO|^Initialized NIXL agent|^Backend UCX was instantiated"),
     re.compile(r"^Received sigquit from a child process|^kill_process_tree called"),
+    # The broadcast line is a load signature, not a configuration one: a rank is waiting for
+    # a shared-memory slot another rank has not released. Its text is identical every time,
+    # which is why it is noise here and a whole writeup elsewhere.
+    re.compile(r"^No available shared memory broadcast block found in \d+ seconds"),
     re.compile(r"^CUDA available: (True|False)"),
     re.compile(r"^GPU \d+ Compute Capability: "),
     re.compile(r"^NVIDIA Topology:|^\t"),
@@ -354,6 +361,10 @@ def unread_samples(text: str) -> tuple[Counter, dict[str, str]]:
     return counts, samples
 
 
+_LOG_LEVEL = re.compile(r"\b(?:INFO|WARNING|ERROR|DEBUG|CRITICAL)\b")
+_PROSE = re.compile(r"^[A-Z][a-z']+\s[^:=]{40,}[.]$")
+
+
 def is_noise(raw_line: str) -> bool:
     if _BARE_PREFIX.match(raw_line):
         return True
@@ -364,6 +375,11 @@ def is_noise(raw_line: str) -> bool:
     stripped = message(raw_line)
     for candidate in (stripped, _COMMENT.sub("", stripped)):
         if candidate and any(pattern.search(candidate) for pattern in NOISE):
+            return True
+        # Prose written around a log is noise; a message the engine printed is not, even
+        # when it happens to be a sentence. Without this gate the audit reports
+        # "nothing worth a look" while hiding settings it failed to read.
+        if candidate and not _LOG_LEVEL.search(raw_line) and _PROSE.search(candidate):
             return True
     return False
 

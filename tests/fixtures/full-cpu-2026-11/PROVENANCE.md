@@ -11,11 +11,10 @@ Run: vLLM `0.34.0rc1.dev398+g153dc0464`, one AVX2 CPU (no CUDA), `vadery/Qwen3.5
 
 ## Why it is not in the root fixture folder
 
-`test_a_directory_is_audited_as_one_corpus_with_a_line_per_log` asserts that every root
-fixture parses with **zero** shapes worth a look. This log is the first *full* noisy one
-from a GPU-less build and does not meet that bar yet: 4 shapes remain unread. Keeping it
-here keeps that invariant honest instead of lowering it, and the remainder is written down
-below rather than discovered later.
+`test_a_directory_is_audited_as_one_corpus_with_a_line_per_log` walks the root folder, so a log
+kept here is audited by its own test. At 0.4.64 that test is the strict one — `audit
+tests/fixtures/full-cpu-2026-11 --max-shapes 0` exits 0, the same bar as the root corpus and
+the held-out directories, and CI runs it.
 
 ## What it guards
 
@@ -40,25 +39,46 @@ backend. The facts now read from it:
 | `cpu.omp_threads` | `7 (torch left at 7)` | 55 |
 | `kv_cache.attention_block_size` | `640 (page >= mamba page)` | 56 |
 | `mm.pixel_cap` | `not applied (cap_pixels_per_frame unset)` | 32 |
+| `mm.encoder_cache` | `16384 tokens, 1 image item(s)` | 63 |
+| `kv_cache.mamba_page_pad` | `20.75% (to match attention page)` | 57 |
+| `kv_cache.cpu_node` | `4.0/30.69 GiB (node 0)` | 81 |
+| `kv_cache.lcm_block_sizes` | `640` | 84 |
+| `compile.inductor_disabled` | `user settings` | 126 |
+| `api.chat_template_order` | `system-first required (inline system messages rewritten)` | 131 |
+| `cpu.numa_auto` | `unavailable (started unbound)` | 18 |
+| `cpu.numa_membind` | `MEMBIND nodes [0]` | 35 |
+| `cpu.numa_migrate` | `failed (errno 1)` | 34 |
+| `cpu.set_num_threads` | `skipped (thread binding owns affinity)` | 61 |
 
 The last row is the one worth keeping: oneDNN refused a primitive descriptor, so the run
 silently fell back to torch linear. Nothing on the command line says so, and a benchmark
 only shows the slower result.
 
-## Remaining 4 shapes (audit at 0.4.64)
+## What is left: 121 noise lines, 0 shapes worth a look (audit at 0.4.64)
 
-0.4.63 and 0.4.64 took nine of them over as facts — `kv_cache.group_sizes`, `kv_cache.mamba_mode`,
-`mm.warmup_s`, `compile.recompile_reason` — and taught the noise table the two progress-bar
-variants. What is left is CPU deployment detail:
+`audit` reports `121 unread line(s), 58 shape(s)` and `nothing worth a look`. That sentence is
+only as good as the noise table, and this log is where the table was caught lying.
 
-- `OMP_NUM_THREADS=N is set; leaving Torch threads at N for serving`
-- `CPU backend doesn't allow to use torch.set_num_threads after the thread binding, skip it`
-- `OpenMP thread binding info:` + `VLLM_CPU_OMP_THREADS_BIND='auto', ...`
-- `Warning: NUMA binding: Using MEMBIND policy ...` / `Warning: numa_migrate_pages failed`
-  (two sources disagree — the API says automatic NUMA binding is unavailable, the C++
-  layer says MEMBIND — so a single fact would have to pick a side)
-- `[transformers] QwenNVL video processing does not apply the per-frame pixel cap ...`
+The "prose" rule — a capitalised English sentence, no colon or equals, 40+ characters, ending
+in a period — was written for text people write *around* a pasted log. Engine messages are
+English sentences too, so it was silently eating settings:
 
-`Warming up model for the compilation...` / `Warming up done.` are now noise as phase
-markers, so the pair's delta is not measured — that is a known cost, not a hidden one. Their
-real home would be a compile-phase fact; nothing reads them until there is one.
+| swallowed line | what it actually says |
+|---|---|
+| `[interface.py:1174] Padding mamba page size by 20.75% to ensure that mamba page size and attention page size are exactly equal` | the hybrid cache pads the mamba page, which is why the KV numbers do not add up to what you configured |
+| `[encoder_runner.py:131] Encoder cache will be initialized with a budget of 16384 tokens, and profiled with 1 image items` | the vision encoder's cache budget and the profile batch |
+| `[cpu_worker.py:255] Explicitly set (4.0/30.69) GiB for KV cache on node 0.` | the per-node CPU KV allocation |
+| `[kv_cache_utils.py:851] kv lcm block sizes 640` | the block size the scheduler actually uses |
+
+All four are facts now (`kv_cache.mamba_page_pad`, `mm.encoder_cache`, `kv_cache.cpu_node`,
+`kv_cache.lcm_block_sizes`), the prose rule only applies to lines with no log preamble, and a
+test pins that (`test_a_sentence_a_log_actually_printed_is_never_prose_noise`).
+
+What remains is genuinely noise: routes and banners, the two `torch.set_num_threads` / NUMA
+warnings (now facts, `cpu.set_num_threads` and `cpu.numa_*`), progress bars, access logs, and
+the broadcast wait — `No available shared memory broadcast block found in 60 seconds`, 49
+occurrences, kept as noise with its own reasoned rule: it is a load signature, not a
+configuration one, and its text is identical every time.
+
+`Warming up model for the compilation...` / `Warming up done.` are phase markers, so the pair's
+delta is not measured — a known cost, not a hidden one.

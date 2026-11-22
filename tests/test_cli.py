@@ -145,6 +145,24 @@ def test_real_cpu_log_from_034_keeps_the_backend_choices():
     assert f["kv_cache.attention_block_size"].value == "640 (page >= mamba page)"
     # Vision tokenisation runs without the reference pixel cap.
     assert f["mm.pixel_cap"].value == "not applied (cap_pixels_per_frame unset)"
+    # 0.4.64 read the rest of what this log prints about the deployment. Every one of these
+    # had been reachable only as an "unread" line — two of them were even counted as prose
+    # noise, which is how a zero remainder can be reported while settings stay hidden.
+    assert f["mm.encoder_cache"].value == "16384 tokens, 1 image item(s)"
+    assert f["kv_cache.mamba_page_pad"].value == "20.75% (to match attention page)"
+    assert f["kv_cache.cpu_node"].value == "4.0/30.69 GiB (node 0)"
+    assert f["kv_cache.lcm_block_sizes"].value == "640"
+    assert f["compile.inductor_disabled"].value == "user settings"
+    assert f["api.chat_template_order"].value == "system-first required (inline system messages rewritten)"
+    # NUMA is reported by two layers that disagree, so it stays two facts: the Python layer
+    # starts the worker unbound, the C++ layer then binds memory with MEMBIND after a
+    # migrate that failed. Collapsing them into one value would have to pick a side.
+    assert f["cpu.numa_auto"].value == "unavailable (started unbound)"
+    assert f["cpu.numa_membind"].value == "MEMBIND nodes [0]"
+    assert f["cpu.numa_migrate"].value == "failed (errno 1)"
+    # The backend refuses to move torch threads once the affinity is bound, which is why
+    # the thread count you see in the log is not the one you asked for.
+    assert f["cpu.set_num_threads"].value == "skipped (thread binding owns affinity)"
     assert f["startup"].value == "ready"
     # The GPU-only fact stays absent rather than being inferred from a CPU default.
     assert "backend.attention" not in f
@@ -166,18 +184,38 @@ def test_cpu_backend_choices_are_read_not_offered_back_as_unread():
         assert audit.shape(line) not in unread, line
 
 
-def test_the_cpu_log_keeps_its_remainder_on_the_record(capsys):
-    # This log is deliberately outside the root corpus because it still has unread shapes.
-    # The count is pinned, not ignored: PROVENANCE.md next to the file lists what is left,
-    # so a rule that eats one of those shapes has to update the note and this number.
+def test_the_cpu_log_has_nothing_left_worth_a_look(capsys):
+    # This log was kept outside the root corpus because four shapes were still unread. 0.4.64
+    # read all four, so the check is now the strict one: `--max-shapes 0`, like the root
+    # corpus and the held-out directories. What remains is 121 noise lines — routes, banner
+    # art, deprecations, progress bars, the broadcast wait — and PROVENANCE.md says why the
+    # broadcast line is noise rather than a fact.
     d = FIX / "full-cpu-2026-11"
-    assert servediff.main(["audit", str(d)]) == 0
+    assert servediff.main(["audit", str(d), "--max-shapes", "0"]) == 0
     out = capsys.readouterr().out
-    assert "4 line(s) worth a look" in out
-    # What is left is CPU deployment detail (thread binding, NUMA policy), not a backend
-    # choice that already has a fact.
-    assert "NUMA binding" in out
-    assert "linear_fallback" not in out
+    assert "nothing worth a look" in out
+    # No setting is handed back as noise any more, including the two that used to be.
+    for gone in ("NUMA binding", "Padding mamba page size", "Explicitly set (", "kv lcm block sizes"):
+        assert gone not in out
+
+
+def test_a_sentence_a_log_actually_printed_is_never_prose_noise():
+    # The audit's "prose" rule exists for text written around a pasted log. Applied to
+    # engine output it was a false negative factory: a capitalised English sentence with
+    # no colon and a trailing period counted as noise, and `audit` then said
+    # "nothing worth a look" while a real setting sat unread underneath. The gate is the
+    # log preamble, not the shape of the sentence.
+    from servediff import audit
+
+    logged = ("(Worker pid=122) INFO 11-14 03:20:21 [interface.py:1174] Padding mamba page "
+              "size by 20.75% to ensure that mamba page size and attention page size are "
+              "exactly equal")
+    assert audit.is_noise(logged) is False
+    assert servediff.parse(logged + "\n")["facts"]["kv_cache.mamba_page_pad"].value == (
+        "20.75% (to match attention page)")
+    prose = ("This is the full log I get when I start the server with two workers and an "
+             "0.9 utilization on a 24 GB card.")
+    assert audit.is_noise(prose) is True
 
 
 def test_the_memory_breakdown_of_a_real_oom_report_is_read():

@@ -1,5 +1,6 @@
 # Every fact key the bundled logs produce. Regenerate with:
 #   python tools/fact_keys.py --write
+api.chat_template_order
 arg.backend.attention_arg
 arg.backend.sampling_arg
 arg.cuda_graph.disabled
@@ -32,12 +33,17 @@ compile.artifacts
 compile.autotune_gemm
 compile.dynamo_s
 compile.graph_s
+compile.inductor_disabled
 compile.range
 compile.recompile_reason
 compile.total_s
 compile.warmup_s
 cpu.core_ids
+cpu.numa_auto
+cpu.numa_membind
+cpu.numa_migrate
 cpu.omp_threads
+cpu.set_num_threads
 cpu.threads_bind_mode
 cpu.torch_threads
 cuda_graph.capture_gib
@@ -138,14 +144,18 @@ kernel.ir_op.fused_add_rms_norm
 kernel.ir_op.gelu_and_mul_sparse
 kernel.ir_op.rms_norm
 kv_cache.attention_block_size
+kv_cache.cpu_node
 kv_cache.group_sizes
 kv_cache.layout
+kv_cache.lcm_block_sizes
 kv_cache.mamba_mode
+kv_cache.mamba_page_pad
 kv_cache.max_concurrency
 kv_cache.memory_gib
 kv_cache.suggested_bytes
 kv_cache.suggested_gib
 kv_cache.tokens
+mm.encoder_cache
 mm.pixel_cap
 mm.warmup_s
 model.architecture

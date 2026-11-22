@@ -5,17 +5,27 @@
 CPU serving was only half readable: the log pins each worker to a core list and lets
 `OMP_NUM_THREADS` from outside override the torch cut, and neither value is in the flags.
 
-Five facts read from a real 0.34 CPU log: `cpu.threads_bind_mode` (`auto (auto_setup=True,
-skip_setup=False)`), `cpu.core_ids` (`[1, 3, 5, 7, 9, 11, 13]`), `cpu.omp_threads`
-(`7 (torch left at 7)`), `kv_cache.attention_block_size` (`640 (page >= mamba page)` — hybrid
-models raise the block size so the attention page fits the mamba page, and the reported group
-sizes follow from that), and `mm.pixel_cap` (`not applied` — transformers skips the per-frame
-pixel cap, so the same video costs more tokens than the reference implementation).
+Fifteen facts read from a real 0.34 CPU log — `cpu.threads_bind_mode`, `cpu.core_ids`,
+`cpu.omp_threads`, `cpu.set_num_threads`, `cpu.numa_auto`, `cpu.numa_membind`,
+`cpu.numa_migrate`, `kv_cache.attention_block_size`, `kv_cache.mamba_page_pad`,
+`kv_cache.cpu_node`, `kv_cache.lcm_block_sizes`, `mm.pixel_cap`, `mm.encoder_cache`,
+`compile.inductor_disabled`, `api.chat_template_order`. The interesting ones are the changes
+no flag records: the hybrid cache pads its mamba page by 20.75% so both pages come out equal
+(which is why the KV numbers do not match what you configured), the CPU layer allocates
+`4.0/30.69 GiB` per node, and the backend refuses to move torch threads once affinity is
+bound.
 
-The full CPU log's unread remainder is now **4** (22 two releases ago): two
-`torch.set_num_threads` skip warnings and the NUMA pair, where the API layer and the C++
-layer disagree about whether binding happened, so a single fact would have to pick a side.
-`PROVENANCE.md` says so instead of dropping them.
+**The audit was hiding four of them.** Its "prose" rule — a capitalised English sentence
+ending in a period — was written for text written around a pasted log, and it matched engine
+messages too: `Padding mamba page size by 20.75% …`, `Encoder cache will be initialized …`,
+`Explicitly set (4.0/30.69) GiB …` and `kv lcm block sizes 640` were counted as noise. So the
+tool reported `nothing worth a look` while settings sat unread underneath. The rule now only
+applies to lines with no log preamble, and `test_a_sentence_a_log_actually_printed_is_never_prose_noise`
+pins it. Any earlier "zero remainder" claim was made with that rule in force.
+
+That makes the full CPU log the fifth corpus at zero: `audit … --max-shapes 0` exits 0, CI
+gates it, and `PROVENANCE.md` lists what is left (121 noise lines, including the 49-occurrence
+broadcast wait, kept as noise with its own reasoned rule).
 
 Also: the README now points at the rendered notes site
 (<https://apex-mochen.github.io/servediff/>) and lists `writeups/same-box-twice.md`.
