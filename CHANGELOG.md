@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.4.62 — 2026-11-22
+
+A CPU log came out as `startup ready` with no backend facts, and a silent fallback stayed invisible.
+
+On vLLM 0.34 with `device_config=cpu` the GPU-shaped `Using X attention backend` line is never
+printed. The choices are printed one backend at a time instead — the vision tower, the multimodal
+encoder, the CPU linear kernel, the GDN prefill kernel — and none of them matched a rule. A diff
+of two CPU runs therefore reported "no backend change" whether or not one of them had asked for
+something else: `<absent>` on both sides, which is the failure mode this tool exists to prevent.
+
+Five rules now read those lines: `backend.attention_vit` (with `(default)` when no flag won),
+`backend.attention_mm`, `backend.linear`, `backend.gdn_prefill`, and
+`backend.linear_fallback`. The last one is the reason to look at CPU startup logs at all: oneDNN
+refuses a primitive descriptor, torch takes over, and nothing on the command line records it.
+
+The fixture is a full 173-line log from vllm#67598 (0.34.0rc1.dev398, one AVX2 CPU, Qwen3.5-0.8B
+W8A8), kept in `tests/fixtures/full-cpu-2026-11/` because 22 shapes in it are still unread —
+the first GPU-less log in the corpus, and the remainder is written down next to it instead of
+being claimed away.
+
 ## 0.4.61 — 2026-11-13
 
 Sixteen waiting lines were one wait, and nine characters of readme said "16 stalls".

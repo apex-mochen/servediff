@@ -596,6 +596,7 @@ contains `TOKEN`, `KEY`, `SECRET`, `PASSWORD`, `CREDENTIAL` or `AUTH` are replac
 | server surface | `Supported tasks: …`, `Scale-out endpoints are …`, chat template content format, FlashInfer autotune skipped, listening address | — |
 | server command | — (not printed) | `sgl start command: …` (the exact invocation, defaults included) |
 | kernel selection | one fact per op from `Final IR op priority …`, e.g. `kernel.ir_op.rms_norm=native`; the autotune gate from `Not enough SMs to use max_autotune_gemm mode` | — |
+| CPU-only builds (0.4.62+) | on a build with no GPU the `Using X attention backend` line never prints, so the choices appear as `Using default backend AttentionBackendEnum.TORCH_SDPA for vit attention` and `Using AttentionBackendEnum.TORCH_SDPA for MMEncoderAttention.`; the kernels as `Selected CPUInt8ScaledMMLinearKernel for CompressedTensorsW8A8Int8` and `Using CPU GDN prefill kernel (head_k_dim=128)`; and the one line that explains a slower run with no flag behind it: `Failed to create oneDNN linear, fallback to torch linear` | — |
 | sampler defaults | `Default vLLM sampling parameters have been overridden by the model's generation_config.json` | — |
 | JIT behaviour | `JIT kernel warmup finished in … s`, `monitored JIT compilations … mode=` | — |
 | torch.compile | `collected artifacts: …`, `torch.compile took … s in total` | — |

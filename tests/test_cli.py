@@ -116,6 +116,53 @@ def test_real_server_log_from_033_is_parsed():
     assert f["kernel.ir_op.gelu_and_mul_sparse"].value == "triton|native"
 
 
+def test_real_cpu_log_from_034_keeps_the_backend_choices():
+    # The corpus' first GPU-less log: vLLM 0.34.0rc1.dev398 on an AVX2 CPU, Qwen3.5-0.8B
+    # W8A8, posted in vllm#67598. On this build the GPU-shaped "Using X attention backend"
+    # line never prints; before 0.4.62 the whole log came out as `startup ready` with zero
+    # backend facts, so a diff of two CPU runs could not see a backend change at all —
+    # `<absent>` on both sides, reported as "no difference".
+    f = facts("full-cpu-2026-11/vllm-0.34.0rc1-cpu-avx2-qwen3.5.log")
+    assert f["backend.attention_vit"].value == "TORCH_SDPA (default)"
+    assert f["backend.attention_mm"].value == "TORCH_SDPA"
+    assert f["backend.linear"].value == "CPUInt8ScaledMMLinearKernel (CompressedTensorsW8A8Int8)"
+    assert f["backend.gdn_prefill"].value == "CPU (head_k_dim=128)"
+    # The line that says the fast path was not used. No flag records this fallback, and a
+    # benchmark only sees the slower result.
+    assert f["backend.linear_fallback"].value == "oneDNN -> torch"
+    assert f["startup"].value == "ready"
+    # The GPU-only fact stays absent rather than being inferred from a CPU default.
+    assert "backend.attention" not in f
+
+
+def test_cpu_backend_choices_are_read_not_offered_back_as_unread():
+    # `audit` promises to hand back lines no rule reads, and `parse` must not read a line
+    # `audit` still calls unread. These five are the same lines the fixture test asserts on.
+    from servediff import audit
+
+    unread = set(audit.unread((FIX / "full-cpu-2026-11/vllm-0.34.0rc1-cpu-avx2-qwen3.5.log").read_text(encoding="utf-8")))
+    for line in (
+        "(Worker pid=122) INFO 11-14 03:20:19 [interface.py:439] Using default backend AttentionBackendEnum.TORCH_SDPA for vit attention",
+        "(Worker pid=122) INFO 11-14 03:20:19 [mm_encoder_attention.py:372] Using AttentionBackendEnum.TORCH_SDPA for MMEncoderAttention.",
+        "(Worker pid=122) INFO 11-14 03:20:19 [__init__.py:880] Selected CPUInt8ScaledMMLinearKernel for CompressedTensorsW8A8Int8",
+        "(Worker pid=122) INFO 11-14 03:20:19 [qwen_gdn_linear_attn.py:360] Using CPU GDN prefill kernel (head_k_dim=128).",
+        "(Worker pid=122) WARNING 11-14 03:20:20 [utils.py:885] Failed to create oneDNN linear, fallback to torch linear. Exception: could not create a primitive descriptor for the matmul primitive.",
+    ):
+        assert audit.shape(line) not in unread, line
+
+
+def test_the_cpu_log_keeps_its_remainder_on_the_record(capsys):
+    # This log is deliberately outside the root corpus because it still has unread shapes.
+    # The count is pinned, not ignored: PROVENANCE.md next to the file lists what is left,
+    # so a rule that eats one of those shapes has to update the note and this number.
+    d = FIX / "full-cpu-2026-11"
+    assert servediff.main(["audit", str(d)]) == 0
+    out = capsys.readouterr().out
+    assert "22 line(s) worth a look" in out
+    # Two of them are progress-bar variants the noise table does not know yet.
+    assert "Download complete:" in out
+
+
 def test_the_memory_breakdown_of_a_real_oom_report_is_read():
     # Verbatim lines from vllm#65907 (v0.32.0 @ 0.97), where the whole argument is that
     # consumed memory stayed at ~45 GiB while peak activation dropped 14.16 -> 8.97 GiB.

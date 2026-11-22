@@ -336,6 +336,26 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
     # line says what was chosen after the check, and FlashInfer vs FlashAttention is a
     # different kernel set for the same command line.
     (re.compile(r"Using (AttentionBackendEnum\.\w+) backend"), lambda m: [("attn.backend", m[1].split(".")[-1])]),
+    # The backend choices that print instead of that line once the build has no GPU.
+    # On vLLM 0.34 CPU the main "Using X attention backend" line never appears; the
+    # vision tower and the multimodal encoder each name their own choice, and "default"
+    # in the sentence means no flag won — the platform default did. Without these the
+    # log is `startup ready` with zero backend facts, and a diff of two CPU runs reports
+    # "no backend change" whether or not one of them asked for something else.
+    (re.compile(r"Using (default )?backend (AttentionBackendEnum\.\w+) for \w+ attention"),
+     lambda m: [("backend.attention_vit",
+                 f"{m[2].split('.')[-1]}{' (default)' if m[1] else ''}")]),
+    (re.compile(r"Using (AttentionBackendEnum\.\w+) for MMEncoderAttention"),
+     lambda m: [("backend.attention_mm", m[1].split(".")[-1])]),
+    # The CPU linear kernel, and the one line that says the fast one was not used:
+    # oneDNN refuses the primitive and torch takes over. A benchmark sees the slow down;
+    # only this line says why, and it is not visible in any flag.
+    (re.compile(r"Selected (CPU\w+LinearKernel) for (\w+)"),
+     lambda m: [("backend.linear", f"{m[1]} ({m[2]})")]),
+    (re.compile(r"Failed to create (oneDNN) linear, fallback to (torch) linear"),
+     lambda m: [("backend.linear_fallback", f"{m[1]} -> {m[2]}")]),
+    (re.compile(r"Using (CPU) GDN prefill kernel \(head_k_dim=(\d+)\)"),
+     lambda m: [("backend.gdn_prefill", f"{m[1]} (head_k_dim={m[2]})")]),
     (re.compile(r"Using (Eagle\d*) auxiliary layers from config: (.+)$"),
      lambda m: [("spec_decode.eagle_layers", f"{m[1]}: {m[2].strip()}")]),
     # The draft model's context is silently halved by the speculative path, and nothing in
