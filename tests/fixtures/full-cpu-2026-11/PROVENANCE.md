@@ -13,7 +13,7 @@ Run: vLLM `0.34.0rc1.dev398+g153dc0464`, one AVX2 CPU (no CUDA), `vadery/Qwen3.5
 
 `test_a_directory_is_audited_as_one_corpus_with_a_line_per_log` asserts that every root
 fixture parses with **zero** shapes worth a look. This log is the first *full* noisy one
-from a GPU-less build and does not meet that bar yet: 22 shapes remain unread. Keeping it
+from a GPU-less build and does not meet that bar yet: 9 shapes remain unread. Keeping it
 here keeps that invariant honest instead of lowering it, and the remainder is written down
 below rather than discovered later.
 
@@ -31,19 +31,21 @@ backend. The facts now read from it:
 | `backend.gdn_prefill` | `CPU (head_k_dim=128)` | 44 |
 | `backend.linear` | `CPUInt8ScaledMMLinearKernel (CompressedTensorsW8A8Int8)` | 45 |
 | `backend.linear_fallback` | `oneDNN -> torch` | 53 |
+| `kv_cache.mamba_mode` | `align (default for Qwen3_5ForConditionalGeneration)` | 16 |
+| `mm.warmup_s` | `9.45` | 33 |
+| `compile.recompile_reason` | `cache load failure (backbone)` | 76 |
+| `kv_cache.group_sizes` | `[640, 640, 640, 640]` | 83 |
 
 The last row is the one worth keeping: oneDNN refused a primitive descriptor, so the run
 silently fell back to torch linear. Nothing on the command line says so, and a benchmark
 only shows the slower result.
 
-## Remaining 22 shapes (audit at 0.4.62)
+## Remaining 9 shapes (audit at 0.4.63)
 
-Real gaps, not shipped as facts yet:
+0.4.63 took four of them over as facts — `kv_cache.group_sizes`, `kv_cache.mamba_mode`,
+`mm.warmup_s`, `compile.recompile_reason` — and taught the noise table the two progress-bar
+variants. What is left is CPU deployment detail:
 
-- `kv_cache group sizes (N, N, N, N)` (hybrid KV cache layout), `Mamba cache mode is set to 'align'`
-- `Multi-modal warmup completed in N.Ns`
-- `Warming up model for the compilation...` / `Warming up done.` (a pair; the delta is startup cost)
-- `[backbone] Compiling model again due to a load failure from ...torch_compile_cache/...`
 - `OMP_NUM_THREADS=N is set; leaving Torch threads at N for serving`
 - `CPU backend doesn't allow to use torch.set_num_threads after the thread binding, skip it`
 - `OpenMP thread binding info:` + `VLLM_CPU_OMP_THREADS_BIND='auto', ...`
@@ -52,5 +54,6 @@ Real gaps, not shipped as facts yet:
   layer says MEMBIND — so a single fact would have to pick a side)
 - `[transformers] QwenNVL video processing does not apply the per-frame pixel cap ...`
 
-Noise the classifier still misses (progress-bar variants): `Download complete:` (4),
-`Reconstruction complete: |` (3).
+`Warming up model for the compilation...` / `Warming up done.` are now noise as phase
+markers, so the pair's delta is not measured — that is a known cost, not a hidden one. Their
+real home would be a compile-phase fact; nothing reads them until there is one.

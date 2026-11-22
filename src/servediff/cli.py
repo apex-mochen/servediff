@@ -148,6 +148,15 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
      lambda m: [("kv_cache.tokens", int(m[1].replace(",", "")))]),
     (re.compile(r"Maximum concurrency for (\d[\d,]*) tokens per request: ([\d.]+)x"),
      lambda m: [("kv_cache.max_concurrency", float(m[2]))]),
+    # Hybrid models (Mamba/GDN layers mixed with attention) settle two more values that no
+    # flag states: whether prefix caching aligns the state cache, and the per-group block
+    # sizes the engine ended up with. Both print once and appear in no argument. On Qwen3.5
+    # (vllm#67598) they were the only description of the cache layout at all — 0.34 moved to
+    # "cache groups" and the older "Available KV cache memory" line does not exist on those.
+    (re.compile(r"Mamba cache mode is set to '(\w+)' for (\S+) by default"),
+     lambda m: [("kv_cache.mamba_mode", f"{m[1]} (default for {m[2]})")]),
+    (re.compile(r"kv cache group sizes \((\d+(?:, ?\d+)*)\)"),
+     lambda m: [("kv_cache.group_sizes", f"[{m[1]}]")]),
     # The extensible KV cache (v0.33.x) sizes itself at warmup and prints the split it
     # settled on: what stayed free, what went to the cache, what it held back for transient
     # activations, and what torch may still reserve. This line is where vllm#66193's
@@ -244,12 +253,21 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
      lambda m: [("model_init.seconds", float(m[1]))]),
     (re.compile(r"Loading weights took ([\d.]+) seconds"),
      lambda m: [("weights.load_s", float(m[1]))]),
+    # The multimodal path is warmed up separately, and its cost lands before the engine's
+    # own init timing. On a vision model this is a startup step you cannot see anywhere else.
+    (re.compile(r"Multi-modal warmup completed in ([\d.]+)s"),
+     lambda m: [("mm.warmup_s", float(m[1]))]),
     # torch.compile outcome: artifact count/size reflects compile behaviour; total
     # wall time is comparable between versions on the same machine.
     (re.compile(r"collected artifacts: (.+?) total"),
      lambda m: [("compile.artifacts", m[1].strip())]),
     (re.compile(r"torch.compile took ([\d.]+) s in total"),
      lambda m: [("compile.total_s", float(m[1]))]),
+    # A compile cache hit is an optimisation you can lose without touching a flag: the
+    # artifact fails to load, the whole compile runs again, and startup absorbs it. This
+    # line names the phase and the reason; nothing in the args does.
+    (re.compile(r"\[(\w+)\] Compiling model again due to a load failure from"),
+     lambda m: [("compile.recompile_reason", f"cache load failure ({m[1]})")]),
     (re.compile(r"Pinned memory is not available.*falling back to (.+?) for UVA buffers"),
      lambda m: [("uva_buffers", f"fallback: {m[1]}")]),
     # Memory headroom at startup. The gap between free and budgeted memory is what a

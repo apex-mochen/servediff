@@ -597,6 +597,7 @@ contains `TOKEN`, `KEY`, `SECRET`, `PASSWORD`, `CREDENTIAL` or `AUTH` are replac
 | server command | — (not printed) | `sgl start command: …` (the exact invocation, defaults included) |
 | kernel selection | one fact per op from `Final IR op priority …`, e.g. `kernel.ir_op.rms_norm=native`; the autotune gate from `Not enough SMs to use max_autotune_gemm mode` | — |
 | CPU-only builds (0.4.62+) | on a build with no GPU the `Using X attention backend` line never prints, so the choices appear as `Using default backend AttentionBackendEnum.TORCH_SDPA for vit attention` and `Using AttentionBackendEnum.TORCH_SDPA for MMEncoderAttention.`; the kernels as `Selected CPUInt8ScaledMMLinearKernel for CompressedTensorsW8A8Int8` and `Using CPU GDN prefill kernel (head_k_dim=128)`; and the one line that explains a slower run with no flag behind it: `Failed to create oneDNN linear, fallback to torch linear` | — |
+| hybrid & multimodal startup (0.4.63+) | `Mamba cache mode is set to 'align' for … by default`, `kv cache group sizes (640, 640, 640, 640)` — 0.34 hybrid builds print this instead of `Available KV cache memory` — `Multi-modal warmup completed in …s`, and `[backbone] Compiling model again due to a load failure from …`: a lost compile-cache hit costs startup time and no flag explains it | — |
 | sampler defaults | `Default vLLM sampling parameters have been overridden by the model's generation_config.json` | — |
 | JIT behaviour | `JIT kernel warmup finished in … s`, `monitored JIT compilations … mode=` | — |
 | torch.compile | `collected artifacts: …`, `torch.compile took … s in total` | — |
@@ -753,7 +754,7 @@ nothing is a valid answer; `2` unreadable path, or more than one `-`.
 output handler (`startup: failed (output handler)`), and an installed-but-unimportable
 optional kernel library (`kernel.module_missing`, `kernel.missing_lib`). All four full logs
 now report `nothing worth a look`; the measurements behind that, and what it does not
-prove, are in [writeups/audit-noise-real-logs.md](writeups/audit-noise-real-logs.md).
+prove, are in [writeups/audit-noise-real-logs.md](https://github.com/apex-mochen/servediff/blob/main/writeups/audit-noise-real-logs.md).
   `servediff audit --markdown run1.log` wraps it in a code fence sized around any
   backticks inside, so it can go straight into the issue form's third field.
   `servediff audit --max-shapes 20 run1.log` exits `1` when more than 20 shapes need a
@@ -771,12 +772,12 @@ prove, are in [writeups/audit-noise-real-logs.md](writeups/audit-noise-real-logs
   nothing is checked at all. With a baseline the gate answers the question you actually have:
   did this upgrade make the server print configuration nothing reads. A shape in the baseline
   is still reported as unread, because it is — accepted once, not read.
-- One worked example end to end: [writeups/wsl-uva-028-vs-030.md](writeups/wsl-uva-028-vs-030.md)
+- One worked example end to end: [writeups/wsl-uva-028-vs-030.md](https://github.com/apex-mochen/servediff/blob/main/writeups/wsl-uva-028-vs-030.md)
   — same flags on a laptop GPU under WSL2, 0.28.0 dies with `RuntimeError: UVA is not
   available`, 0.30.0 starts; the startup-log diff is 53 differences and 14 identical facts,
   and the one line that explains it is the pinned-memory fallback from vllm#56908.
 - When the log says `No available shared memory broadcast block found in 60 seconds`,
-  [writeups/vllm-shm-broadcast-60-seconds.md](writeups/vllm-shm-broadcast-60-seconds.md) gives
+  [writeups/vllm-shm-broadcast-60-seconds.md](https://github.com/apex-mochen/servediff/blob/main/writeups/vllm-shm-broadcast-60-seconds.md) gives
   the three arithmetic checks that separate a full `/dev/shm`, a capture still running, and
   one reader that stopped draining — worked through a real 102-line TP2 log, against the two
   answers that dominate search results.

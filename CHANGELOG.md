@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.4.63 — 2026-11-22
+
+The hybrid cache on 0.34 was invisible, and a lost compile-cache hit had no line.
+
+vLLM 0.34 builds with Mamba/GDN layers stop printing `Available KV cache memory` and print
+`kv cache group sizes (640, 640, 640, 640)` instead, plus the mamba cache mode the model chose
+by default. Neither matched a rule, so on Qwen3.5 the cache layout the engine settled on was
+absent from `show` entirely. Two more startup steps only exist on these runs: the multimodal
+warmup (`Multi-modal warmup completed in …s`) and a torch.compile cache artifact that failed
+to load and forced the whole compile again (`[backbone] Compiling model again due to a load
+failure from …`) — that one is measured startup time that no flag records.
+
+Four facts (`kv_cache.group_sizes`, `kv_cache.mamba_mode`, `mm.warmup_s`,
+`compile.recompile_reason`), and two progress-bar shapes (`Download complete:`,
+`Reconstruction complete:`) reclassified as noise rather than as lines worth a look. The full
+CPU log's unread remainder drops from 22 to 9, and the pinned count plus `PROVENANCE.md` say
+which nine.
+
+Also: the three `writeups/` links in the README were relative, so on the PyPI project page
+they pointed at `pypi.org/...` and went nowhere. They are absolute now.
+
 ## 0.4.62 — 2026-11-22
 
 A CPU log came out as `startup ready` with no backend facts, and a silent fallback stayed invisible.

@@ -70,6 +70,13 @@ NOISE = (
     re.compile(r"warnings\.warn\("),
     re.compile(r"DeprecationWarning|is deprecated, use"),
     re.compile(r"Loading (safetensors )?checkpoint shards"),  # tqdm progress bar
+    # Two more progress bars from a CPU build (vllm#67598): the download gauge and the
+    # weight-reconstruction gauge. Both print a bar, a percentage and a byte count, and
+    # carry no setting.
+    re.compile(r"^(Download|Reconstruction) complete:"),
+    # Compile phase markers: they say the step began, never with what settings it ran — the
+    # same reason "JIT kernel warmup starting" is noise below.
+    re.compile(r"^Warming up model for the compilation\.\.\.$|^Warming up done\.$"),
     re.compile(r'"(GET|POST) /[^"]*" \d{3}'),  # uvicorn access log
     re.compile(r"INFO:\s+(Started server process|Waiting for application startup)"),
     re.compile(r"Available routes are:"),

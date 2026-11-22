@@ -130,6 +130,13 @@ def test_real_cpu_log_from_034_keeps_the_backend_choices():
     # The line that says the fast path was not used. No flag records this fallback, and a
     # benchmark only sees the slower result.
     assert f["backend.linear_fallback"].value == "oneDNN -> torch"
+    # The hybrid cache: 0.34 prints per-group block sizes instead of "Available KV cache
+    # memory", and mamba mode is a default the model chose, not a flag.
+    assert f["kv_cache.group_sizes"].value == "[640, 640, 640, 640]"
+    assert f["kv_cache.mamba_mode"].value == "align (default for Qwen3_5ForConditionalGeneration)"
+    # Two startup steps that only exist on this kind of run.
+    assert f["mm.warmup_s"].value == 9.45
+    assert f["compile.recompile_reason"].value == "cache load failure (backbone)"
     assert f["startup"].value == "ready"
     # The GPU-only fact stays absent rather than being inferred from a CPU default.
     assert "backend.attention" not in f
@@ -158,9 +165,11 @@ def test_the_cpu_log_keeps_its_remainder_on_the_record(capsys):
     d = FIX / "full-cpu-2026-11"
     assert servediff.main(["audit", str(d)]) == 0
     out = capsys.readouterr().out
-    assert "22 line(s) worth a look" in out
-    # Two of them are progress-bar variants the noise table does not know yet.
-    assert "Download complete:" in out
+    assert "9 line(s) worth a look" in out
+    # What is left is CPU deployment detail (thread binding, NUMA policy), not a backend
+    # choice that already has a fact.
+    assert "NUMA binding" in out
+    assert "linear_fallback" not in out
 
 
 def test_the_memory_breakdown_of_a_real_oom_report_is_read():
