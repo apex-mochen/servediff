@@ -1,0 +1,76 @@
+[2026-10-06 00:15:18] Tree cache initialized: source=default impl=UnifiedRadixCache hybrid_swa=False hybrid_ssm=False hicache_attached=False streaming_wrapped=False
+2026-10-06 00:15:18 NIXL INFO    _api.py:285 Initialized NIXL agent: b8bc5e5b-c792-4e9e-b666-e9ad7fa4901e
+2026-10-06 00:15:19 NIXL INFO    _api.py:407 Backend UCX was instantiated
+[2026-10-06 00:15:19] NIXL KVManager initialized with backend: UCX
+[2026-10-06 00:15:19] Staging buffer using cudaMalloc (no custom mem pool). This works for all GPU architectures. For NVLink/MNNVL transport, set SGLANG_MOONCAKE_CUSTOM_MEM_POOL.
+[2026-10-06 00:15:19] StagingBuffer allocated: 896.0 MB on cuda:0, method=cudaMalloc, ptr=0x7a65e8000000
+[2026-10-06 00:15:19] StagingBuffer allocated: 896.0 MB on cuda:0, method=cudaMalloc, ptr=0x7a65b0000000
+[2026-10-06 00:15:19] StagingBuffer allocated: 896.0 MB on cuda:0, method=cudaMalloc, ptr=0x7a6578000000
+[2026-10-06 00:15:19] StagingBuffer allocated: 896.0 MB on cuda:0, method=cudaMalloc, ptr=0x7a6540000000
+[2026-10-06 00:15:19] Scheduler hit an exception: Traceback (most recent call last):
+  File "/sgl-workspace/sglang/python/sglang/srt/managers/scheduler.py", line 5841, in run_scheduler_process
+    scheduler = Scheduler(
+                ^^^^^^^^^^
+  File "/sgl-workspace/sglang/python/sglang/srt/managers/scheduler.py", line 680, in __init__
+    self.init_disaggregation()
+  File "/sgl-workspace/sglang/python/sglang/srt/managers/scheduler.py", line 1574, in init_disaggregation
+    self.disagg_prefill_bootstrap_queue = PrefillBootstrapQueue(
+                                          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/sgl-workspace/sglang/python/sglang/srt/disaggregation/prefill.py", line 206, in __init__
+    self.kv_manager = self._init_kv_manager()
+                      ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/sgl-workspace/sglang/python/sglang/srt/disaggregation/prefill.py", line 332, in _init_kv_manager
+    kv_manager.set_kv_buffer_tensors(
+TypeError: NixlKVManager.set_kv_buffer_tensors() got an unexpected keyword argument 'slot_layer_ids'
+
+[2026-10-06 00:15:19] Received sigquit from a child process. It usually means the child failed.
+[2026-10-06 00:15:19] kill_process_tree called: parent_pid=149, include_parent=True, pid=149
+[2026-10-06 00:15:50] NIXL KVManager initialized with backend: UCX
+[2026-10-06 00:15:51] INFO:     Uvicorn running on http://127.0.0.1:30000 (Press CTRL+C to quit)
+[2026-10-06 00:15:52] Start of pd disaggregation warmup ...
+[2026-10-06 00:15:53] Disaggregation warmup requests completed for all 1 DP ranks
+[2026-10-06 00:15:53] The server is fired up and ready to roll!
+TypeError: NixlKVManager.set_kv_buffer_tensors() got an unexpected keyword argument 'slot_layer_ids'
+Python: 3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]
+CUDA available: True
+GPU 0: NVIDIA H100 80GB HBM3
+GPU 0 Compute Capability: 9.0
+CUDA_HOME: /usr/local/cuda
+NVCC: Cuda compilation tools, release 13.0, V13.0.88
+CUDA Driver Version: 580.159.04
+PyTorch: 2.13.0+cu130
+sglang: 0.5.20
+sglang-kernel: 0.4.7
+flashinfer_python: 0.6.18
+flashinfer_cubin: 0.6.18
+flashinfer_jit_cache: 0.6.18+cu130
+triton: 3.7.1
+transformers: 5.12.1
+torchao: Module Not Found
+numpy: 2.3.5
+aiohttp: 3.14.3
+fastapi: 0.141.1
+huggingface_hub: 1.32.0
+interegular: 0.3.3
+modelscope: 1.40.1
+orjson: 3.12.0
+outlines: 0.1.11
+packaging: 26.3
+psutil: 7.2.2
+pydantic: 2.13.5
+python-multipart: 0.0.32
+pyzmq: 27.2.0
+uvicorn: 0.53.0
+uvloop: 0.22.1
+vllm: Module Not Found
+xgrammar: 0.2.1
+openai: 2.6.1
+tiktoken: 0.14.0
+anthropic: 1.6.0
+litellm: Module Not Found
+torchcodec: 0.15.0+cu130
+NVIDIA Topology:
+	GPU0	CPU Affinity	NUMA Affinity	GPU NUMA ID
+GPU0	 X 	0-103	0		N/A
+Hypervisor vendor:: KVM
+ulimit soft: 1048576

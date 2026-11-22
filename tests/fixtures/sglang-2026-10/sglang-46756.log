@@ -1,0 +1,8 @@
+[DP3 TP3 EP3] mamba_size (24) is less than decode side's max_slots_needed (72 = 72 reqs * 1 slots/req), raising effective_mamba_size to 72
+...
+torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 59.88 GiB. GPU 2 has a total capacity of 95.00 GiB of which 29.24 GiB is free.
+  File ".../sglang/srt/mem_cache/memory_pool.py", line 777, in <...>
+    intermediate_ssm_state_cache = torch.zeros(
+[Scheduler] scheduler died (exit code: -3), reason: 11
+[DP7 TP7 EP7] mamba_size (6) is less than decode side's max_slots_needed (18 = 18 reqs * 1 slots/req), raising effective_mamba_size to 18
+torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 2.09 GiB. GPU 4 has a total capacity of 95.00 GiB of which 19.31 MiB is free. Process ... has 94.98 GiB memory in use.

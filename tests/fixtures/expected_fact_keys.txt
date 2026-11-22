@@ -1,5 +1,6 @@
 # Every fact key the bundled logs produce. Regenerate with:
 #   python tools/fact_keys.py --write
+after_ready.error
 api.chat_template_order
 arg.backend.attention_arg
 arg.backend.sampling_arg
@@ -145,6 +146,8 @@ kernel.ir_op.gelu_and_mul_sparse
 kernel.ir_op.rms_norm
 kv_cache.attention_block_size
 kv_cache.cpu_node
+kv_cache.dtype
+kv_cache.fp8_scaling
 kv_cache.group_sizes
 kv_cache.layout
 kv_cache.lcm_block_sizes
@@ -155,6 +158,9 @@ kv_cache.memory_gib
 kv_cache.suggested_bytes
 kv_cache.suggested_gib
 kv_cache.tokens
+mamba.cache_size
+mamba.effective_size
+mamba.state_gib
 mm.encoder_cache
 mm.pixel_cap
 mm.warmup_s
@@ -167,7 +173,10 @@ model_runner
 parallel.dp_leader
 parallel.roles
 parallel.world_size
+pd.warmup
 sampling.overridden
+sched.max_running_requests
+scheduler.exit
 server.bind
 server.command
 server.scale_out

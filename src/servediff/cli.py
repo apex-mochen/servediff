@@ -238,6 +238,28 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
     (re.compile(r"^NIXL KVManager initialized with backend: (\S+)"),
      lambda m: [("transfer.nixl_backend", m[1])]),
     (re.compile(r"^Scheduler hit an exception"), lambda m: [("startup", "failed (scheduler)")]),
+    # SGLang sizes the mamba state cache first and only then admits requests, so the
+    # concurrency you configured is not the one you get — and nothing in `server_args` says
+    # so. Both numbers are needed: the cap and the cache that caused it.
+    (re.compile(r"Mamba Cache is allocated\. max_mamba_cache_size: (\d+), conv_state size: ([\d.]+)GB, ssm_state size: ([\d.]+)GB"),
+     lambda m: [("mamba.cache_size", int(m[1])), ("mamba.state_gib", f"{m[2]}/{m[3]}")]),
+    (re.compile(r"max_running_requests is capped to (\d+) by the mamba state cache \(max_mamba_cache_size=(\d+), (\d+) state slots per request\)"),
+     lambda m: [("sched.max_running_requests",
+                 f"{m[1]} (capped by mamba cache: {m[2]} slots, {m[3]} per request)")]),
+    # Per-rank: the scheduler raises the mamba cache to what the decode side says it needs,
+    # which is a different number per DP/TP/EP rank in the same launch.
+    (re.compile(r"\[DP(\d+) TP(\d+) EP(\d+)\] mamba_size \((\d+)\) is less than decode side's max_slots_needed \((\d+) = (\d+) reqs \* (\d+) slots/req\), raising effective_mamba_size to (\d+)"),
+     lambda m: [("mamba.effective_size",
+                 f"{m[8]} (raised from {m[4]}, needed {m[5]} on DP{m[1]}/TP{m[2]}/EP{m[3]})")]),
+    # Prefill/decode disaggregation warming up is a startup step, not a request.
+    (re.compile(r"Disaggregation warmup requests completed for all (\d+) DP ranks"),
+     lambda m: [("pd.warmup", f"completed (all {m[1]} DP ranks)")]),
+    # The scheduler's death sentence: an exit code and a reason, next to the traceback.
+    (re.compile(r"\[Scheduler\] scheduler died \(exit code: (-?\d+)\), reason: (\S+)"),
+     lambda m: [("scheduler.exit", f"code {m[1]} (reason {m[2]})")]),
+    # FP8 KV cache with an implicit scale of 1.0 — a numeric choice no flag states.
+    (re.compile(r"Using FP8 KV cache but no scaling factors provided\. Defaulting to scaling factors of ([\d.]+)"),
+     lambda m: [("kv_cache.fp8_scaling", f"defaulted to {m[1]} (accuracy risk)")]),
     (re.compile(r"^ulimit (soft|hard): (\d+)"), lambda m: [(f"env.ulimit.{m[1]}", int(m[2]))]),
     # Model loading cost: memory footprint and wall time. Both V1 (gpu_model_runner)
     # and V2 (model_runner) print the same message, and 0.23 printed it without the

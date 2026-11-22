@@ -1,0 +1,11 @@
+Using FP8 KV cache but no scaling factors provided. Defaulting to scaling factors of 1.0.
+This may lead to less accurate results!
+KV Cache is allocated. dtype: torch.float8_e4m3fn, #tokens: 456512, K size: 2.61 GB, V size: 2.61 GB
+max_total_num_tokens=456512, chunked_prefill_size=4096, max_prefill_tokens=16384, max_running_requests=10, context_len=262144, available_gpu_mem=2.87 GB
+The server is fired up and ready to roll!
+Scheduler hit an exception: Traceback (most recent call last):
+  File "/usr/local/lib/python3.12/dist-packages/triton/language/core.py", line 2090, in dot
+    res = _semantic.dot(input, other, acc, input_precision, max_num_imprecise_acc, out_dtype)
+  File "/usr/local/lib/python3.12/dist-packages/triton/language/semantic.py", line 1500, in dot
+    assert rhs.dtype in (tl.int8, tl.uint8, tl.float16, tl.bfloat16, tl.float32, tl.float64),
+AssertionError: Unsupported rhs dtype fp8e4nv

@@ -588,6 +588,7 @@ contains `TOKEN`, `KEY`, `SECRET`, `PASSWORD`, `CREDENTIAL` or `AUTH` are replac
 | speculative decoding | `Using Eagle3 auxiliary layers from config: (2, 10, 18, 26, 34)` | — |
 | kernel errors and picks | `CUDA error (…flash_api.cpp): invalid configuration argument` (degraded, not fatal), `Using FlashInfer for top-p & top-k sampling.`, `FlashInfer resolved query dtypes: …`, `vLLM is using nccl==…`, an installed-but-unimportable optional kernel library (`Module deep_gemm was found but failed to import`, `ImportError: libnvrtc.so.3`) | — |
 | runtime environment | the `collect_env` block every bug report pastes: `vLLM Version … (git sha …)`, `PyTorch version`, `ROCM used to build PyTorch`, `ROCM Version`, `HIP runtime version`, `OS`, `Python version`, `GPU models and configuration`, `[pip3] torch/triton/transformers/numpy/flashinfer-python==…`, and every `NAME=value` the dump ends with (`CUDA_VERSION`, `TORCH_CUDA_ARCH_LIST`, `VLLM_BUILD_COMMIT`, `VLLM_IMAGE_TAG`, …) — device selection and per-host cache paths are excluded, `Could not collect` / `N/A` are absences rather than values, and on ROCm this block is ~180 lines and every line reads like a setting | its own `name: value` dump: `sglang:`, `PyTorch:`, `sglang-kernel:`, `flashinfer_python:`, `triton:`, `CUDA_HOME:`, `NVCC:`, `CUDA Driver Version:`, `ulimit soft:` |
+| SGLang mamba cache & concurrency (0.4.64+) | — | `Mamba Cache is allocated. max_mamba_cache_size: 63, conv_state size: 0.18GB, ssm_state size: 9.00GB`, `max_running_requests is capped to 12 by the mamba state cache (max_mamba_cache_size=63, 5 state slots per request)` — the concurrency you set is not the one you get — `[DP3 TP3 EP3] mamba_size (24) … raising effective_mamba_size to 72` (per rank, and it differs between ranks of one launch), `Disaggregation warmup requests completed for all 1 DP ranks`, `[Scheduler] scheduler died (exit code: -3), reason: 11`, and `Using FP8 KV cache but no scaling factors provided. Defaulting to scaling factors of 1.0` (facts `mamba.cache_size`, `mamba.state_gib`, `mamba.effective_size`, `sched.max_running_requests`, `pd.warmup`, `scheduler.exit`, `kv_cache.fp8_scaling`) |
 | SGLang runtime state | — | `Tree cache initialized: source=… impl=UnifiedRadixCache …`, `NIXL KVManager initialized with backend: UCX`, and a scheduler that died before serving (`Scheduler hit an exception` → `startup: failed (scheduler)`), none of which appears in `server_args` |
 | dtype coercion | `Casting torch.bfloat16 to torch.float32` — a numeric change no flag records | — |
 | loading cost, split | `Loading model from scratch`, `Initializing model took … s`, `Loading weights took … s`, `Model loading took … GiB memory and … seconds` — so a slower startup names its step | — |
@@ -731,8 +732,11 @@ nothing is a valid answer; `2` unreadable path, or more than one `-`.
   gVisor run (vllm#65250) — each 44–61 "worth a look" lines before, nothing after; a GB200
   NVL node (vllm#66192, aarch64, SM100) and an RTX PRO 6000 Blackwell box (vllm#66193) —
   nothing after, once the per-card model line and the InfiniBand NIC grid were understood;
-  and six SGLang startup logs (sglang#41654, #42684, #43741, #46756, #48502, #49206), where the
-  brackets around SGLang's timestamp and its own `name: value` dump were the misses. The
+  and six SGLang reports (sglang#41654, #42684, #43741, #46756, #48502, #49206), where the
+  brackets around SGLang's timestamp and its own `name: value` dump were the misses; those six
+  are now fixtures (`tests/fixtures/sglang-2026-10/`, `PROVENANCE.md` names the code blocks each
+  file was assembled from) and `audit` reads them to zero while yielding the mamba cache, the
+  concurrency cap it forces and the per-rank effective size. The
   parallel-config and all-reduce rules are checked against real TP>1 logs; MoE models in
   full logs, SGLang versions other than 0.4.4–0.5.20, Intel GPUs and other engines are not
   yet verified.

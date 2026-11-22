@@ -99,6 +99,19 @@ ran: six vLLM and six SGLang.
 | vllm#66192 | GB200 NVL node, aarch64, SM100 | 9 | 0 |
 | vllm#66193 | RTX PRO 6000 Blackwell, aggregate line repeats the card prefix | 13 | 0 |
 
+The SGLang rows were measured on excerpts, and those excerpts were not in the repo — a number
+nobody can re-run is a claim, not a measurement. They are fixtures now
+(`tests/fixtures/sglang-2026-10/`, with `PROVENANCE.md` listing the code blocks each file was
+assembled from). Reassembled from the full report bodies rather than only the environment
+dumps, those six logs carried eight more shapes worth a look, and six of them were settings: the
+mamba state cache (`mamba.cache_size` `63`, `mamba.state_gib` `0.18/9.00`), the concurrency it
+caps (`sched.max_running_requests` `12 (capped by mamba cache: 63 slots, 5 per request)`), the
+per-rank raise to what decode needs (`mamba.effective_size` `72 (raised from 24, needed 72 on
+DP3/TP3/EP3)`, and a different number on DP7/TP7/EP7 in the same launch), prefill/decode warmup
+reaching ready (`pd.warmup`), the scheduler's own exit code and reason (`scheduler.exit`
+`code -3 (reason 11)`), and an implicit FP8 KV scale (`kv_cache.fp8_scaling` `defaulted to 1.0`).
+All six now audit to `0 with shapes worth a look` under CI.
+
 Three classes of miss, none of which is a single bad regex:
 
 - **An inventory read as a setting.** A CUDA container prints ~35 `[pip3] nvidia-*==` lines;

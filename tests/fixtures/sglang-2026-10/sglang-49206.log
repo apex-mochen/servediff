@@ -1,0 +1,33 @@
+File "sglang/srt/managers/scheduler_pp_mixin.py", line 1721, in _pp_launch_batch
+File "sglang/srt/managers/scheduler.py", line 5239, in run_batch
+File "sglang/srt/speculative/eagle_worker_v2.py", line 1542, in forward_batch_generation
+File "sglang/srt/speculative/eagle_worker_v2.py", line 2045, in verify
+File "sglang/srt/speculative/eagle_worker_common.py", line 882, in run_eagle_verify
+    else post_verify_graphs.run(
+File "sglang/srt/speculative/eagle_post_verify_graphs.py", line 74, in run
+File "sglang/srt/speculative/eagle_post_verify_graphs.py", line 346, in run
+    self._capture(slot)
+File "sglang/srt/speculative/eagle_post_verify_graphs.py", line 440, in _capture
+    outputs = self._body(slot)
+File "sglang/srt/speculative/eagle_post_verify_graphs.py", line 183, in _body
+File "sglang/srt/speculative/eagle_post_verify_graphs.py", line 268, in _sample
+    output = speculative_runtime_hooks.post_verify(
+File "sglang/kernels/plugin_kernels/nvidia/spec.py", line 355, in __call__
+File "sglang/srt/kernel_plugins/nvidia/speculative_runtime.py", line 92, in default_post_verify
+File "sglang/srt/speculative/eagle_utils.py", line 1015, in eagle_sample
+    target_predict = sample_uno_tree_target_tokens(
+File "sglang/srt/speculative/uno_utils.py", line 499, in sample_uno_tree_target_tokens
+File "sglang/srt/speculative/uno_utils.py", line 200, in _build_sparse_target_support
+File "torch/_dynamo/eval_frame.py", line 1261, in compile_wrapper
+File "sglang/srt/speculative/uno_utils.py", line 145, in _build_sparse_target_support_tensors
+    topk_logits, topk_ids = _flashinfer_top_k(
+File "flashinfer/topk.py", line 1062, in top_k
+    row_states_buffer = _get_row_states_buffer("radix_topk_row_states", input.device)
+File "flashinfer/topk.py", line 66, in _get_row_states_buffer
+    if torch.cuda.is_current_stream_capturing():
+File "torch/_dynamo/convert_frame.py", line 2649, in __call__
+...
+File "torch/_dynamo/convert_frame.py", line 917, in trace_frame
+    raise exc.TorchRuntimeError(
+torch._dynamo.exc.TorchRuntimeError: torch.compile cannot JIT compile during CUDA graph capture. ...
+torch._dynamo.exc.TorchRuntimeError: torch.compile cannot JIT compile during CUDA graph capture. Execute warmup iterations outside of CUDA graph capture to trigger compilation, then capture the graph after compilation has completed.

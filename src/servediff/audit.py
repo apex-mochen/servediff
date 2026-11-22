@@ -215,6 +215,11 @@ NOISE = (
     re.compile(r"^[a-z][a-z0-9_.+-]*: (?:Module Not Found|\d)"),
     re.compile(r"^StagingBuffer allocated: |^Staging buffer using cudaMalloc"),
     re.compile(r"^NIXL INFO|^Initialized NIXL agent|^Backend UCX was instantiated"),
+    # The listening banner and the second line of the FP8 warning: the fact is the warning's
+    # first line (`kv_cache.fp8_scaling`), the consequence sentence adds nothing to diff.
+    re.compile(r"^INFO:\s+Uvicorn running on http"),
+    re.compile(r"^This may lead to less accurate results!$"),
+    re.compile(r"^Start of pd disaggregation warmup"),
     re.compile(r"^Received sigquit from a child process|^kill_process_tree called"),
     # The broadcast line is a load signature, not a configuration one: a rank is waiting for
     # a shared-memory slot another rank has not released. Its text is identical every time,

@@ -2125,3 +2125,31 @@ def test_no_fact_key_disappears_from_the_corpus():
         f"new fact keys {added} — add a test that pins them, then run "
         "`python tools/fact_keys.py --write`"
     )
+
+
+def test_the_sglang_reports_audit_to_zero_and_yield_the_mamba_facts(capsys):
+    # Six public SGLang reports, reassembled verbatim (PROVENANCE.md says which code blocks).
+    # They are the SGLang half of the "audit is honest" claim: before this pass the mamba
+    # cache, the concurrency cap it forces and the per-rank effective size were all just
+    # lines this tool handed back as "worth a look".
+    d = FIX / "sglang-2026-10"
+    assert servediff.main(["audit", str(d), "--max-shapes", "0"]) == 0
+    out = capsys.readouterr().out
+    assert "6 log(s): 0 with shapes worth a look" in out
+
+    f = facts("sglang-2026-10/sglang-41654.log")
+    assert f["mamba.cache_size"].value == 63
+    assert f["mamba.state_gib"].value == "0.18/9.00"
+    assert f["sched.max_running_requests"].value == (
+        "12 (capped by mamba cache: 63 slots, 5 per request)")
+
+    f = facts("sglang-2026-10/sglang-46756.log")
+    # Two ranks in one launch, two different answers — a single fact would have to pick one.
+    sizes = f["mamba.effective_size"].value
+    assert isinstance(sizes, list) and len(sizes) == 2
+    assert set(sizes) == {"72 (raised from 24, needed 72 on DP3/TP3/EP3)",
+                          "18 (raised from 6, needed 18 on DP7/TP7/EP7)"}
+    assert f["scheduler.exit"].value == "code -3 (reason 11)"
+
+    f = facts("sglang-2026-10/sglang-43741.log")
+    assert f["kv_cache.fp8_scaling"].value == "defaulted to 1.0. (accuracy risk)"
