@@ -534,6 +534,40 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
     # (`vllm.v1.engine.exceptions.EngineDeadError: …`), so the type may be mid-line.
     (re.compile(r"((?:RuntimeError|ValueError|IndexError|torch\.OutOfMemoryError|AssertionError|AttributeError|KeyError|TypeError|EngineDeadError): .+)$"),
      lambda m: [("startup.error", m[1].strip())]),
+    # A crash dumps the whole VllmConfig the failed run was using. It is the only place
+    # those values appear: `args` lists only the non-defaults, and the process died before
+    # any ready line. It is also one long English sentence, so the prose-noise rule used to
+    # swallow it whole (forum 2637, a PD-disaggregation hang).
+    # Groups follow the dump's own order: dtype and max_seq_len precede the parallel
+    # sizes, which is why a pattern written in "logical" order finds nothing.
+    (re.compile(r"Dumping input data for V1 LLM engine \(v([^)]+)\) with config: model='([^']*)'"
+                r".*?dtype=torch\.(\w+), max_seq_len=(\d+)"
+                r".*?tensor_parallel_size=(\d+), pipeline_parallel_size=(\d+), data_parallel_size=(\d+)"
+                r".*?kv_cache_dtype=(\w+)"
+                r".*?enable_prefix_caching=(True|False), enable_chunked_prefill=(True|False)"
+                r".*?'backend': '(\w+)'"),
+     lambda m: [("engine.version", m[1]),
+                ("weights.model", m[2]),
+                ("weights.dtype", m[3]),
+                ("kv_cache.max_seq_len", int(m[4])),
+                ("parallel.tp", int(m[5])),
+                ("parallel.pp", int(m[6])),
+                ("parallel.dp", int(m[7])),
+                ("kv_cache.dtype", m[8]),
+                ("cache.prefix", "enabled" if m[9] == "True" else "disabled"),
+                ("cache.chunked_prefill", "enabled" if m[10] == "True" else "disabled"),
+                ("compile.backend", m[11])]),
+    # P2P NCCL for prefill/decode disaggregation prints the env it is about to override.
+    # Only the non-None entries are real overrides; the rest are the variables it may set.
+    (re.compile(r"set_p2p_nccl_context, original_values: (\{[^}]*\})"),
+     lambda m: [("nccl.env_overrides", _non_none_pairs(m[1]))]),
+    (re.compile(r"Successfully import tool parser (\w+)"),
+     lambda m: [("api.tool_parser", m[1])]),
+    # A chat request field the server accepted and then ignored is a behaviour fact: it
+    # changes what the model saw, and no flag records it.
+    (re.compile(r"fields were present in the request but ignored: (\{[^}]*\})"),
+     lambda m: [("api.ignored_request_fields", m[1])]),
+    (re.compile(r"(TimeoutError: .+)$"), lambda m: [("startup.cause", m[1].strip())]),
     # SGLang.
     (re.compile(r"Disable prefill CUDA graph because"), lambda m: [("cuda_graph.prefill", "disabled")]),
     (re.compile(r"The server is fired up and ready to roll"), lambda m: [("startup", "ready")]),
@@ -1145,6 +1179,20 @@ def _gate_corpus(args) -> int:
               f" {len(results) - changed_logs} unchanged")
     return 1 if changed_logs else 0
 
+
+def _non_none_pairs(literal: str) -> str:
+    """`{'A': None, 'B': '4194304'}` -> `{B: 4194304}`; the None entries are not overrides."""
+    inner = literal.strip("{} ")
+    out = []
+    for part in inner.split(", "):
+        if ":" not in part:
+            continue
+        k, v = part.split(":", 1)
+        v = v.strip()
+        if v in ("None", "null"):
+            continue
+        out.append(f"{k.strip().strip(chr(39))}={v.strip(chr(39))}")
+    return "{" + ", ".join(out) + "}" if out else "{}"
 
 def _keep_console_printable() -> None:
     # A Windows console defaults to a single-byte code page, and the report echoes log

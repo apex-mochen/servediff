@@ -2,6 +2,8 @@
 #   python tools/fact_keys.py --write
 after_ready.error
 api.chat_template_order
+api.ignored_request_fields
+api.tool_parser
 arg.backend.attention_arg
 arg.backend.sampling_arg
 arg.cuda_graph.disabled
@@ -29,9 +31,12 @@ backend.linear_fallback
 backend.moe
 backend.moe_prepare_finalize
 backend.sampling_flashinfer
+cache.chunked_prefill
+cache.prefix
 cache.radix
 compile.artifacts
 compile.autotune_gemm
+compile.backend
 compile.dynamo_s
 compile.graph_s
 compile.inductor_disabled
@@ -155,6 +160,7 @@ kv_cache.lcm_block_sizes
 kv_cache.mamba_mode
 kv_cache.mamba_page_pad
 kv_cache.max_concurrency
+kv_cache.max_seq_len
 kv_cache.memory_gib
 kv_cache.non_kv_gib
 kv_cache.requested_gib
@@ -173,8 +179,12 @@ model_init.seconds
 model_loading.gib
 model_loading.seconds
 model_runner
+nccl.env_overrides
+parallel.dp
 parallel.dp_leader
+parallel.pp
 parallel.roles
+parallel.tp
 parallel.world_size
 pd.warmup
 sampling.overridden
@@ -187,6 +197,7 @@ server.scale_out
 server.tasks
 serving.chat_template_content_format
 startup
+startup.cause
 startup.error
 transfer.nixl_backend
 triton.drivers
@@ -194,6 +205,8 @@ uva_buffers
 weights.available_ram_gib
 weights.cache
 weights.checkpoint_gib
+weights.dtype
 weights.filesystem
 weights.load_s
+weights.model
 weights.prefetch

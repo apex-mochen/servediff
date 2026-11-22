@@ -789,6 +789,12 @@ prove, are in [writeups/audit-noise-real-logs.md](https://github.com/apex-mochen
   — why the four per-worker facts are read from the lowest rank (the other ranks stay in the
   evidence line) instead of being collapsed by line count, and why numeric rows print a
   magnitude (`-4.6%`) while text rows never invent one.
+- When the server dies, the crash prints the whole `VllmConfig` it was running with
+  (`Dumping input data for V1 LLM engine (v0.20.1) with config: …`) — one long line that
+  records the model, dtype, `max_seq_len`, TP/PP/DP, prefix caching and the compile backend of
+  the failed run. `servediff` reads it into facts, so the run that crashed is still comparable
+  with the run that works; the same log can also carry `set_p2p_nccl_context` overrides and
+  request fields the server accepted then ignored (`{'enable_thinking'}`).
 - When htop shows "only two cores" on a CPU-only box with hundreds of threads,
   [writeups/vllm-cpu-384-threads.md](https://github.com/apex-mochen/servediff/blob/main/writeups/vllm-cpu-384-threads.md)
   reads a 22-line forum paste into 21 facts: 95 cores bound (192-286), one reserved, MEMBIND on

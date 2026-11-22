@@ -2168,6 +2168,17 @@ def test_the_sglang_reports_audit_to_zero_and_yield_the_mamba_facts(capsys):
     assert f["kv_cache.fp8_scaling"].value == "defaulted to 1.0. (accuracy risk)"
 
 
+def test_a_prompt_prefixed_line_is_a_command_not_a_setting():
+    # `$ PYTHONPATH=<main @ …> python3 -m sglang.launch_server --mem-fraction-static 0.85`
+    # (sglang#52318) carries six flag-looking tokens that never reached the server.
+    from servediff import audit
+    assert audit.is_noise("$ PYTHONPATH=<main @ 448764da63>/python python3 -m sglang.launch_server --port 30000 --mem-fraction-static 0.85")
+    assert audit.is_noise("$ vllm serve Qwen/Qwen3-8B --max-model-len 32768")
+    assert audit.is_noise("vllm serve Qwen/Qwen3-8B --max-model-len 32768")
+    # A log line that merely mentions a path is not a prompt.
+    assert not audit.is_noise("INFO 11-22 [engine.py:42] loaded $PROFILE from /root/model")
+
+
 def test_a_384_thread_cpu_forum_report_is_read_without_a_ready_line():
     # discuss.vllm.ai thread 2708: 384 threads, 1.5 TB RAM, and the poster sees two threads
     # busy. The paste is a fragment (no ready line), which is the normal shape of a forum
@@ -2187,3 +2198,35 @@ def test_a_384_thread_cpu_forum_report_is_read_without_a_ready_line():
     assert f["model_runner"].value == "v1 (v2 requires Triton)"
     # A fragment: the absence is honest, not inferred.
     assert "startup" not in f
+
+
+def test_a_pd_disaggregation_crash_still_names_the_config_it_died_with():
+    # discuss.vllm.ai thread 2637. A prefill/decode pair over P2P NCCL hangs in the 60 s
+    # broadcast wait and then dumps the whole VllmConfig. That dump is one long sentence, so
+    # before this rule the single most useful line in the paste was classified as prose.
+    f = facts("vllm-forum-2026-05/pd-nccl-sample-tokens-timeout.log")
+    assert f["engine.version"].value == "0.20.1"
+    assert f["weights.model"].value == "/data-new/models/Qwen3-30B-A3B"
+    assert f["weights.dtype"].value == "bfloat16"
+    assert f["kv_cache.max_seq_len"].value == 8192
+    assert f["parallel.tp"].value == 2
+    assert f["parallel.pp"].value == 1
+    assert f["parallel.dp"].value == 1
+    assert f["cache.prefix"].value == "enabled"
+    assert f["cache.chunked_prefill"].value == "enabled"
+    assert f["compile.backend"].value == "inductor"
+    # Only the non-None NCCL variables were overridden; the rest are the ones it may set.
+    assert f["nccl.env_overrides"].value == "{NCCL_BUFFSIZE=4194304}"
+    assert f["startup.cause"].value == "TimeoutError: RPC call to sample_tokens timed out."
+    # It failed, and it never reached ready; "failed" twice is the output-handler path plus
+    # the engine itself, and neither value claims a working server.
+    assert "ready" not in f["startup"].values
+
+
+def test_a_request_field_the_server_ignored_is_a_fact():
+    # thread 2426: a tool parser was imported and `enable_thinking` was accepted then dropped
+    # from the request. Neither appears in any flag, and both change what the model saw.
+    f = facts("vllm-forum-2026-05/broadcast-60s-tool-parser.log")
+    assert f["api.tool_parser"].value == "Qwen3CoderToolParser"
+    assert f["api.ignored_request_fields"].value == "{'enable_thinking'}"
+    assert f["engine.version"].value == "0.14.0"

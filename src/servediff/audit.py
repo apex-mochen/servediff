@@ -219,12 +219,27 @@ NOISE = (
     # first line (`kv_cache.fp8_scaling`), the consequence sentence adds nothing to diff.
     # A pasted launch command is shell history, and the second Triton line is the
     # consequence of the first (`triton.drivers` is the fact).
-    re.compile(r"^\$ vllm serve|^vllm serve "),
+    # Anything after a shell prompt is the command somebody typed, never what the server
+    # resolved: sglang#52318 pastes `$ PYTHONPATH=<main @ …> python3 -m sglang.launch_server
+    # --mem-fraction-static 0.85`, which reads as six settings and none of them applied.
+    re.compile(r"^\$\s|^vllm serve "),
     re.compile(r"^Triton not installed or not compatible"),
     re.compile(r"^INFO:\s+Uvicorn running on http"),
     re.compile(r"^This may lead to less accurate results!$"),
     re.compile(r"^Start of pd disaggregation warmup"),
-    re.compile(r"^Received sigquit from a child process|^kill_process_tree called"),
+    # A crash prints four dumps around the exception: the config (read as facts), the
+    # scheduler input and stats (per-step, huge), the fatal-error marker and the exception
+    # chain. Only the config and the cause line survive; the rest is the same event repeated.
+    re.compile(r"\[dump_input\.py:\d+\] Dumping scheduler (?:output|stats)"),
+    re.compile(r"\[core\.py:\d+\] (?:EngineCore encountered a fatal error|"
+               r"The above exception was the direct cause|Traceback \(most recent call last\))"),
+    re.compile(r"^TimeoutError$"),
+    re.compile(r"\[multiproc_executor\.py:\d+\] Parent process exited"),
+    re.compile(r"(?:INFO:\s+)?Finished server process \[|Application shutdown complete$"),
+    # One per rank at connect time; the addresses differ by rank, nothing to diff.
+    re.compile(r"\[p2p_nccl_engine\.py:\d+\] .*ncclCommInitRank Success,"),
+    # multiprocessing's own shutdown noise, including the two-line warning continuation.
+    re.compile(r"multiprocessing/resource_tracker\.py:\d+: UserWarning|^\s+warnings\.warn\("),    re.compile(r"^Received sigquit from a child process|^kill_process_tree called"),
     # The broadcast line is a load signature, not a configuration one: a rank is waiting for
     # a shared-memory slot another rank has not released. Its text is identical every time,
     # which is why it is noise here and a whole writeup elsewhere.
