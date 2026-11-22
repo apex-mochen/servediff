@@ -22,3 +22,22 @@ def test_readme_mentions_every_writeup():
     writeups = sorted(p.name for p in (ROOT / "writeups").glob("*.md"))
     missing = [w for w in writeups if w not in text]
     assert missing == []
+
+
+def test_readme_names_the_facts_it_ships():
+    """A fact in the matrix is a promise; a fact missing from it is one users cannot find.
+
+    The 0.4.64 CPU facts were read by rules before they had a row here, which is the same
+    kind of gap as the dead PyPI links: true in the code, absent where people look.
+    """
+    text = (ROOT / "README.md").read_text(encoding="utf-8")
+    for fact in (
+        "kv_cache.mamba_page_pad",
+        "kv_cache.cpu_node",
+        "kv_cache.lcm_block_sizes",
+        "mm.encoder_cache",
+        "compile.inductor_disabled",
+        "api.chat_template_order",
+        "cpu.numa_membind",
+    ):
+        assert fact in text, fact

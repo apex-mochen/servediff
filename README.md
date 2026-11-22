@@ -597,6 +597,7 @@ contains `TOKEN`, `KEY`, `SECRET`, `PASSWORD`, `CREDENTIAL` or `AUTH` are replac
 | server command | — (not printed) | `sgl start command: …` (the exact invocation, defaults included) |
 | kernel selection | one fact per op from `Final IR op priority …`, e.g. `kernel.ir_op.rms_norm=native`; the autotune gate from `Not enough SMs to use max_autotune_gemm mode` | — |
 | CPU-only builds (0.4.62+) | on a build with no GPU the `Using X attention backend` line never prints, so the choices appear as `Using default backend AttentionBackendEnum.TORCH_SDPA for vit attention` and `Using AttentionBackendEnum.TORCH_SDPA for MMEncoderAttention.`; the kernels as `Selected CPUInt8ScaledMMLinearKernel for CompressedTensorsW8A8Int8` and `Using CPU GDN prefill kernel (head_k_dim=128)`; and the one line that explains a slower run with no flag behind it: `Failed to create oneDNN linear, fallback to torch linear` | — |
+| CPU deployment detail (0.4.64+) | `Explicitly set (4.0/30.69) GiB for KV cache on node 0.`, `kv lcm block sizes 640`, `Padding mamba page size by 20.75% to ensure that …` (the pad is why the KV numbers do not match the flag you set), `Encoder cache will be initialized with a budget of 16384 tokens …`, `Inductor compilation was disabled by user settings`, `The chat template requires system-first ordering …`, and the two-layer NUMA story — `Automatic NUMA binding unavailable … starting unbound` next to `Using MEMBIND policy …` after `numa_migrate_pages failed`; the facts are `kv_cache.cpu_node`, `kv_cache.lcm_block_sizes`, `kv_cache.mamba_page_pad`, `mm.encoder_cache`, `compile.inductor_disabled`, `api.chat_template_order`, `cpu.numa_auto`, `cpu.numa_membind`, `cpu.numa_migrate`, `cpu.set_num_threads` | — |
 | hybrid & multimodal startup (0.4.63+) | `Mamba cache mode is set to 'align' for … by default`, `kv cache group sizes (640, 640, 640, 640)` — 0.34 hybrid builds print this instead of `Available KV cache memory` — `Multi-modal warmup completed in …s`, and `[backbone] Compiling model again due to a load failure from …`: a lost compile-cache hit costs startup time and no flag explains it | — |
 | sampler defaults | `Default vLLM sampling parameters have been overridden by the model's generation_config.json` | — |
 | JIT behaviour | `JIT kernel warmup finished in … s`, `monitored JIT compilations … mode=` | — |
@@ -752,7 +753,14 @@ nothing is a valid answer; `2` unreadable path, or more than one `-`.
   the last shapes that were left there are now read: the `Casting torch.bfloat16 to
   torch.float32` warning (`model.cast` — a silent numeric change no flag records), a failed
 output handler (`startup: failed (output handler)`), and an installed-but-unimportable
-optional kernel library (`kernel.module_missing`, `kernel.missing_lib`). All four full logs
+optional kernel library (`kernel.module_missing`, `kernel.missing_lib`).
+  One rule had to be withdrawn to make that sentence true: the "prose" classifier — a
+  capitalised English sentence ending in a period, meant for text written *around* a pasted
+  log — also matched messages the engine printed, so `Padding mamba page size by 20.75% …`,
+  `Encoder cache will be initialized …`, `Explicitly set (4.0/30.69) GiB …` and `kv lcm block
+  sizes 640` were counted as noise while `audit` said `nothing worth a look`. It now applies
+  only to lines with no log preamble, all four are facts, and
+  `test_a_sentence_a_log_actually_printed_is_never_prose_noise` pins the difference. All five full logs
 now report `nothing worth a look`; the measurements behind that, and what it does not
 prove, are in [writeups/audit-noise-real-logs.md](https://github.com/apex-mochen/servediff/blob/main/writeups/audit-noise-real-logs.md).
   `servediff audit --markdown run1.log` wraps it in a code fence sized around any
