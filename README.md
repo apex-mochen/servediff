@@ -772,6 +772,11 @@ prove, are in [writeups/audit-noise-real-logs.md](https://github.com/apex-mochen
   nothing is checked at all. With a baseline the gate answers the question you actually have:
   did this upgrade make the server print configuration nothing reads. A shape in the baseline
   is still reported as unread, because it is — accepted once, not read.
+- Two identical runs of the same server must not differ:
+  [writeups/same-box-twice.md](https://github.com/apex-mochen/servediff/blob/main/writeups/same-box-twice.md)
+  — why the four per-worker facts are read from the lowest rank (the other ranks stay in the
+  evidence line) instead of being collapsed by line count, and why numeric rows print a
+  magnitude (`-4.6%`) while text rows never invent one.
 - One worked example end to end: [writeups/wsl-uva-028-vs-030.md](https://github.com/apex-mochen/servediff/blob/main/writeups/wsl-uva-028-vs-030.md)
   — same flags on a laptop GPU under WSL2, 0.28.0 dies with `RuntimeError: UVA is not
   available`, 0.30.0 starts; the startup-log diff is 53 differences and 14 identical facts,
