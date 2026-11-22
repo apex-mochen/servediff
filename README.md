@@ -777,6 +777,9 @@ prove, are in [writeups/audit-noise-real-logs.md](https://github.com/apex-mochen
   — why the four per-worker facts are read from the lowest rank (the other ranks stay in the
   evidence line) instead of being collapsed by line count, and why numeric rows print a
   magnitude (`-4.6%`) while text rows never invent one.
+- The same notes as a plain web page: <https://apex-mochen.github.io/servediff/> —
+  generated from `writeups/*.md` by `tools/build_site.py`, each page titled with the exact
+  error string it is about.
 - One worked example end to end: [writeups/wsl-uva-028-vs-030.md](https://github.com/apex-mochen/servediff/blob/main/writeups/wsl-uva-028-vs-030.md)
   — same flags on a laptop GPU under WSL2, 0.28.0 dies with `RuntimeError: UVA is not
   available`, 0.30.0 starts; the startup-log diff is 53 differences and 14 identical facts,
