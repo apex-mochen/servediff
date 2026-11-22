@@ -13,6 +13,7 @@ benchmark 结果文件只记录客户端。升级之后，server 可能会悄悄
 - **不做什么**：不判断性能变化是哪一项造成的，那仍然需要 A/B 实验。它告诉你该 A/B 哪几项。
 
 本页是简介，逐条事实与完整命令表以英文 [README.md](https://github.com/apex-mochen/servediff/blob/main/README.md) 为准；每篇写up 的渲染版在 <https://apex-mochen.github.io/servediff/>。
+CPU-only 机器上「htop 只有两个核在跑」的这个场景，见 [writeups/vllm-cpu-384-threads.md](https://github.com/apex-mochen/servediff/blob/main/writeups/vllm-cpu-384-threads.md)（22 行日志读出 21 条事实，95 核已绑定）。
 
 ## 一分钟试用（不需要 GPU）
 

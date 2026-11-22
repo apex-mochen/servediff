@@ -789,6 +789,11 @@ prove, are in [writeups/audit-noise-real-logs.md](https://github.com/apex-mochen
   — why the four per-worker facts are read from the lowest rank (the other ranks stay in the
   evidence line) instead of being collapsed by line count, and why numeric rows print a
   magnitude (`-4.6%`) while text rows never invent one.
+- When htop shows "only two cores" on a CPU-only box with hundreds of threads,
+  [writeups/vllm-cpu-384-threads.md](https://github.com/apex-mochen/servediff/blob/main/writeups/vllm-cpu-384-threads.md)
+  reads a 22-line forum paste into 21 facts: 95 cores bound (192-286), one reserved, MEMBIND on
+  node 0, Triton reporting 0 drivers so the run drops to the v1 model runner, and why a cpuset
+  clamp — not a vLLM flag — is the reading that survives.
 - The same notes as a plain web page: <https://apex-mochen.github.io/servediff/> —
   generated from `writeups/*.md` by `tools/build_site.py`, each page titled with the exact
   error string it is about.
