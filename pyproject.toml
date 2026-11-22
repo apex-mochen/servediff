@@ -40,7 +40,7 @@ Issues = "https://github.com/apex-mochen/servediff/issues"
 Changelog = "https://github.com/apex-mochen/servediff/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "markdown>=3"]
 
 [project.scripts]
 servediff = "servediff.cli:main"

@@ -1,4 +1,8 @@
 import html
+
+import pytest
+
+pytest.importorskip("markdown", reason="build_site.py needs markdown; dev extra installs it")
 import re
 import subprocess
 import sys
