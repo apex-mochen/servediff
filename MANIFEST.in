@@ -1,5 +1,5 @@
 include CHANGELOG.md CONTRIBUTING.md README.zh-CN.md
-recursive-include tests/fixtures *.log *.md
+recursive-include tests/fixtures *.log *.md *.txt
 recursive-include examples *.log
 # Tests run from the unpacked sdist in the publish workflow, so anything a test opens
 # has to be in here: tools/render_demo_svg.py and assets/demo.svg are read by
