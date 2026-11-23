@@ -152,11 +152,14 @@ GLOSSARY: dict[str, Gloss] = {
         "shrinks without any weight changing",
     ),
     "kv_cache.padding_waste": Gloss(
-        "The share of KV memory lost to padding layers added so the hybrid attention "
-        "layout fits the block size (kv_cache.padding_layers says how many).",
-        "percent of KV memory",
-        "it is a cost the engine chose to pay, not a leak, and it is absent on models "
-        "that need no padding",
+        "The upper bound the cache planner prints for KV memory that padding layers could "
+        "waste, added so caches with different block sizes share one page layout "
+        "(kv_cache.padding_layers says how many layers).",
+        "percent of KV memory, as an upper bound",
+        "the log says 'may waste at most', so this is not the measured waste of an "
+        "allocated cache: multiplying it into a memory estimate overstates the loss. "
+        "vllm#69280 read the 350% as actual waste and compared it with a measured "
+        "1.7-2.7x, which are two different quantities",
     ),
     "kv_cache.suggested_gib": Gloss(
         "The --kv-cache-memory the engine suggests when the utilization fraction cannot "

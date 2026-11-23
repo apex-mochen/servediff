@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.4.85 — 2026-11-23
+
+A reading in 0.4.82 was wrong in a way a real issue shows. vllm#69280 (open, unanswered)
+quotes `Add 7 padding layers, may waste at most 350.00% KV cache memory` and treats the
+350% as the KV memory actually wasted, then compares it with a 1.7-2.7x ratio measured
+from allocated pools. The log says "may waste at most": it is an upper bound the planner
+prints when caches with different block sizes have to share one page layout, not the
+measured waste of an allocated cache. Two different quantities.
+
+`kv_cache.padding_waste` now says so, in both fields:
+
+```
+  unit: percent of KV memory, as an upper bound
+  what it does not tell you: the log says 'may waste at most', so this is not the measured
+  waste of an allocated cache: multiplying it into a memory estimate overstates the loss.
+  vllm#69280 read the 350% as actual waste and compared it with a measured 1.7-2.7x, ...
+```
+
+The old text ("the share of KV memory lost to padding layers") read like a measurement,
+which is precisely how it gets multiplied. The entry now names the issue it was corrected
+on, so the next reader can check the reasoning instead of trusting the sentence.
+
+Verified on the issue's own lines before changing anything: `show` reads
+`kv_cache.padding_layers=7`, `kv_cache.padding_waste=350.00%`,
+`kv_cache.group_sizes=[16, 16, 16, 16, 16, 16, 64, 64, 64, 64, 64, 64]`,
+`kv_cache.tokens=349495` from four pasted lines, each with its evidence line.
+`pytest` 196 passed; site `facts.html` regenerated from the same table.
+
 ## 0.4.84 — 2026-11-23
 
 0.4.83 put the explanation in the terminal output. Two gaps were left, both on the wrong
