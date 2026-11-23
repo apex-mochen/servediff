@@ -2201,6 +2201,24 @@ def _corpus_keys():
     return [line.strip() for line in text.splitlines() if line.strip() and not line.startswith("#")]
 
 
+def test_no_fact_value_joins_two_numbers_with_a_bare_comma():
+    # `compile.range` is the pair `(1, 2048)`, and joining the two captures with a comma
+    # alone rendered `1,2048` -- one malformed number with a misplaced thousands separator,
+    # in every table, for several releases, because a test had asserted the broken string.
+    # This walks the whole corpus instead: a thousands separator has exactly three digits
+    # after the comma, so anything else is two numbers that lost their separator.
+    bad = []
+    for path in sorted(FIX.rglob("*.log")):
+        facts = servediff.parse(path.read_text(encoding="utf-8", errors="replace"))["facts"]
+        for key, fact in facts.items():
+            for value in fact.values:
+                text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
+                for match in re.finditer(r"\d{1,3},(\d+)", text):
+                    if len(match.group(1)) != 3:
+                        bad.append((path.name, key, text[:80]))
+    assert not bad, bad[:5]
+
+
 def test_diff_why_explains_the_changed_keys_and_groups_them(capsys):
     # A diff row states a change and stops. --why answers "so what does this count" in the
     # same command, and groups keys by the entry that explains them: one version bump that
