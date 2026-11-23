@@ -290,6 +290,10 @@ serve flags and <strong>did not reproduce the regression</strong> — v0.29 came
 diff did not solve the issue; it told both sides what to test. A log says what is configured, not
 what it costs. Reading the dispatch list as "every collective used FlashInfer" is specifically
 wrong: it is a candidate set tried in order, falling through when a backend rejects the input.</p>
+<h2>If the log says <code>CUDA out of memory</code> instead</h2>
+<p>That message means something else and has its own two wordings — the device's free memory vs the
+allocator pool's — with the arithmetic and the command in
+<a href="cuda-oom-holder.html"><code>CUDA out of memory</code> on a card that looks free</a>.</p>
 <h2>What servediff is, and what it refuses to do</h2>
 <p>It reads startup logs from vLLM and SGLang and answers "what did each server actually run with":</p>
 <pre><code class="language-bash">pip install servediff
