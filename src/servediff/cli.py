@@ -18,7 +18,9 @@ Usage:
     servediff capture [-o run.log] [--python /path/to/python] -- <server command>
     servediff audit <log|dir>... [--json] [--markdown] [--max-shapes N]
                 [--baseline accepted.json] [--write-baseline accepted.json]
-Exit codes: 0 no differences, 1 differences found, 2 nothing recognised in an input.
+    servediff explain <key>
+Exit codes: 0 no differences, 1 differences found, 2 nothing recognised in an
+input (for `explain`: a key no log produces).
 """
 
 from __future__ import annotations
@@ -37,6 +39,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from servediff import env as envsnap
+from servediff.glossary import GLOSSARY as _GLOSSARY, KNOWN_KEYS as _KNOWN_KEYS
+from servediff.glossary import families as _gloss_families, lookup as _gloss_lookup
 
 # Two spellings of the same escape: the real one, and a copy whose ESC byte was eaten by a
 # forum or a terminal-to-HTML conversion, which leaves the literal `e[36m` behind.
@@ -1676,6 +1680,7 @@ _FIRST_RUN = """servediff {version} - read what an inference server actually ran
   servediff audit server.log         the lines no rule reads: what the log still hides
   servediff repeats server.log       one wait re-logged, or N separate stalls
   servediff diff old.log new.log     what changed between two runs
+  servediff explain kv_cache.tokens  what one fact key means, and what it does not
 
 Docs and worked examples: https://apex-mochen.github.io/servediff/"""
 
@@ -1704,6 +1709,10 @@ def _run(argv=None) -> int:
     show.add_argument("--json", action="store_true")
     show.add_argument("--evidence", action="store_true",
                       help="print the log line behind each fact, to paste into a bug report")
+    explain = sub.add_parser("explain", help="what a fact key means, and what it does not")
+    explain.add_argument("key", nargs="?",
+                         help="a fact key or a prefix such as kv_cache (omit for the list)")
+    explain.add_argument("--json", action="store_true")
     d = sub.add_parser("diff", help="diff two server logs, or two `servediff env` snapshots")
     d.add_argument("baseline", type=Path, help="server log or env snapshot; - reads stdin")
     d.add_argument("candidate", type=Path, nargs="?",
@@ -2109,6 +2118,57 @@ def _run(argv=None) -> int:
         else:
             out = "\n\n".join(blocks)
             print(f"```text\n{out}\n```" if args.markdown else out)
+        return 0
+
+    if args.command == "explain":
+        import difflib
+        keys = sorted(k for k in _GLOSSARY if "." in k)
+        if args.key is None:
+            if args.json:
+                print(json.dumps({k: {"what": g.what, "unit": g.unit, "trap": g.trap}
+                                  for k, g in _gloss_families()}, indent=2))
+                return 0
+            print(f"{len(_GLOSSARY)} entries over {len(_gloss_families())} families. "
+                  f"`servediff explain <key>` reads one; a family name reads all of it.")
+            print()
+            for name, g in _gloss_families():
+                first = g.what.split(". ")[0].rstrip(".") + "."
+                print(f"  {name:20s} {first}")
+            return 0
+        matched, gloss = _gloss_lookup(args.key)
+        # `kv_cache.tokenz` used to answer with the family gloss and exit 0, which reads
+        # exactly like a documented key. A dotted key is only answered if it is one the
+        # corpus actually produces; otherwise the honest answer is the typo.
+        if gloss is not None and "." in args.key and args.key not in _KNOWN_KEYS \
+                and matched != args.key:
+            gloss = None
+        if gloss is None:
+            close = difflib.get_close_matches(args.key, keys, n=4, cutoff=0.6)
+            print(f"explain: no entry for {args.key!r}", file=sys.stderr)
+            if close:
+                print("closest keys: " + ", ".join(close), file=sys.stderr)
+            prefix = args.key.split(".")[0]
+            if _gloss_lookup(prefix)[0] is not None:
+                print(f"family {prefix} is documented: servediff explain {prefix}",
+                      file=sys.stderr)
+            print(f"known families: {', '.join(n for n, _ in _gloss_families())}",
+                  file=sys.stderr)
+            return 2
+        if args.json:
+            print(json.dumps({"key": args.key, "family": matched, "what": gloss.what,
+                              "unit": gloss.unit, "trap": gloss.trap}, indent=2))
+            return 0
+        print(args.key if matched == args.key else f"{args.key}  (family: {matched})")
+        print(f"  unit: {gloss.unit}")
+        print(f"  what it means: {gloss.what}")
+        if gloss.trap:
+            print(f"  what it does not tell you: {gloss.trap}")
+        if matched != args.key:
+            # The family gloss answers the "which part of the log is this from" question
+            # a bare key leaves open.
+            print()
+            print(f"  no per-key entry; the family {matched} covers it:")
+            print(f"  {_gloss_lookup(matched)[1].what}")
         return 0
 
     if args.command == "show":

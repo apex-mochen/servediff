@@ -124,6 +124,10 @@ def extra_cases(fixtures: Path, logs: list[Path]) -> list[tuple[str, list[str]]]
         ("demo", ["demo"]),
         ("env --json", ["env", "--json"]),
         ("capture --help", ["capture", "--help"]),
+        ("explain list", ["explain"]),
+        ("explain a key", ["explain", "kv_cache.tokens"]),
+        ("explain a typo", ["explain", "kv_cache.tokenz"]),
+        ("explain --json", ["explain", "--json"]),
     ]
     return cases
 

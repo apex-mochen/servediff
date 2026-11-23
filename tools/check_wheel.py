@@ -21,6 +21,7 @@ import os
 import shutil
 import subprocess
 import sys
+import sys
 import tempfile
 import tomllib
 from pathlib import Path
@@ -86,7 +87,19 @@ def main() -> int:
     _, text = run([str(bin_dir / "servediff"), "show", "server.log", "--json"], cwd=work)
     json.loads(text)
 
-    print("wheel: version, first-run block, packaged demo, show/audit/repeats, --json all pass")
+    # The glossary ships as a module, so it can be lost by a packaging change that drops
+    # a subpackage; an installed `explain` is the proof it did not.
+    _, text = run([str(bin_dir / "servediff"), "explain", "kv_cache.max_concurrency"], cwd=work)
+    if "sequences" not in text:
+        print("wheel: explain lost the glossary entry", file=sys.stderr)
+        return 1
+    _, text = run([str(bin_dir / "servediff"), "show", "server.log", "--evidence"], cwd=work)
+    if "line 1:" not in text and "line " not in text:
+        print("wheel: --evidence printed nothing", file=sys.stderr)
+        return 1
+
+    print("wheel: version, first-run block, packaged demo, show/audit/repeats, --json, "
+          "explain, --evidence all pass")
     return 0
 
 

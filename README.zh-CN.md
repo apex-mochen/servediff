@@ -97,6 +97,7 @@ Ctrl-C 会停掉 server、保留日志、退出码 `130`；server 自己结束�
 | `servediff series <a> <b> <c> ...` | 三份及以上日志，按你给的顺序排列成列，每条 fact 一行；`--json` / `--markdown` / `--all` / `--raw-args` | `0` 各份全同；`1` 有 fact 不同；`2` 少于三份 |
 | `servediff env [--python P] [-o snap.json]` | 该解释器的包、GPU 信息，以及名字以 `VLLM_` / `SGLANG_` / `SGL_` / `CUDA_` / `NCCL_` / `TORCH_` / `PYTORCH_` / `FLASHINFER_` / `TRITON_` 开头的环境变量和 `HF_HUB_OFFLINE` / `TRANSFORMERS_OFFLINE`；看起来像密钥的名字一律写成 `<redacted>` | `0` 已写出；`2` 快照失败，或那个路径写不进去 |
 | `servediff capture [-o run.log] -- <启动命令>` | 跑起 server、把日志同时输出到终端和文件，并在启动**之前**写出 `<out>.env.json`。命令里自带 python 启动器时（`capture -- python -m vllm...`），快照的就是那个解释器；否则用 `--python` 指到 server 所在的环境 | server 自己的退出码；路径写不进去或命令起不来时是 `2` |
+| `servediff explain <key>` | 解释一条 fact 名字的含意、单位，以及它**没**告诉你的事（例如 `kv_cache.max_concurrency` 除的是那句话里的 token 数，不是你的请求长度）；只给族名（`kv_cache`）则连族一起讲；`--json` | `0` 有出处；`2` 这个键任何日志都不会产生 |
 | `servediff demo` | 用包内自带的 vllm#47047 摘录跑一次 diff，不需要任何现成日志 | `1`（这两份日志确实有差异，那是结果） |
 | `servediff audit <log|dir>...` | 列出没有任何规则读到的行，分成噪声（只报数量）和「值得看一眼」的形状（逐条列出）；给目录（或给多个路径）时按一个语料整体跑，每份日志一行结论；`--top N` / `--everything` / `--markdown` / `--json` / `--max-shapes N` / `--baseline JSON` / `--write-baseline JSON` | `0` 已读；`1` 值得看一眼的形状超过 `--max-shapes`（带 `--baseline` 时只算基线里没有的）；`2` 读不了，或给的不是基线文件 |
 

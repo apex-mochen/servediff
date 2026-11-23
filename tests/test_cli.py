@@ -2173,6 +2173,63 @@ def test_bare_servediff_shows_where_to_start(capsys):
     assert "apex-mochen.github.io/servediff" in out
 
 
+def _corpus_keys():
+    text = (FIX / "expected_fact_keys.txt").read_text(encoding="utf-8")
+    return [line.strip() for line in text.splitlines() if line.strip() and not line.startswith("#")]
+
+
+def test_every_fact_key_can_be_explained(capsys):
+    # The meaning of a key used to live in the comment above its regex -- in the source, where
+    # a reader of `show` output never looks. The glossary is the promise that every key the
+    # tool prints can be read; this gate keeps the promise as keys are added.
+    keys = _corpus_keys()
+    assert len(keys) > 250
+    missing = []
+    for key in keys:
+        capsys.readouterr()
+        if servediff.main(["explain", key]) != 0:
+            missing.append(key)
+    assert missing == [], f"no explanation for: {missing}"
+
+
+def test_the_vocabulary_shipped_in_the_package_matches_the_corpus():
+    # `explain` needs the key list to tell a key covered by its family from a typo; if the
+    # list drifts, a new key starts answering with "no entry" on a real log.
+    from servediff.glossary import KNOWN_KEYS
+    assert set(KNOWN_KEYS) == set(_corpus_keys())
+
+
+def test_explain_calls_a_typo_a_typo(capsys):
+    # A dotted key that no log produces used to answer with its family gloss and exit 0,
+    # which reads exactly like documentation. It is a typo and must say so.
+    assert servediff.main(["explain", "kv_cache.tokenz"]) == 2
+    err = capsys.readouterr().err
+    assert "no entry for 'kv_cache.tokenz'" in err
+    assert "kv_cache.tokens" in err
+
+
+def test_explain_a_known_key_prints_the_family_and_the_trap(capsys):
+    assert servediff.main(["explain", "kv_cache.max_concurrency"]) == 0
+    out = capsys.readouterr().out
+    assert out.startswith("kv_cache.max_concurrency")
+    assert "sequences" in out
+    assert "family: kv_cache" not in out  # an exact entry does not repeat its family
+    assert "does not tell you" in out
+
+
+def test_explain_without_a_key_lists_the_families(capsys):
+    assert servediff.main(["explain"]) == 0
+    out = capsys.readouterr().out
+    assert "kv_cache" in out and "env" in out and "startup" in out
+
+
+def test_explain_json_is_parseable(capsys):
+    assert servediff.main(["explain", "--json", "torch.oom_holder_gib"]) == 0
+    data = json.loads(capsys.readouterr().out)
+    assert data["family"] == "torch"
+    assert "94.41" in data["trap"]
+
+
 def test_show_only_says_nothing_when_the_log_had_nothing_to_read(capsys):
     # `show` exits 2 with "no configuration lines recognised". That sentence is a promise:
     # on a log that does carry facts it must never be printed, or the tool has quietly

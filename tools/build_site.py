@@ -11,6 +11,9 @@ from pathlib import Path
 
 import markdown
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+from servediff.glossary import GLOSSARY, families  # noqa: E402
+
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "_site"
 
@@ -78,6 +81,48 @@ def main() -> int:
             encoding="utf-8")
         notes.append((title, slug, desc))
         print(f"{slug}: {len(body)} chars, title={title[:60]!r}")
+
+    # One page for the vocabulary itself: `show` prints keys, and the meaning of each used
+    # to live in a source comment. Search traffic lands on the error string, but the
+    # second thing a reader needs is "what does this number count".
+    fam = families()
+    exact = sorted(k for k in GLOSSARY if "." in k)
+    parts = ["<h1>What each servediff fact key means</h1>",
+             "<p>Each entry is one key, or one family when every key in it shares a "
+             "meaning. The third paragraph is the one that matters: what the number "
+             "does <em>not</em> answer, which is how a diff gets misread.</p>",
+             "<pre><code>servediff explain kv_cache.max_concurrency</code></pre>",
+             "<ul class=\"index\">"]
+    for name, g in fam:
+        parts.append(f'<li><a href="#{name}"><code>{name}</code></a> '
+                     f'&mdash; {html.escape(g.what.split(". ")[0])}</li>')
+    parts.append("</ul>")
+    for name, g in fam:
+        members = [k for k in exact if k.split(".")[0] == name]
+        parts.append(f'<h2 id="{name}"><code>{name}</code></h2>')
+        parts.append(f"<p><strong>Measured in:</strong> {html.escape(g.unit)}</p>")
+        parts.append(f"<p>{html.escape(g.what)}</p>")
+        if g.trap:
+            parts.append(f'<p class="note">What it does not tell you: {html.escape(g.trap)}</p>')
+        for k in members:
+            kg = GLOSSARY[k]
+            parts.append(f'<h3><code>{k}</code></h3>')
+            parts.append(f"<p><strong>Measured in:</strong> {html.escape(kg.unit)}</p>")
+            parts.append(f"<p>{html.escape(kg.what)}</p>")
+            if kg.trap:
+                parts.append(f'<p class="note">What it does not tell you: {html.escape(kg.trap)}</p>')
+    vocab = "\n".join(parts)
+    (OUT / "facts.html").write_text(
+        page("What each servediff fact key means",
+             vocab,
+             "Every key servediff prints from a vLLM or SGLang startup log, with what it "
+             "counts and what it does not tell you.",
+             "https://apex-mochen.github.io/servediff/facts.html"),
+        encoding="utf-8")
+    print(f"facts.html: {len(vocab)} chars, {len(fam)} families, {len(exact)} exact keys")
+    notes.append(("What each fact key means",
+                  "facts.html",
+                  "Every key servediff prints, with what it counts and what it does not tell you."))
 
     items = "\n".join(
         f'<li><a href="{s}">{html.escape(t)}</a><br><span class="note">{html.escape(d)}</span></li>'

@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.4.82 — 2026-11-23
+
+`show` prints keys (`kv_cache.max_concurrency`, `transfer.staging_total_mib`) and the
+only place their meaning lived was the comment above the regex that produced them -- in
+the source, where nobody reading the output looks. 0.4.81 made the raw line reachable;
+this makes the number readable.
+
+`servediff explain kv_cache.max_concurrency` answers three things: what it counts, what
+it is measured in, and what it does **not** tell you -- the third being the one that
+costs people a decision:
+
+```
+kv_cache.max_concurrency
+  unit: sequences
+  what it means: How many concurrent sequences the cache holds at the per-request token
+                 count the same sentence names.
+  what it does not tell you: it divides by that sentence's token count, not by your real
+                             request size -- at half the length you get roughly twice the
+                             concurrency
+```
+
+56 entries cover all 274 keys the bundled corpus produces: 43 family glosses plus 13
+exact keys where the family reading is too coarse (`gpu.utilization_effective` is the
+fraction reached, not the one asked for; `torch.oom_holder_gib` is the process holding
+the card in vllm#54559). A family name prints the whole family. `explain` with no key
+lists them all; `--json` for scripts.
+
+Three gates keep this honest rather than decorative:
+
+- every key in `tests/fixtures/expected_fact_keys.txt` must resolve (274 assertions in
+  one test) -- a new fact without a reading fails CI;
+- the key list shipped in the package must equal the corpus list, so the typo check
+  cannot drift into "no entry" on a real log;
+- a dotted key no log produces exits 2 and names the closest keys. Before this, a typo
+  (`kv_cache.tokenz`) answered with the family gloss and exit 0, which reads exactly
+  like documentation.
+
+`tools/build_site.py` now renders the same table to `facts.html` (43 families, 13 exact
+keys, 13 pages in the sitemap), so the vocabulary is a public page and not only a
+`--help` string. `pytest` 189 passed; `tools/cli_sweep.py` 1 038 calls, no traceback;
+`tools/check_wheel.py` also proves `explain` and `--evidence` survive packaging.
+
 ## 0.4.81 — 2026-11-23
 
 `show` prints our reading of a log plus the line number it came from. Disagreeing with
