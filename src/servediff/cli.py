@@ -12,6 +12,7 @@ Usage:
     servediff show <log>
     servediff show <log> --json > facts.json
     servediff diff <baseline.log> <candidate.log> [--raw-args] [--json] [--markdown] [--all]
+                        [--why]
     servediff diff <today.log> --against facts.json
     servediff env [--python /path/to/server/venv/bin/python] [-o env.json]
     servediff diff <baseline-env.json> <candidate-env.json>
@@ -1283,6 +1284,60 @@ def config_notes(parsed: dict) -> list[str]:
             f" ({', '.join(names)}): the run is not configured the way the command reads"]
 
 
+_WHY_LIMIT = 6
+
+
+def _why_rows(rows: list[dict]) -> tuple[dict, int]:
+    """Group the changed keys by the glossary entry that explains them.
+
+    A diff row states a change and stops; `--why` answers the next question without
+    sending the reader to a second command. Grouping matters as much as the text:
+    five compile.* keys changed by one version bump are one explanation, not five
+    copies of it, and six paragraphs read while forty do not. Keys past the limit are
+    counted, not dropped silently.
+    """
+    groups: dict[str, dict] = {}
+    omitted: set[str] = set()
+    for row in rows:
+        key = row["key"]
+        if row["status"] == "same" or key.startswith("raw_arg."):
+            continue
+        matched, gloss = _gloss_lookup(key)
+        if gloss is None:
+            continue
+        if matched in groups:
+            if key not in groups[matched]["keys"]:
+                groups[matched]["keys"].append(key)
+            continue
+        if len(groups) >= _WHY_LIMIT:
+            omitted.add(key)
+            continue
+        groups[matched] = {"unit": gloss.unit, "what": gloss.what,
+                           "trap": gloss.trap, "keys": [key]}
+    return groups, len(omitted)
+
+
+def _print_why(why: dict, omitted: int = 0) -> None:
+    print()
+    print("what these changed keys measure (and what they do not):")
+    for matched, group in why.items():
+        keys = group["keys"]
+        if matched == keys[0]:
+            print(f"  {keys[0]}")
+        elif len(keys) == 1:
+            print(f"  {keys[0]}  (family: {matched})")
+        else:
+            head = keys[:6]
+            more = f", and {len(keys) - 6} more" if len(keys) > 6 else ""
+            print(f"  {matched}  ({len(keys)} keys: {', '.join(head)}{more})")
+        print(f"    {group['what']}")
+        if group["trap"]:
+            print(f"    [does not tell you: {group['trap']}]")
+    if omitted:
+        print(f"  ({omitted} more changed key(s) not explained here; "
+              f"`servediff explain <key>` reads any of them)")
+
+
 def _only_key(text: str) -> str:
     return text.replace("_", "").replace("-", "").lower()
 
@@ -1727,6 +1782,8 @@ def _run(argv=None) -> int:
     d.add_argument("--skip-absent", action="store_true",
                    help="hide facts one side never printed, so a failed run's tail does not"
                         " bury the rows that both logs can be compared on")
+    d.add_argument("--why", action="store_true",
+                   help="after the table, say what each changed key measures and what it does not")
     d.add_argument("--only", action="append", metavar="MATCH", default=None,
                    help="compare only facts whose key starts with, or contains, MATCH (repeatable;"
                         " `_` and `-` are ignored, so `--only all_reduce` finds backend.allreduce_*),"
@@ -2270,6 +2327,9 @@ def _run(argv=None) -> int:
                 print("diff: --only narrows server-log facts; env snapshots are compared whole",
                       file=sys.stderr)
                 return 2
+            if args.why:
+                print("diff: --why explains server-log facts; env snapshots compare versions,"
+                      " which have no fact vocabulary", file=sys.stderr)
             rows = envsnap.ranked(envsnap.diff(json.loads(text_a), json.loads(text_b)))
             key = [r for r in rows if envsnap.is_key(r)]
             if args.json:
@@ -2348,12 +2408,16 @@ def _run(argv=None) -> int:
     if args.skip_absent and all_differing:
         notes.append(f"{len(hidden_absent)} difference(s) hidden by --skip-absent: one side"
                      " never printed those lines, so they can only be listed, not compared")
+    why = _why_rows(differing if not args.all else rows) if getattr(args, "why", False) else ({}, 0)
     if args.json:
-        print(json.dumps({"differences": len(all_differing),
-                          "compared_both_sides": len(differing),
-                          "hidden_absent": len(hidden_absent),
-                          "notes": notes, "rows": differing if args.skip_absent else rows},
-                         indent=2, ensure_ascii=False, default=str))
+        payload = {"differences": len(all_differing),
+                   "compared_both_sides": len(differing),
+                   "hidden_absent": len(hidden_absent),
+                   "notes": notes, "rows": differing if args.skip_absent else rows}
+        if why[0]:
+            payload["why"] = why[0]
+            payload["why_omitted"] = why[1]
+        print(json.dumps(payload, indent=2, ensure_ascii=False, default=str))
     elif args.markdown:
         warnings = []
         for side, parsed in (("baseline", a), ("candidate", b)):
@@ -2396,6 +2460,8 @@ def _run(argv=None) -> int:
             line += (f" {len(hidden_absent)} difference(s) skipped because one side never printed"
                      " those lines (--skip-absent).")
         print(line + " Absent means the log did not print it, not that it was off.")
+        if why[0]:
+            _print_why(*why)
     return 1 if all_differing else 0
 
 

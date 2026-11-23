@@ -2178,6 +2178,41 @@ def _corpus_keys():
     return [line.strip() for line in text.splitlines() if line.strip() and not line.startswith("#")]
 
 
+def test_diff_why_explains_the_changed_keys_and_groups_them(capsys):
+    # A diff row states a change and stops. --why answers "so what does this count" in the
+    # same command, and groups keys by the entry that explains them: one version bump that
+    # moves six compile.* keys is one explanation, not six.
+    a = FIX / "vllm-forum-2026-07/a2-stuck-on-shm-broadcast.log"
+    b = FIX / "sglang-2026-10/sglang-42684.log"
+    assert servediff.main(["diff", str(a), str(b), "--why"]) == 1
+    out = capsys.readouterr().out
+    assert "what these changed keys measure" in out
+    assert "does not tell you" in out
+    assert "compile  (" in out  # six keys, one heading
+    # A key that did not change is not explained: the section is about this diff.
+    tail = out.split("what these changed keys measure", 1)[1]
+    assert "kv_cache.max_concurrency" not in tail
+
+
+def test_diff_why_json_groups_without_changing_the_rows(capsys):
+    a = FIX / "vllm-forum-2026-07/a2-stuck-on-shm-broadcast.log"
+    b = FIX / "sglang-2026-10/sglang-42684.log"
+    assert servediff.main(["diff", str(a), str(b), "--why", "--json"]) == 1
+    data = json.loads(capsys.readouterr().out)
+    assert "why" in data and len(data["why"]) <= 6
+    assert data["why_omitted"] > 0  # 46 changed keys cannot all be explained in one screen
+    assert all("trap" in g and "keys" in g for g in data["why"].values())
+    assert all("rows" not in g for g in data["why"].values())
+    assert set(data["rows"][0]) >= {"key", "baseline", "candidate", "status"}
+
+
+def test_diff_without_why_says_nothing_extra(capsys):
+    a = FIX / "vllm-forum-2026-07/a2-stuck-on-shm-broadcast.log"
+    b = FIX / "sglang-2026-10/sglang-42684.log"
+    assert servediff.main(["diff", str(a), str(b)]) == 1
+    assert "what these changed keys measure" not in capsys.readouterr().out
+
+
 def test_every_fact_key_can_be_explained(capsys):
     # The meaning of a key used to live in the comment above its regex -- in the source, where
     # a reader of `show` output never looks. The glossary is the promise that every key the
@@ -2197,6 +2232,24 @@ def test_the_vocabulary_shipped_in_the_package_matches_the_corpus():
     # list drifts, a new key starts answering with "no entry" on a real log.
     from servediff.glossary import KNOWN_KEYS
     assert set(KNOWN_KEYS) == set(_corpus_keys())
+
+
+def test_glossary_only_points_at_keys_the_corpus_produces():
+    # A trap that names `kv_cache.requested_gib` is only useful while that key exists; a
+    # renamed key turns the cross-reference into a dead pointer that still reads correct.
+    from servediff.glossary import GLOSSARY, KNOWN_KEYS
+    fams = {k.split(".")[0] for k in KNOWN_KEYS}
+    prose = {"e.g", "torch.compile"}  # names of things, not fact keys
+    bad = []
+    for name, gloss in GLOSSARY.items():
+        text = f"{gloss.what} {gloss.trap}"
+        for token in re.findall(r"[a-z_]+(?:\.?[a-z_0-9]+)+", text):
+            if "." not in token or token in prose or token in KNOWN_KEYS or token in GLOSSARY:
+                continue
+            if token.split(".")[0] in fams:  # a family prefix such as env.pip
+                continue
+            bad.append((name, token))
+    assert bad == []
 
 
 def test_explain_calls_a_typo_a_typo(capsys):

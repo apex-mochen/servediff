@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.4.83 — 2026-11-23
+
+`diff` states a change and stops. 0.4.82 gave you one command to ask what a key means;
+this puts the answer in the diff itself, where the question is actually asked:
+
+```
+$ servediff diff a2.log sglang-42684.log --why
+...
+what these changed keys measure (and what they do not):
+  compile  (6 keys: compile.cached_range, compile.dynamo_s, compile.graph_s, compile.range,
+            compile.total_s, compile.warmup_s)
+    torch.compile / inductor on the backbone: backend, ranges compiled, fusions enabled,
+    seconds spent, and why a recompile happened.
+    [does not tell you: compile.total_s hides which phase grew; compile.dynamo_s,
+    graph_s and warmup_s split it]
+```
+
+Grouping is the point, not the prose: six `compile.*` keys moved by one version bump are
+one explanation, not six copies of it. Six entries is the cap (`--why` on a 46-row diff
+would otherwise print a page), and the keys past it are counted, not dropped -- `(N more
+changed key(s) not explained here; servediff explain <key> reads any of them)`. `--json`
+carries the same grouping as a `why` object plus `why_omitted`, and the `rows` array is
+untouched, so an existing consumer does not see a schema change. `--why` is text/JSON
+only; against `env` snapshots it says why it does not apply.
+
+One new gate: the glossary may only point at keys the corpus actually produces. Each
+`trap` names other keys (`kv_cache.requested_gib`, `backend.attention_forced`,
+`sched.max_running_requests`); a rename would leave those as dead references that still
+read correct. The test resolves every dotted token in the prose against the key list,
+fact-family by fact-family. `pytest` 193 passed; `cli_sweep` now also runs `diff --why`
+and `--why --json`, no tracebacks.
+
 ## 0.4.82 — 2026-11-23
 
 `show` prints keys (`kv_cache.max_concurrency`, `transfer.staging_total_mib`) and the
