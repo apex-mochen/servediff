@@ -476,16 +476,34 @@ def _rows(lines: list[str], counts: Counter) -> None:
         lines.append(f"  {count:>4}  {line[:150]}")
 
 
+def reads_nothing(text: str) -> bool:
+    """True when no rule produced a single fact from this text.
+
+    This is the question a corpus audit has to answer before it answers the other one.
+    Unread lines split into noise and shapes, and a file whose lines are all noise reads as
+    clean; a reproducer script pasted into an issue does exactly that. If nothing was read
+    at all, "nothing worth a look" is true and useless: the reader needs to know that this
+    file is not a startup log, or not one this tool can read.
+    """
+    return not parse(text)["facts"]
+
+
 def report(path: Path, text: str, limit: int = 0, everything: bool = False,
-           known: set[str] | None = None) -> str:
+           known: set[str] | None = None, facts: int | None = None) -> str:
     """One block per log: totals first, then shapes, noise separated out.
 
     `known` is the set of shapes an earlier `--write-baseline` recorded: they are still
     counted but not listed, so a log that already passed once does not re-print the same rows
     every run. The line is reported as accepted, not as read: nothing changed about the parser.
+    `facts` is passed in when the caller already parsed the text; otherwise it is parsed here.
     """
+    if facts is None:
+        facts = len(parse(text)["facts"])
     counts, samples = unread_samples(text)
     lines = [f"{path}: {sum(counts.values())} unread line(s), {len(counts)} shape(s)"]
+    if facts == 0:
+        lines.append("  0 facts: not one configuration line in this file is recognised —"
+                     " an unread file is not a clean one")
     if not counts:
         lines.append("  nothing unread: every non-empty line matched a rule")
         return "\n".join(lines)

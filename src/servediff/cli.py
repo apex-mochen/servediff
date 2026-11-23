@@ -1710,13 +1710,15 @@ def _read_log(path) -> str:
         raise InputError(f"{path}: {exc.strerror or exc}") from exc
 
 
-def _audit_gate(max_shapes: int | None, shapes: int) -> int:
+def _audit_gate(max_shapes: int | None, shapes: int, unread_files: int = 0) -> int:
     """Audit's exit code with a threshold: 1 means 'the parser is behind this log', not
     'the log is different', so it does not collide with diff's 1."""
     if max_shapes is None:
         return 0
     if shapes > max_shapes:
-        print(f"audit: {shapes} shape(s) worth a look is above --max-shapes {max_shapes}",
+        tail = (f" ({shapes - unread_files} shape(s) + {unread_files} file(s) that read nothing)"
+                if unread_files else "")
+        print(f"audit: {shapes} shape(s) worth a look{tail} is above --max-shapes {max_shapes}",
               file=sys.stderr)
         return 1
     return 0
@@ -2036,12 +2038,19 @@ def _run(argv=None) -> int:
         seen = Counter()  # every shape this run saw, baseline or not, for --write-baseline
         hidden_shapes = 0
         hidden_lines = 0
+        # A file that yields no fact is not a clean file: it is a file this tool cannot read.
+        # Counted on its own and into the gate, because "0 shapes worth a look" over a paste
+        # that produced nothing is the report lying in the one case it exists to catch.
+        empty_logs: list[str] = []
         for path in logs:
             try:
                 text = _read_log(path)
             except InputError as exc:
                 print(f"audit: {exc}", file=sys.stderr)
                 return 2
+            facts_here = len(parse(text)["facts"])
+            if facts_here == 0:
+                empty_logs.append(_label(path))
             counts, samples = auditmod.unread_samples(text)
             look, _ = auditmod.split(counts, samples)
             seen.update({line: count for line, count in look.items()})
@@ -2053,8 +2062,8 @@ def _run(argv=None) -> int:
             shapes_worth_a_look += len(look)
             blocks.append(auditmod.report(Path(_label(path)), text,
                                           limit=args.top, everything=args.everything,
-                                          known=known))
-            summary.append((_label(path), sum(counts.values()), len(counts), look))
+                                          known=known, facts=facts_here))
+            summary.append((_label(path), sum(counts.values()), len(counts), look, facts_here))
         if args.write_baseline is not None:
             try:
                 args.write_baseline.write_text(
@@ -2082,16 +2091,19 @@ def _run(argv=None) -> int:
                     {
                         "path": str(Path(path_label)),
                         "unread": unread,
+                        "facts": facts,
                         "shapes": shapes,
                         "shapes_worth_a_look": [
                             {"line": line, "count": count}
                             for line, count in look.most_common(args.top or None)
                         ],
                     }
-                    for path_label, unread, shapes, look in summary
+                    for path_label, unread, shapes, look, facts in summary
                 ],
                 "shapes_worth_a_look": shapes_worth_a_look,
                 "logs_with_shapes_worth_a_look": sum(1 for item in summary if item[3]),
+                "logs_read_nothing": len(empty_logs),
+                "logs_read_nothing_paths": empty_logs,
             }
             if known is not None:
                 # Only present when a baseline was given, so a pipeline reading the default
@@ -2099,14 +2111,17 @@ def _run(argv=None) -> int:
                 payload["baseline_shapes_not_counted"] = hidden_shapes
                 payload["baseline_lines_not_counted"] = hidden_lines
             print(json.dumps(payload, indent=2, ensure_ascii=False))
-            return _audit_gate(args.max_shapes, shapes_worth_a_look)
+            return _audit_gate(args.max_shapes, shapes_worth_a_look + len(empty_logs),
+                               len(empty_logs))
         if len(logs) > 1 and not args.markdown and not args.json:
             # A corpus asks a different question from one log: which of these still
             # has a shape no rule reads. One line each, then only the rows that matter.
             out = []
-            for name, unread, shapes, look in summary:
+            for name, unread, shapes, look, facts in summary:
                 name = Path(name).name
-                if look:
+                if facts == 0:
+                    verdict = "0 facts: nothing recognised"
+                elif look:
                     verdict = f"{len(look)} shape(s) worth a look"
                 else:
                     verdict = ("nothing new (all in the baseline)" if known is not None
@@ -2115,12 +2130,16 @@ def _run(argv=None) -> int:
                 for line, count in look.most_common(args.top or None):
                     out.append(f"    {count:>4}  {line[:150]}")
             with_look = sum(1 for item in summary if item[3])
-            out.append(f"{len(logs)} log(s): {with_look} with shapes worth a look")
+            tail = (f"; {len(empty_logs)} read nothing at all" if empty_logs else "")
+            out.append(f"{len(logs)} log(s): {with_look} with shapes worth a look{tail}")
             print("\n".join(out))
             if args.max_shapes is not None:
-                print(f"audit: {shapes_worth_a_look} shape(s) worth a look,"
+                extra = (f" + {len(empty_logs)} file(s) that read nothing"
+                         if empty_logs else "")
+                print(f"audit: {shapes_worth_a_look} shape(s) worth a look{extra},"
                       f" threshold {args.max_shapes}", file=sys.stderr)
-            return _audit_gate(args.max_shapes, shapes_worth_a_look)
+            return _audit_gate(args.max_shapes, shapes_worth_a_look + len(empty_logs),
+                               len(empty_logs))
         if args.markdown:
             # The issue form asks for the engine, the line, and this report, so step three
             # should be one paste. The fence is made longer than any run of backticks in
@@ -2132,12 +2151,15 @@ def _run(argv=None) -> int:
             print(f"{fence}text")
             print(body)
             print(fence)
-            return _audit_gate(args.max_shapes, shapes_worth_a_look)
+            return _audit_gate(args.max_shapes, shapes_worth_a_look + len(empty_logs),
+                               len(empty_logs))
         print("\n\n".join(blocks))
         if args.max_shapes is not None:
-            print(f"\naudit: {shapes_worth_a_look} shape(s) worth a look, threshold"
+            extra = (f" + {len(empty_logs)} file(s) that read nothing" if empty_logs else "")
+            print(f"\naudit: {shapes_worth_a_look} shape(s) worth a look{extra}, threshold"
                   f" {args.max_shapes}", file=sys.stderr)
-        return _audit_gate(args.max_shapes, shapes_worth_a_look)
+        return _audit_gate(args.max_shapes, shapes_worth_a_look + len(empty_logs),
+                           len(empty_logs))
 
     if args.command == "demo":
         # A fresh install has nothing to diff, and the tool is useless until you find two

@@ -33,3 +33,11 @@ across a month boundary rather than a new escape.
 
 Same caveat as the October corpus: a sample, not a census. The absence of a false positive here
 is not the absence of one in the wild.
+
+### Pastes moved out of this collection (0.4.96)
+
+Sixteen files that appear in this table are not startup logs: reproducer scripts, docstrings
+and config notes pasted into the issue body beside the log. They now live in
+`samples/not-startup-logs/` with a README explaining why, because a file that yields no fact
+at all was inflating this corpus while `audit` reported it clean. The startup logs listed here
+are unchanged.

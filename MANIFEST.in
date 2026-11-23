@@ -1,6 +1,9 @@
 include CHANGELOG.md CONTRIBUTING.md README.zh-CN.md
 recursive-include tests/fixtures *.log *.md *.txt
 recursive-include examples *.log
+# The pastes that are not startup logs: a test runs `show` on one of them and the corpus
+# test asserts none of them is inside tests/fixtures/.
+recursive-include samples/not-startup-logs *.log *.md
 # Tests run from the unpacked sdist in the publish workflow, so anything a test opens
 # has to be in here: tools/render_demo_svg.py and assets/demo.svg are read by
 # tests/test_demo_svg.py, and without them the release fails at "Tests from the sdist".

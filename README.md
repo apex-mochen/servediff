@@ -101,9 +101,9 @@ in the paste. The write-up shows the reading, with line numbers.
 Install from PyPI. A different, unrelated tool also uses the name `servediff` in a
 third-party Homebrew tap; the `pip install servediff` package is this one.
 
-The measurement this project is built on — twenty-one logs pasted into public bug reports,
-nothing the parser cannot read — is one command in a checkout, and it answers for every log
-with one line each:
+The measurement this project is built on — seventy-one startup logs pasted into public bug
+reports, nothing the parser cannot read — is one command in a checkout, and it answers for
+every log with one line each:
 
 ```bash
 servediff audit tests/fixtures      # a directory audits every *.log inside it
@@ -111,9 +111,15 @@ servediff audit tests/fixtures      # a directory audits every *.log inside it
 
 That corpus is the one the rules were written against, so it can always be made to pass.
 The test that matters is output the rules have never seen: `tests/fixtures/held-out-2026-10/`
-(eleven pastes), `tests/fixtures/held-out-2026-11/` (seven), and
-`tests/fixtures/held-out-2026-11b/` (twenty-eight), all collected straight from vLLM and
+(eight pastes), `tests/fixtures/held-out-2026-11/` (five), and
+`tests/fixtures/held-out-2026-11b/` (eighteen), all collected straight from vLLM and
 SGLang issues with their issue numbers in a `PROVENANCE.md` beside them.
+
+Sixteen further pastes from the same issues are kept in `samples/not-startup-logs/` and are
+deliberately not in that corpus: they are reproducer scripts and docstrings, pasted into issue
+bodies beside the logs, and no rule reads a single fact out of them. Keeping them in the
+corpus would have made "the corpus reads clean" mean nothing; `audit` now reports a file that
+yields no fact as a file it cannot read, which is what that folder is the test case for.
 
 ```text
 note: baseline: no all-reduce facts and no rank line: cannot tell whether this run had more than one rank, so an absent all-reduce path here is inconclusive
@@ -184,7 +190,7 @@ names a python launcher, that interpreter is the one snapshotted; for entry poin
 | `servediff capture [-o run.log] -- <server command>` | runs the server, tees its log to stdout and to the file, and writes `<out>.env.json` **before** launch. If the command names a python launcher (`capture -- python -m vllm...`), that interpreter is the one snapshotted; otherwise pass `--python` to point at the server's venv | the server's own exit code; `2` when the paths cannot be written or the command cannot start |
 | `servediff explain <key>` | what one fact key means, what it is measured in, and the thing it does not tell you (e.g. `kv_cache.max_concurrency` divides by the token count in its own sentence, not yours); a family name (`kv_cache`) reads all of it; `--json` | `0` documented; `2` a key no log produces |
 | `servediff demo` | two excerpt logs shipped inside the package → a real diff with no log files of your own; run this first after installing | `1` always (the bundled logs differ; see the note it prints) |
-| `servediff audit <log|dir>` | the lines no rule reads, split into noise (counted) and shapes worth a look (listed); a directory (or several paths) is audited as one corpus, one line per log; `--top N`, `--everything`, `--markdown`, `--json`, `--max-shapes N`, `--baseline JSON`, `--write-baseline JSON` | `0` reported; `1` more shapes worth a look than `--max-shapes` allows (with `--baseline`, only shapes not in it); `2` unreadable path or a file that is not a baseline |
+| `servediff audit <log|dir>` | the lines no rule reads, split into noise (counted) and shapes worth a look (listed); a file no rule reads a fact from is named as unread, not filed under noise; a directory (or several paths) is audited as one corpus, one line per log; `--top N`, `--everything`, `--markdown`, `--json`, `--max-shapes N`, `--baseline JSON`, `--write-baseline JSON` | `0` reported; `1` more shapes worth a look than `--max-shapes` allows (with `--baseline`, only shapes not in it; a file that yields no fact always counts as one); `2` unreadable path or a file that is not a baseline |
 | `servediff repeats <log|dir>` | the message shapes that appear more than once, each with its span, median gap and whether the gaps hold: `regular` (a watchdog re-logging one wait), `burst` (a retry loop), `untimed`; `--min N`, `--top N`, `--markdown`, `--json` | `0` reported, including a log that repeats nothing; `2` unreadable path, or more than one `-` |
 
 `1` always means *the inputs differ* — never *something went wrong* — so
@@ -805,8 +811,9 @@ prove, are in [writeups/audit-noise-real-logs.md](https://github.com/apex-mochen
   when the server starts printing configuration this tool still cannot read, which is the
   moment you want to know rather than three regressions later.
   `servediff audit --json run1.log` is the same report for a pipeline: per log the
-  `unread` and `shapes` counts, the shapes worth a look with their counts, and a total
-  `shapes_worth_a_look`, so the gate reads a field instead of parsing a table. `--json`
+  `unread`, `facts` and `shapes` counts, the shapes worth a look with their counts, and a total
+  `shapes_worth_a_look` plus `logs_read_nothing` and the paths behind that count, so the gate
+  reads a field instead of parsing a table. `--json`
   changes the format, not the exit code, and it does not mix with `--markdown`.
   `servediff audit --write-baseline accepted.json run1.log` records the shapes this run saw,
   and `servediff audit --baseline accepted.json --max-shapes 0 run2.log` counts only shapes

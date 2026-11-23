@@ -494,7 +494,10 @@ def test_audit_gate_fails_only_when_the_parser_is_behind(tmp_path, capsys):
     assert servediff.main(["audit", str(log)]) == 0
     # Access logs are noise, not "worth a look", so a threshold of 0 still passes.
     noisy = tmp_path / "noise.log"
-    noisy.write_text('INFO:     127.0.0.1:52344 - "GET /health HTTP/1.1" 200 OK\n')
+    # One fact, so this test stays about the access-log lines: the file-level rule ("a file
+    # that reads nothing is not clean") is what test_a_file_that_reads_nothing covers.
+    noisy.write_text("GPU 0: NVIDIA H100\n"
+                     'INFO:     127.0.0.1:52344 - "GET /health HTTP/1.1" 200 OK\n')
     assert servediff.main(["audit", str(noisy), "--max-shapes", "0"]) == 0
 
 
@@ -572,7 +575,8 @@ def test_a_baseline_turns_the_gate_into_a_regression_gate(tmp_path, capsys):
     # A gate on the absolute count fails forever after the first line the parser cannot read,
     # which is how a gate gets switched off. A baseline makes it a question about what is new.
     log = tmp_path / "run.log"
-    log.write_text("Router gate chose expert 3 for every token on this run\n",
+    log.write_text("GPU 0: NVIDIA H100\n"
+                   "Router gate chose expert 3 for every token on this run\n",
                    encoding="utf-8")
     base = tmp_path / "baseline.json"
     assert servediff.main(["audit", str(log), "--write-baseline", str(base)]) == 0
@@ -591,7 +595,9 @@ def test_a_baseline_turns_the_gate_into_a_regression_gate(tmp_path, capsys):
 
 def test_a_new_shape_still_fails_against_a_baseline(tmp_path):
     log = tmp_path / "old.log"
-    log.write_text("Router gate chose expert 3 for every token on this run\n", encoding="utf-8")
+    log.write_text("GPU 0: NVIDIA H100\n"
+                   "Router gate chose expert 3 for every token on this run\n",
+                   encoding="utf-8")
     base = tmp_path / "baseline.json"
     assert servediff.main(["audit", str(log), "--write-baseline", str(base)]) == 0
     fresh = tmp_path / "new.log"
@@ -625,13 +631,44 @@ def test_a_file_that_is_not_a_baseline_is_an_input_error(tmp_path, capsys):
     assert "not a baseline" in err
 
 
+def test_a_file_that_reads_nothing_is_not_reported_clean(tmp_path, capsys):
+    """A paste that yields no fact must be flagged, not filed under noise.
+
+    Found by asking the corpus a question it had never been asked: how many of these files
+    produce a single fact? Sixteen did not -- reproducer scripts pasted into issue bodies,
+    every line of them Python, all classified as "noise" -- and `audit` had been calling the
+    whole corpus clean since the first of them arrived. `audit` splits unread lines into
+    noise and shapes; a file that reads nothing is the one case where both answers are
+    useless unless the file is named as unread.
+    """
+    script = tmp_path / "repro.log"
+    script.write_text(
+        'import torch\n'
+        'from vllm.config import set_current_vllm_config\n'
+        'with torch.no_grad():\n'
+        '    out = model(input_ids)\n',
+        encoding="utf-8")
+    assert servediff.main(["audit", "--max-shapes", "0", str(script)]) == 1
+    out = capsys.readouterr().out
+    assert "0 facts: not one configuration line in this file is recognised" in out
+
+
+def test_the_corpus_has_no_file_that_reads_nothing(capsys):
+    # The startup-log corpus is startup logs. Pastes that are reproducer scripts live in
+    # samples/not-startup-logs/ and are audited by the test above; a file that reads nothing
+    # sitting inside tests/fixtures/ would mean either the corpus or the parser is wrong.
+    assert servediff.main(["audit", "--max-shapes", "0", str(FIX)]) == 0
+    out = capsys.readouterr().out
+    assert "read nothing at all" not in out
+
+
 def test_a_second_month_of_pastes_finds_nothing_either(capsys):
     # The batch collected one month after the first, so this is what tests whether the noise
     # table learned October or learned logs. At 0.4.36 one line survived here: the conditional
     # expression `run(a) if a.cmd == "run" else compare(a)` in sglang-49403.log.
     held = FIX / "held-out-2026-11"
     logs = sorted(held.glob("*.log"))
-    assert len(logs) == 7, logs
+    assert len(logs) == 5, logs
     assert servediff.main(["audit", str(held)]) == 0
     out = capsys.readouterr().out
     assert f"{len(logs)} log(s): 0 with shapes worth a look" in out
@@ -656,7 +693,7 @@ def test_a_third_month_of_pastes_finds_nothing_either(capsys):
     # pasted along with collect_env.
     held = FIX / "held-out-2026-11b"
     logs = sorted(held.glob("*.log"))
-    assert len(logs) == 28, logs
+    assert len(logs) == 18, logs
     assert servediff.main(["audit", str(held)]) == 0
     out = capsys.readouterr().out
     assert f"{len(logs)} log(s): 0 with shapes worth a look" in out
@@ -706,7 +743,7 @@ def test_the_held_out_corpus_reports_nothing_to_look_at(capsys):
     # this command reported 8 of 11 files with lines worth a look.
     held = FIX / "held-out-2026-10"
     logs = sorted(held.glob("*.log"))
-    assert len(logs) == 11, logs
+    assert len(logs) == 8, logs
     assert servediff.main(["audit", str(held)]) == 0
     out = capsys.readouterr().out
     assert f"{len(logs)} log(s): 0 with shapes worth a look" in out
@@ -2673,7 +2710,8 @@ def test_a_log_pasted_through_a_forum_still_parses():
 def test_a_pure_traceback_says_what_it_is_instead_of_exiting_silently():
     # sglang#52318 is a stack with no startup lines at all. "not recognised" alone reads as
     # a bug in the reader; the hint names the difference and says there is nothing to compare.
-    log = Path(__file__).parent / "fixtures" / "sglang-2026-11" / "sglang-52318-assertion.log"
+    log = (Path(__file__).parent.parent / "samples" / "not-startup-logs"
+           / "sglang-52318-assertion.log")
     out = subprocess.run([sys.executable, "-m", "servediff", "show", str(log)],
                          capture_output=True, text=True)
     assert out.returncode == 2

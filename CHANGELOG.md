@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.4.96
+
+A file that reads nothing was the one file `audit` was quiet about.
+
+The corpus question that had never been asked: how many of these files produce a single fact?
+Sixteen of the 87 did not. They are reproducer scripts and docstrings pasted into issue bodies
+beside the log, and every line of them matched the traceback-frame patterns in the noise table
+— `try:`, `flush()`, `time.sleep(N)` — so `audit tests/fixtures --max-shapes 0` answered
+**87 log(s), 0 with shapes worth a look** about a corpus it could not read 18% of.
+
+The split is noise versus shapes, and both are statements about unread lines. A file that yields
+no fact at all needs a third one:
+
+```
+0 facts: not one configuration line in this file is recognised — an unread file is not a clean one
+```
+
+Such a file now counts once toward `--max-shapes`, so a baseline cannot accept it away: a
+baseline records shapes the parser was allowed to leave unread, not files it never read. In
+`--json` the count is `logs_read_nothing` with `logs_read_nothing_paths`, and every log carries
+its own `facts` count.
+
+The sixteen pastes moved to `samples/not-startup-logs/`, which ships in the sdist and carries a
+README on why. The startup-log corpus is `tests/fixtures/` at **71 logs**, still 0 shapes worth
+a look; the new expected-failure set is that folder, and two tests hold both ends: a script
+pasted as a log exits `1` under `--max-shapes 0` and names itself, and the corpus contains no
+such file. Three older tests gained one fact line in their fixtures so they keep testing shape
+gates rather than the new file rule. Tests 204 → **206**.
+
 ## 0.4.95
 
 README only; no code change.
