@@ -52,6 +52,15 @@ handler returns `[(fact_key, value)]` pairs:
 - For a rule about absence, the negative test matters more: `<absent>` must never be
   reported as "off" or "disabled".
 
+## Cross-command checks
+
+`python tools/invariants.py --repo .` runs the same question through several commands and
+fails when they disagree: a log against itself, A/B against B/A, `show` text vs `--json` vs
+`--markdown`, `repeats` line counts vs the file, `differences == compared_both_sides +
+hidden_absent` under both modes, and `series` keys vs the union of pairwise diffs. Every one
+of those was a shipped defect once (0.4.97, 0.4.98, 0.4.99, 0.4.100). It takes about 90 s over
+the whole corpus; `--sample 20` is enough for a loop, `--only self-diff` for one check.
+
 ## What a PR here should not do
 
 Infer which difference caused a slowdown, and never fill a gap with a default. If the log
