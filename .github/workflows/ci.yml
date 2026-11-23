@@ -5,6 +5,17 @@ on:
   pull_request:
 
 jobs:
+  wheel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install build
+      - name: Build the wheel and use it from a clean venv
+        run: python tools/check_wheel.py
+
   test:
     runs-on: ${{ matrix.os }}
     strategy:

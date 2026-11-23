@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.4.80 — 2026-11-23
+
+The first command after `pip install servediff` is `servediff`, and it answered
+`error: the following arguments are required: command`. A newcomer has no log yet,
+so the useful answer is the shortest path to output: bare `servediff` now prints the
+five commands, the docs URL, and exits 0.
+
+`tools/check_wheel.py` closes the gap that everything else in this repo leaves: the
+tests run the source tree, but what ships is a wheel, and the `examples/` that
+`demo` reads exist only if packaging includes them. It builds the wheel, installs it
+into a fresh venv with `--no-index` (so a published copy cannot stand in), and from a
+directory with no source tree checks `--version` and `__version__` against
+pyproject, the first-run block, `demo` reading its packaged logs, `show`/`audit`/
+`repeats`, and that `show --json` parses. It runs as its own CI job.
+
+That check also explains a lie we had been telling ourselves: in a dev venv left
+from an earlier install, `servediff --version` reports the *installed* metadata
+(0.4.77 on a 0.4.80 checkout), because the version is read from the distribution
+rather than a literal. That is correct for pip users and misleading for us, so the
+version is now verified where it matters — on the artifact.
+
+`pytest` 182 passed.
+
 ## 0.4.79 — 2026-11-23
 
 The corpus tests pin what the commands *print*. Nothing pinned that they *return*.

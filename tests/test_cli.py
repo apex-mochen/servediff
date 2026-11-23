@@ -2150,6 +2150,16 @@ def test_repeats_json_carries_the_span_and_the_median(tmp_path, capsys):
     assert group["first"] == 11 * 3600 + 10 * 60  # the log quotes 11:10:00
 
 
+def test_bare_servediff_shows_where_to_start(capsys):
+    # The first command a person runs after `pip install` is `servediff`. It used to answer
+    # an argparse error, because `command` is required and they had no log yet.
+    assert servediff.main([]) == 0
+    out = capsys.readouterr().out
+    assert "servediff demo" in out
+    assert "servediff show server.log" in out
+    assert "apex-mochen.github.io/servediff" in out
+
+
 def test_show_only_says_nothing_when_the_log_had_nothing_to_read(capsys):
     # `show` exits 2 with "no configuration lines recognised". That sentence is a promise:
     # on a log that does carry facts it must never be printed, or the tool has quietly

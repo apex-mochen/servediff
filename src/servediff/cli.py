@@ -1669,8 +1669,27 @@ def main(argv=None) -> int:
         return 0
 
 
+_FIRST_RUN = """servediff {version} - read what an inference server actually ran with.
+
+  servediff demo                     two logs shipped in the package, no GPU, ~1 s
+  servediff show server.log          the settings the log actually resolved to
+  servediff audit server.log         the lines no rule reads: what the log still hides
+  servediff repeats server.log       one wait re-logged, or N separate stalls
+  servediff diff old.log new.log     what changed between two runs
+
+Docs and worked examples: https://apex-mochen.github.io/servediff/"""
+
+
 def _run(argv=None) -> int:
     _keep_console_printable()
+    # Bare `servediff` used to answer an argparse error (`the following arguments are
+    # required: command`) on the first keystroke after install. A newcomer has no log yet,
+    # so the useful answer is the shortest path to output, not a usage dump.
+    if argv is None:
+        argv = sys.argv[1:]
+    if not argv:
+        print(_FIRST_RUN.format(version=_version()))
+        return 0
     parser = argparse.ArgumentParser(
         prog="servediff",
         description=__doc__.split("\n\n")[0],

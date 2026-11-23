@@ -49,7 +49,8 @@ servediff demo
 ```
 
 `demo` diffs two excerpt logs that ship inside the package, so your first command
-produces real output without you finding logs first. It exits `1`, because the two
+produces real output without you finding logs first. Run `servediff` alone to see the
+five commands and nothing else. It exits `1`, because the two
 logs do differ — that is the result, not a failure.
 
 It then runs `repeats` on two more shipped logs that carry the same
