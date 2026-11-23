@@ -60,6 +60,20 @@ $ servediff repeats repro.log --top 3
   anything that could have blocked a reader.
 ```
 
+A span is a duration only while the file holds one run. Paste a failed run and a working run
+into the same file and the same warning repeats minutes apart; that gap is the distance between
+the two runs, not how long anything lasted. `repeats` labels those groups `split` and prints the
+run count plus the longest single run instead of a file-wide span:
+
+```
+6x split  09:01:12 -> 09:56:45  span 3333 s in 3 runs, longest 180 s
+```
+
+A gap becomes a boundary only when it is both ≥300 s and ≥5× the group's median gap, so a 60 s
+watchdog that logs five times still reads `regular`. `--json` keeps the span keys and adds
+`segments` and `longest_segment_s`, so a script can tell "one 3333 s wait" from "three runs,
+the longest 180 s".
+
 ### The timestamp is the end of the wait, not its start
 
 Every one of these lines is printed *after* the watchdog has already been waiting for the
