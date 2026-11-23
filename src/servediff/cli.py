@@ -113,7 +113,12 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
     # selection line itself ("Using FLASH_ATTN attention backend out of potential
     # backends: [...]"), so the rule has to match both shapes; matching only the
     # standalone `backends: [...]` line left the common one invisible.
-    (re.compile(r"(?:^backends: |out of potential backends: )(\[[^\]]*\])"),
+    #
+    # `attention backend` is load-bearing: the MoE selection line uses the same words
+    # ("Using FlashInfer CUTLASS Unquantized MoE backend out of potential backends:
+    # [...]"), and matching it too gave one log two values under this key -- an attention
+    # list and an MoE list in the same row, which reads as a config change that is not one.
+    (re.compile(r"(?:^backends: |attention backend out of potential backends: )(\[[^\]]*\])"),
      lambda m: [("backend.candidates", m[1])]),
     (re.compile(r"Enforce eager set"), lambda m: [("cuda_graph", "disabled (enforce_eager)"),
                                                   ("compile", "disabled (enforce_eager)")]),

@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.4.94 — 2026-11-24
+
+0.4.93's own fix, caught by walking the corpus it changed. The new attention-candidate rule
+matched `out of potential backends: `, and the MoE selection line uses the same words:
+
+```
+Using FlashInfer CUTLASS Unquantized MoE backend out of potential backends: ['AITER', ...]
+```
+
+So one log carried two values under `backend.candidates` -- an attention list and an MoE
+list -- and a row with two values reads as a configuration change that never happened. The
+rule now requires `attention backend` before `out of potential backends`, which is the part
+that distinguishes the two lines. The corpus goes from 6 logs carrying this key to 4, and
+none of them carries two values.
+
+The regression test states both halves: a log with both selection lines must yield one
+value, the attention one; and the log that exposed it must stay single-valued. 204 tests.
+
 ## 0.4.93 — 2026-11-24
 
 `backend.candidates` was written for a line vLLM does not print. The rule matched a bare

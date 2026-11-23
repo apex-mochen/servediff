@@ -1536,6 +1536,22 @@ def test_a_single_gpu_report_reads_the_model_once_even_when_the_line_repeats_it(
     assert not look, sorted(look)
 
 
+def test_the_moe_candidate_list_is_not_read_as_attention_candidates():
+    # 0.4.93 started reading the attention list off the selection line by matching
+    # "out of potential backends", which the MoE selection line uses too. One real log
+    # then carried two values under `backend.candidates` -- an attention list and an MoE
+    # list -- and a row with two values reads as a config change that never happened.
+    text = ("Using FLASH_ATTN attention backend out of potential backends: ['FLASH_ATTN', 'FLASHINFER']\n"
+            "Using FlashInfer CUTLASS Unquantized MoE backend out of potential backends: ['AITER', 'DEEPGEMM']\n")
+    fact = servediff.parse(text)["facts"]["backend.candidates"]
+    assert fact.value == "['FLASH_ATTN', 'FLASHINFER']"
+    assert len(fact.values) == 1
+    # The same rule against the log that exposed it.
+    log = FIX / "vllm-forum-2026-04/qwen36-35b-fp8-eager.log"
+    facts = servediff.parse(log.read_text(encoding="utf-8", errors="replace"))["facts"]
+    assert len(facts["backend.candidates"].values) == 1
+
+
 def test_a_stalled_startup_reports_how_long_it_waited():
     # The most repeated line in a stalled startup was classified as noise: 49 copies of
     # "No available shared memory broadcast block found in 60 seconds" in a log that then
