@@ -69,7 +69,7 @@ def main() -> int:
     for md in sorted((ROOT / "writeups").glob("*.md")):
         text = md.read_text(encoding="utf-8")
         raw_title = text.splitlines()[0].lstrip("# ").strip()
-        title = re.sub(r"[`*_]", "", raw_title)
+        title = re.sub(r"[`*]", "", raw_title)
         body = markdown.markdown(text, extensions=["fenced_code", "tables"])
         slug = md.stem + ".html"
         desc = first_paragraph("\n".join(text.splitlines()[1:]))

@@ -27,7 +27,7 @@ def test_every_writeup_gets_a_page_titled_with_its_first_line():
         page = (site / (md.stem + ".html")).read_text(encoding="utf-8")
         title = re.search(r"<title>(.*?)</title>", page, re.S).group(1)
         headline = md.read_text(encoding="utf-8").splitlines()[0].lstrip("# ").strip()
-        assert html.unescape(title) == re.sub(r"[`*_]", "", headline), (md.name, title, headline)
+        assert html.unescape(title) == re.sub(r"[`*]", "", headline), (md.name, title, headline)
         assert len(page) > 2_000, (md.name, len(page))
 
 
