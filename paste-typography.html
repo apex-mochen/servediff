@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The log you pasted is not the log the server wrote</title>
+<meta name="description" content="Two pastes, two different losses, same cause: a forum or a chat client rewrites punctuation, and every rule in this tool is written against the ASCII the server prints.">
+<link rel="canonical" href="https://apex-mochen.github.io/servediff/paste-typography.html">
+<style>
+:root { --fg:#1c1c1e; --muted:#6b6b70; --line:#e4e4e7; --code:#f6f6f7; }
+body { margin:0 auto; max-width:44rem; padding:2.5rem 1.25rem 6rem;
+  font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  color:var(--fg); }
+h1 { font-size:1.9rem; line-height:1.25; margin:0 0 1rem; letter-spacing:-0.01em; }
+h2 { font-size:1.25rem; margin:2.2rem 0 .6rem; }
+h3 { font-size:1.05rem; margin:1.6rem 0 .4rem; }
+p, li { color:var(--fg); }
+pre { background:var(--code); border:1px solid var(--line); border-radius:6px;
+  padding:.85rem 1rem; overflow-x:auto; font-size:.86rem; line-height:1.5; }
+code { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:.9em; }
+p code, li code { background:var(--code); padding:.1em .3em; border-radius:3px; }
+a { color:#0b62d0; }
+.note { color:var(--muted); font-size:.9rem; }
+nav { border-bottom:1px solid var(--line); padding-bottom:.75rem; margin-bottom:2rem;
+  font-size:.9rem; }
+nav a { margin-right:1rem; }
+ul.index li { margin:.5rem 0; }
+</style>
+</head>
+<body>
+<nav><a href="./index.html">servediff notes</a><a href="https://github.com/apex-mochen/servediff">source</a><a href="https://pypi.org/project/servediff/">pip install servediff</a></nav>
+<h1>The log you pasted is not the log the server wrote</h1>
+<p>Two pastes, two different losses, same cause: a forum or a chat client rewrites punctuation,
+and every rule in this tool is written against the ASCII the server prints.</p>
+<h2>Loss 1 — quotes (vLLM 0.28, forum 2946)</h2>
+<pre><code>Mamba cache mode is set to ‘align’ for Qwen3_5ForConditionalGeneration …
+min_p and logit_bias parameters won’t work with speculative decoding.
+</code></pre>
+<p>The server writes <code>'align'</code> and <code>won't</code>. The rule wants <code>'align'</code>. Result: <code>kv_cache.mamba_mode</code>
+and the spec warning both disappear from a log that plainly contains them — the worst kind of
+failure, because the table still looks complete.</p>
+<h2>Loss 2 — dashes (vLLM 0.19, forum 2570)</h2>
+<p>Hugging Face puts <strong>two hyphens</strong> in a cache directory name:</p>
+<pre><code>/root/.cache/huggingface/hub/models--Qwen--Qwen3.6-35B-A3B-FP8/snapshots/61a5771f…
+</code></pre>
+<p>SmartyPants turns <code>--</code> into an en dash, so the pasted copy reads:</p>
+<pre><code>/root/.cache/huggingface/hub/models–Qwen–Qwen3.6-35B-A3B-FP8/snapshots/61a5771f…
+</code></pre>
+<p><code>arg.model</code> is still read — but with the wrong value. Two consequences worth separating:</p>
+<ul>
+<li><code>diff</code> between a pasted log and a log taken on the box reports a <strong>model path change that
+  never happened</strong>, and the real change next to it is easier to miss.</li>
+<li>Anything downstream that keys off the model path (a cache, a baseline file, a group-by in
+  <code>show</code>) sees a second identity for one checkpoint.</li>
+</ul>
+<p><code>---</code> becomes an em dash, so the fold has to be <code>– → --</code> and <code>— → ---</code>, not "drop the dash".</p>
+<h2>The fix</h2>
+<p>One translation table, applied in <code>parse</code> and in <code>audit</code> before any rule runs:</p>
+<pre><code class="language-python">CURLY = str.maketrans({&quot;\u2018&quot;: &quot;'&quot;, &quot;\u2019&quot;: &quot;'&quot;, &quot;\u201c&quot;: '&quot;', &quot;\u201d&quot;: '&quot;',
+                       &quot;\u2013&quot;: &quot;--&quot;, &quot;\u2014&quot;: &quot;---&quot;})
+</code></pre>
+<h2>What this says about pasted logs generally</h2>
+<p>The forum is a lossy channel, and the loss is <strong>typographic, silent and content-shaped</strong>:
+it hits paths, flags and quoted values, never the line structure. So the cheap defence is
+one fold of the characters that have a known ASCII twin, applied before matching rather than
+inside each rule. Anything the fold cannot know — a wrapped line, a truncated paste, a log
+reassembled from screenshots — is a different problem and is not solved by this.</p>
+<p>This is also why the corpus keeps the pasted punctuation in the fixture and folds it at read
+time: the fixture is the evidence of what a user actually has, and the fold is the product.</p>
+</body>
+</html>
