@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.75 — 2026-11-23
+
+The code in 0.4.74 was right; the test guarding it was not, and the Windows job said so.
+
+- **0.4.74's `ci` run on `windows-latest` failed** while uploading to PyPI succeeded, so the
+  published wheel is the one you want — but a red check under a release tag is not something to
+  leave standing. The defect was in the test: it decoded the child process's stderr as UTF-8,
+  and a pipe on Windows uses the ANSI code page (`UnicodeDecodeError: 0x97 ... invalid start
+  byte` — an em dash). The note the product prints is pure ASCII and was there all along.
+  The assertion now compares the raw bytes, so neither side's locale can make it lie.
+- No product change; `servediff` behaves exactly as 0.4.74.
+
 ## 0.4.74 — 2026-11-23
 
 A log captured on Windows was not being read at all.

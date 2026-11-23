@@ -2561,8 +2561,10 @@ def test_utf16_on_stdin_is_decoded_too():
                           input=source.decode("utf-8").encode("utf-16"),
                           capture_output=True)
     assert out2.returncode == 0
-    assert "read as utf-16" in out2.stderr.decode()
-    assert "kernel.jit_during_inference" in out2.stdout.decode()
+    # Compare bytes: on a Windows runner the child writes stderr in the ANSI code page, so
+    # decoding it as UTF-8 in the test was what failed, not the note itself.
+    assert b"read as utf-16" in out2.stderr
+    assert b"kernel.jit_during_inference" in out2.stdout
 
 
 def test_the_short_log_hint_counts_its_lines():
