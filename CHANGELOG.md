@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.4.81 — 2026-11-23
+
+`show` prints our reading of a log plus the line number it came from. Disagreeing with
+the reading needs the server's own text, and finding line 3 000 of a 100 MB file by hand
+is where that stops happening — which is exactly the point where someone would have
+quoted the line into an issue.
+
+`servediff show server.log --evidence` prints it under each fact:
+
+```
+compile.dynamo_s                 9.35      line 6
+    line 6: (Worker_TP0 pid=137) INFO 07-19 09:01:58 [backends.py:1148] Dynamo bytecode transform time: 9.35 s
+```
+
+Every evidence entry is printed, not just the first, because a fact that two ranks
+reported has two lines and the disagreement between them is the interesting part.
+Default output is unchanged. `pytest` 183 passed.
+
 ## 0.4.80 — 2026-11-23
 
 The first command after `pip install servediff` is `servediff`, and it answered

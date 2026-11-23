@@ -1702,6 +1702,8 @@ def _run(argv=None) -> int:
     show = sub.add_parser("show", help="effective config facts in one log")
     show.add_argument("log", type=Path, help="server log, or - to read stdin")
     show.add_argument("--json", action="store_true")
+    show.add_argument("--evidence", action="store_true",
+                      help="print the log line behind each fact, to paste into a bug report")
     d = sub.add_parser("diff", help="diff two server logs, or two `servediff env` snapshots")
     d.add_argument("baseline", type=Path, help="server log or env snapshot; - reads stdin")
     d.add_argument("candidate", type=Path, nargs="?",
@@ -2134,6 +2136,12 @@ def _run(argv=None) -> int:
             for key, fact in sorted(parsed["facts"].items()):
                 where = fact.evidence[0][0]
                 print(f"{key:32s} {_fmt(fact.value):60s} line {where if where else '-'}")
+                if args.evidence:
+                    # The value is our reading; the line is what the server said. A reader
+                    # disagreeing with us needs the second one to quote, and digging line
+                    # 3 000 out of a 100 MB file by hand is where that stops happening.
+                    for lineno, raw in fact.evidence:
+                        print(f"    line {lineno}: {raw}")
             notes = config_notes(parsed)
             if notes:
                 print()

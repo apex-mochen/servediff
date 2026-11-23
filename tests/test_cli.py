@@ -2150,6 +2150,19 @@ def test_repeats_json_carries_the_span_and_the_median(tmp_path, capsys):
     assert group["first"] == 11 * 3600 + 10 * 60  # the log quotes 11:10:00
 
 
+def test_show_evidence_prints_the_line_a_fact_came_from(capsys):
+    # `show` prints our reading and a line number. To disagree with the reading you need the
+    # server's own text, and finding line 6 of a 100 MB file by hand is where that stops.
+    log = FIX / "vllm-forum-2026-07/a2-stuck-on-shm-broadcast.log"
+    assert servediff.main(["show", str(log)]) == 0
+    plain = capsys.readouterr().out
+    assert "line 6:" not in plain
+    assert servediff.main(["show", str(log), "--evidence"]) == 0
+    out = capsys.readouterr().out
+    assert "[backends.py:1148] Dynamo bytecode transform time: 9.35 s" in out
+    assert "line 6: " in out
+
+
 def test_bare_servediff_shows_where_to_start(capsys):
     # The first command a person runs after `pip install` is `servediff`. It used to answer
     # an argparse error, because `command` is required and they had no log yet.
