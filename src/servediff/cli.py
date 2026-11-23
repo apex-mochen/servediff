@@ -107,9 +107,14 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
     (re.compile(r"Using '?([^']+?)'? (?:(NvFp4|Fp8|Unquantized|Mxfp4|Int4|W4A16) )?MoE backend"),
      lambda m: [("backend.moe", m[1] if m[2] is None else f"{m[1]} ({m[2]})")]),
     (re.compile(r"Using (MoEPrepareAndFinalize\w+)"), lambda m: [("backend.moe_prepare_finalize", m[1])]),
-    # The backends this build would consider at all, printed on its own line. A diff
-    # that shows the chosen backend unchanged can still hide this list shrinking.
-    (re.compile(r"^backends: (\[[^\]]*\])"), lambda m: [("backend.candidates", m[1])]),
+    # The backends this build would consider at all. A diff that shows the chosen backend
+    # unchanged can still hide this list shrinking -- a build that stops offering
+    # FLASHINFER reads as "FLASH_ATTN, same as before". vLLM prints the list on the
+    # selection line itself ("Using FLASH_ATTN attention backend out of potential
+    # backends: [...]"), so the rule has to match both shapes; matching only the
+    # standalone `backends: [...]` line left the common one invisible.
+    (re.compile(r"(?:^backends: |out of potential backends: )(\[[^\]]*\])"),
+     lambda m: [("backend.candidates", m[1])]),
     (re.compile(r"Enforce eager set"), lambda m: [("cuda_graph", "disabled (enforce_eager)"),
                                                   ("compile", "disabled (enforce_eager)")]),
     (re.compile(r"cudagraph_mode[=:] ?'?(\w+)"), lambda m: [("cuda_graph.mode", m[1])]),
@@ -1426,6 +1431,31 @@ def _md_cell(value) -> str:
     return text.replace("|", "\\|").replace("\n", " ")
 
 
+def _raw(value) -> str:
+    return json.dumps(value, ensure_ascii=False) if not isinstance(value, str) else value
+
+
+def _row_cells(row: dict) -> tuple[str, str]:
+    """Two terminal cells a reader can tell apart.
+
+    A 40-column cell is what keeps a diff readable until two values differ only past that
+    column: the row then says `changed` above two identical-looking strings, which is the
+    one thing this tool exists to prevent. When the cut hides where they differ, both
+    cells widen to just past that character instead of going full width.
+    """
+    base, cand = _raw(row["baseline"]), _raw(row["candidate"])
+    sb, sc = _short(base, 40), _short(cand, 40)
+    if row["status"] == "same" or sb != sc:
+        return sb, sc
+    common = 0
+    for a, b in zip(base, cand):
+        if a != b:
+            break
+        common += 1
+    width = min(max(len(base), len(cand)), common + 14)
+    return _short(base, width), _short(cand, width)
+
+
 def _render_show_markdown(*, label: str, engine: str, facts: dict, notes: list[str],
                           evidence: bool) -> str:
     """Render one log as a GitHub-flavored report, suitable for pasting into an issue.
@@ -2497,8 +2527,9 @@ def _run(argv=None) -> int:
                 shown = rows if args.all else key
                 print(f"{'fact':32s} {'baseline':40s} {'candidate':40s} status")
                 for r in shown:
-                    print(f"{r['key']:32s} {_short(_fmt(r['baseline']), 40):40s}"
-                          f" {_short(_fmt(r['candidate']), 40):40s} {r['status']}"
+                    b_cell, c_cell = _row_cells(r)
+                    print(f"{r['key']:32s} {b_cell}"
+                          f" {c_cell} {r['status']}"
                           f"{('  ' + r['delta']) if r.get('delta') else ''}")
                 print(f"\n{len(key)} difference(s) in Python, GPU, inference packages and engine env vars;"
                       f" {len(rows) - len(key)} in other packages{'' if args.all else ' (--all to list them)'}.")
@@ -2603,8 +2634,9 @@ def _run(argv=None) -> int:
         for r in rows if args.all else differing:
             # Mark truncation instead of cutting a value mid-word: a cell that ends
             # in `TP ran` reads like the value itself, not like a clipped column.
-            print(f"{r['key']:32s} {_short(_fmt(r['baseline']), 40):40s}"
-                  f" {_short(_fmt(r['candidate']), 40):40s} {r['status']}"
+            b_cell, c_cell = _row_cells(r)
+            print(f"{r['key']:32s} {b_cell}"
+                  f" {c_cell} {r['status']}"
                   f"{('  ' + r['delta']) if r.get('delta') else ''}")
         line = f"\n{len(differing)} difference(s); {identical} fact(s) identical."
         if hidden_absent:

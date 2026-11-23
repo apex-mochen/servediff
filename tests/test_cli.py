@@ -2072,8 +2072,11 @@ def test_a_directory_gates_every_log_and_reports_one_exit_code(tmp_path, capsys)
     d, facts_path = _corpus(tmp_path, capsys)
     assert servediff.main(["diff", str(d), "--against", str(facts_path)]) == 1
     out = capsys.readouterr().out
-    assert "bad.log" in out and "backend.attention, engine.version" in out
-    assert "base.log" in out and "0 difference(s); 3 fact(s) identical" in out
+    # The candidate list rides on the selection line ("out of potential backends: [...]"),
+    # so a matrix row that switches backend changes two facts, not one: the chosen kernel
+    # and the set the build was willing to choose from.
+    assert "bad.log" in out and "backend.attention, backend.candidates, engine.version" in out
+    assert "base.log" in out and "0 difference(s); 4 fact(s) identical" in out
     assert "3 log(s): 2 differ from" in out and "1 unchanged" in out
 
 
@@ -2082,7 +2085,7 @@ def test_a_directory_respects_only_so_one_row_fails(tmp_path, capsys):
     assert servediff.main(["diff", str(d), "--against", str(facts_path), "--only", "backend."]) == 1
     out = capsys.readouterr().out
     assert "1 differ from" in out and "2 unchanged" in out
-    assert "[backend.attention]" in out, out
+    assert "[backend.attention, backend.candidates]" in out, out
 
 
 def test_a_directory_without_logs_is_an_input_error(tmp_path, capsys):
@@ -2258,6 +2261,39 @@ def test_bare_servediff_shows_where_to_start(capsys):
     assert "servediff demo" in out
     assert "servediff show server.log" in out
     assert "apex-mochen.github.io/servediff" in out
+
+
+def test_the_candidate_backend_list_is_read_from_the_selection_line():
+    # The rule was written for a bare `backends: [...]` line, which vLLM does not print:
+    # the list rides on the selection line itself. So every real log had the chosen backend
+    # as a fact and the set it was chosen from invisible -- and a build that stopped
+    # offering FLASHINFER diffed as "FLASH_ATTN, same as before".
+    log = FIX / "vllm-0.33.0-real-rtx4060.log"
+    facts = servediff.parse(log.read_text(encoding="utf-8", errors="replace"))["facts"]
+    assert facts["backend.candidates"].value == (
+        "['FLASH_ATTN', 'FLASHINFER', 'TRITON_ATTN', 'FLEX_ATTENTION']")
+    assert facts["backend.candidates"].evidence[0][0] == 27
+    assert "out of potential backends" in facts["backend.candidates"].evidence[0][1]
+
+
+def test_two_values_that_differ_past_the_column_are_not_printed_identically(tmp_path, capsys):
+    # A 40-column cell is what keeps a diff readable, and it also hides a change that
+    # starts at column 41: the row then reads `changed` above two identical strings. The
+    # tool exists to show differences a person cannot eyeball, so this one has to be
+    # visible: the cells widen just past where they diverge, not to full width.
+    line = ("Using FLASH_ATTN attention backend out of potential backends: "
+            "['FLASH_ATTN', 'FLASHINFER', 'TRITON_ATTN', 'FLEX_ATTENTION']\n")
+    a = tmp_path / "a.log"
+    b = tmp_path / "b.log"
+    a.write_text("INFO [core.py:122] Initializing a V1 LLM engine (v0.34.0) with config: model='m'\n" + line,
+                 encoding="utf-8")
+    b.write_text("INFO [core.py:122] Initializing a V1 LLM engine (v0.34.0) with config: model='m'\n"
+                 + line.replace("'FLEX_ATTENTION']", "'FLEX_ATTENTION', 'ZZZ']"), encoding="utf-8")
+    assert servediff.main(["diff", str(a), str(b)]) == 1
+    out = capsys.readouterr().out
+    row = [l for l in out.splitlines() if l.startswith("backend.candidates")][0]
+    assert row.count("changed") == 1
+    assert "'FLEX_ATTENTION']" in row and "'FLEX_ATTENTION', 'ZZZ']" in row, row
 
 
 def _corpus_keys():

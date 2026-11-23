@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.4.93 — 2026-11-24
+
+`backend.candidates` was written for a line vLLM does not print. The rule matched a bare
+`backends: [...]` line; every real log puts the list on the selection line itself:
+
+```
+Using FLASH_ATTN attention backend out of potential backends: ['FLASH_ATTN', 'FLASHINFER', ...]
+```
+
+So every log had the chosen backend as a fact and the set it was chosen from invisible. A
+build that stops offering FLASHINFER diffed as "FLASH_ATTN, same as before" -- the exact case
+the rule's own comment says it exists to catch. Both shapes are matched now.
+
+The second defect was found by testing the first. With the list finally read, `diff` between
+a log and the same log with one candidate appended printed two identical-looking cells:
+
+```
+backend.candidates   ['FLASH_ATTN', 'FLASHINFER', 'TRITON_... ['FLASH_ATTN', 'FLASHINFER', 'TRITON_... changed
+```
+
+and the summary said **0 difference(s), 61 identical**. The 40-column cell cut the value
+before the change at column 65. Two values that differ past the column now widen just past
+the character where they diverge, so the row stays narrow and readable:
+
+```
+backend.candidates   ['FLASH_ATTN', ..., 'FLEX_ATTENTION']  ['FLASH_ATTN', ..., 'FLEX_ATTENTION', 'ZZZ']  changed
+```
+
+Two regressions guard it: the list must be read from the selection line of a real log, and
+a change at column 65 must be visible in the printed row.
+
 ## 0.4.92 — 2026-11-24
 
 `sampling.overridden` read to end of line, so the value it shipped was not the dict the
