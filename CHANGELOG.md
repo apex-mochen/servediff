@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.4.97
+
+`--json` had two counts with one meaning each, and the meaning depended on a flag.
+
+The question: for a pair of logs, does `compared_both_sides` answer the same number twice?
+It did not. `servediff diff a.log b.log --json` on a corpus pair reported
+`differences: 27, compared_both_sides: 27, hidden_absent: 0`; the same pair with
+`--skip-absent` reported `27, 0, 27`. Both runs are correct about the rows they printed —
+the flag only changes which rows are listed — but the counts moved, and the field a CI job
+reads to decide "did anything actually change on the same code path?" was counting the
+27 settings neither log printed on the other side. A table of `<absent>` rows and a real
+comparison produced the same `compared_both_sides`.
+
+Now the three fields are defined once and always add up:
+
+- `differences`: every row that is not identical `= compared_both_sides + hidden_absent`
+- `compared_both_sides`: rows both inputs printed **and** that disagree
+- `hidden_absent`: the rest — one side never printed the line
+
+The `--skip-absent` flag now changes only the `rows` array, never the numbers. Text output
+also stopped printing "N difference(s) skipped because one side never printed those lines
+(--skip-absent)" when the flag was not passed.
+
+Checked over 60 random fixture pairs in both modes: 0 violations, and the accounting holds
+in every case. The regression test asserts equal counts across the two modes on the
+existing failed-startup pair, and fails if `compared_both_sides` goes back to counting
+one-sided rows.
+
 ## 0.4.96
 
 A file that reads nothing was the one file `audit` was quiet about.

@@ -963,6 +963,17 @@ def test_skip_absent_keeps_only_rows_both_logs_printed(tmp_path, capsys):
     assert payload["differences"] == 3 and payload["compared_both_sides"] == 1
     assert payload["hidden_absent"] == 2
     assert [r["key"] for r in payload["rows"]] == ["startup"]
+    # Same pair, same inputs, only the flag differs: the three counts must not move. With
+    # `compared_both_sides` counting every one-sided row whenever the flag was absent, this
+    # pair reported 3 settings "compared" here and 1 there, so a CI job reading the field
+    # could not tell a comparison from a table full of <absent>.
+    capsys.readouterr()
+    assert servediff.main(["diff", str(a), str(b), "--json"]) == 1
+    plain = json.loads(capsys.readouterr().out)
+    for field in ("differences", "compared_both_sides", "hidden_absent"):
+        assert plain[field] == payload[field], (field, plain[field], payload[field])
+    assert plain["compared_both_sides"] == len(
+        [r for r in plain["rows"] if r["status"] == "changed"])
 
 
 def test_cuda_graph_captures_and_pool():

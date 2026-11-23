@@ -2586,14 +2586,16 @@ def _run(argv=None) -> int:
             return 2
         rows = kept
     all_differing = [r for r in rows if r["status"] != "same"]
+    # `compared_both_sides` has to mean the same thing whether or not --skip-absent was
+    # passed: facts both inputs printed and that disagree. Counting one-sided rows there
+    # let the same pair report 27 compared settings without the flag and 0 with it, so a
+    # CI job reading the field could not tell a comparison from a table of <absent>.
+    both_sides = [r for r in all_differing if r["status"] == "changed"]
+    hidden_absent: list[dict] = [r for r in all_differing if r["status"] != "changed"]
     # A run that died at startup leaves every later fact <absent>, so one-sided rows
     # outnumber real differences roughly 10:1 and bury them. --skip-absent keeps only
     # the facts both logs printed: what changed on the same code path.
-    differing = all_differing
-    hidden_absent: list[dict] = []
-    if args.skip_absent:
-        hidden_absent = [r for r in all_differing if r["status"] != "changed"]
-        differing = [r for r in all_differing if r["status"] == "changed"]
+    differing = both_sides if args.skip_absent else all_differing
     identical = len(rows) - len(all_differing)
     notes = []
     for side, parsed in (("baseline", a), ("candidate", b)):
@@ -2620,7 +2622,7 @@ def _run(argv=None) -> int:
     why = _why_rows(differing if not args.all else rows) if getattr(args, "why", False) else ({}, 0)
     if args.json:
         payload = {"differences": len(all_differing),
-                   "compared_both_sides": len(differing),
+                   "compared_both_sides": len(both_sides),
                    "hidden_absent": len(hidden_absent),
                    "notes": notes, "rows": differing if args.skip_absent else rows}
         if why[0]:
@@ -2666,7 +2668,7 @@ def _run(argv=None) -> int:
                   f" {c_cell} {r['status']}"
                   f"{('  ' + r['delta']) if r.get('delta') else ''}")
         line = f"\n{len(differing)} difference(s); {identical} fact(s) identical."
-        if hidden_absent:
+        if args.skip_absent and hidden_absent:
             line += (f" {len(hidden_absent)} difference(s) skipped because one side never printed"
                      " those lines (--skip-absent).")
         print(line + " Absent means the log did not print it, not that it was off.")

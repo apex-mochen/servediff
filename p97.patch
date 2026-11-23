@@ -1,0 +1,176 @@
+From 0197c28aed78d4581da63b95269b011daa199635 Mon Sep 17 00:00:00 2001
+From: servediff <servediff@example.com>
+Date: Tue, 24 Nov 2026 02:48:25 +0800
+Subject: [PATCH] 0.4.97: --json counts must not move when only the flag moves
+
+`compared_both_sides` counted every one-sided row whenever `--skip-absent` was absent, so
+the same pair reported differences/both/hidden as 27/27/0 and 27/0/27. The field answers
+"did anything change on the same code path", and a table of <absent> rows answered it the
+same as a real comparison.
+
+Now: differences = compared_both_sides + hidden_absent, always; the flag only shortens the
+rows array. Text output no longer claims rows were skipped when they were not.
+
+Regression test asserts equal counts across both modes and equality to the changed-row
+count; checked over 60 random fixture pairs in both modes with 0 violations.
+---
+ CHANGELOG.md         | 28 ++++++++++++++++++++++++++++
+ README.md            |  8 +++++---
+ README.zh-CN.md      |  2 +-
+ pyproject.toml       |  2 +-
+ src/servediff/cli.py | 16 +++++++++-------
+ tests/test_cli.py    | 11 +++++++++++
+ 6 files changed, 55 insertions(+), 12 deletions(-)
+
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 5602b86..37ea837 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -1,5 +1,33 @@
+ # Changelog
+ 
++## 0.4.97
++
++`--json` had two counts with one meaning each, and the meaning depended on a flag.
++
++The question: for a pair of logs, does `compared_both_sides` answer the same number twice?
++It did not. `servediff diff a.log b.log --json` on a corpus pair reported
++`differences: 27, compared_both_sides: 27, hidden_absent: 0`; the same pair with
++`--skip-absent` reported `27, 0, 27`. Both runs are correct about the rows they printed —
++the flag only changes which rows are listed — but the counts moved, and the field a CI job
++reads to decide "did anything actually change on the same code path?" was counting the
++27 settings neither log printed on the other side. A table of `<absent>` rows and a real
++comparison produced the same `compared_both_sides`.
++
++Now the three fields are defined once and always add up:
++
++- `differences`: every row that is not identical `= compared_both_sides + hidden_absent`
++- `compared_both_sides`: rows both inputs printed **and** that disagree
++- `hidden_absent`: the rest — one side never printed the line
++
++The `--skip-absent` flag now changes only the `rows` array, never the numbers. Text output
++also stopped printing "N difference(s) skipped because one side never printed those lines
++(--skip-absent)" when the flag was not passed.
++
++Checked over 60 random fixture pairs in both modes: 0 violations, and the accounting holds
++in every case. The regression test asserts equal counts across the two modes on the
++existing failed-startup pair, and fails if `compared_both_sides` goes back to counting
++one-sided rows.
++
+ ## 0.4.96
+ 
+ A file that reads nothing was the one file `audit` was quiet about.
+diff --git a/README.md b/README.md
+index d41b209..60387d8 100644
+--- a/README.md
++++ b/README.md
+@@ -480,9 +480,11 @@ startup                          failed                                   ["read
+ 3 difference(s); 14 fact(s) identical. 50 difference(s) skipped because one side never printed those lines (--skip-absent). Absent means the log did not print it, not that it was off.
+ ```
+ 
+-The exit code is still 1: the inputs do differ. `--json` reports both counts
+-(`differences` including the hidden ones, and `compared_both_sides` without them), so a
+-script cannot mistake a smaller table for a cleaner result.
++The exit code is still 1: the inputs do differ. `--json` reports three counts that
++always add up: `differences` (every row that is not identical), `compared_both_sides` (only
++the rows both inputs printed **and** that disagree) and `hidden_absent` (the rest, one side
++never printed the line). All three are the same with or without `--skip-absent`; only the
++`rows` array shrinks, so a script cannot mistake a smaller table for a cleaner result.
+ 
+ ## Validated against real TP>1 logs
+ 
+diff --git a/README.zh-CN.md b/README.zh-CN.md
+index e48e7b2..49edda1 100644
+--- a/README.zh-CN.md
++++ b/README.zh-CN.md
+@@ -113,7 +113,7 @@ Ctrl-C 会停掉 server、保留日志、退出码 `130`；server 自己结束
+ 
+ `1` 只表示「输入不同」，不表示「出错」，所以 `servediff diff old.log new.log` 可以直接当 CI 门禁。`-` 至多出现一次：stdin 只能读一遍。
+ 
+-最常见的真实场景是「一次崩了、一次同样的参数能起来」。崩掉的那份日志提前结束，之后每条 fact 在它那侧都是 `<absent>`——0.28.0 对 0.30.0 这一对里 53 行差异有 50 行都是这一类，正好把解释结果的那几行埋掉。`servediff diff a.log b.log --skip-absent` 只保留两份日志都打印过的事实，也就是同一条代码路径上真正变了的东西，并明确报出它隐藏了多少行，而不是把它们悄悄算成「相同」（真实的 0.28/0.30 一对：53 差异 → 3 行 + 「50 行被隐藏」）。退出码仍是 `1`，`--json` 里 `differences` 和 `compared_both_sides` 两个数字都在。
++最常见的真实场景是「一次崩了、一次同样的参数能起来」。崩掉的那份日志提前结束，之后每条 fact 在它那侧都是 `<absent>`——0.28.0 对 0.30.0 这一对里 53 行差异有 50 行都是这一类，正好把解释结果的那几行埋掉。`servediff diff a.log b.log --skip-absent` 只保留两份日志都打印过的事实，也就是同一条代码路径上真正变了的东西，并明确报出它隐藏了多少行，而不是把它们悄悄算成「相同」（真实的 0.28/0.30 一对：53 差异 → 3 行 + 「50 行被隐藏」）。退出码仍是 `1`，`--json` 里三个数字永远对得上：`differences`（所有不相同的行）、`compared_both_sides`（**两边都打印过且确实不同**的行）、`hidden_absent`（其余，即一边从没打印过的那行）；加不加 `--skip-absent` 这三个数都一样，变的只是 `rows` 数组，所以脚本不会把更短的表当成更干净的结果。
+ 
+ ## 命令行说的，和实际跑的不是一回事
+ 
+diff --git a/pyproject.toml b/pyproject.toml
+index 11e6d4f..442ff51 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
+ 
+ [project]
+ name = "servediff"
+-version = "0.4.96"
++version = "0.4.97"
+ description = "Diff what your vLLM / SGLang server actually ran with: auto-selected backends, CUDA graphs, startup failures, dependency versions."
+ readme = "README.md"
+ requires-python = ">=3.10"
+diff --git a/src/servediff/cli.py b/src/servediff/cli.py
+index 24c203a..bd917f3 100644
+--- a/src/servediff/cli.py
++++ b/src/servediff/cli.py
+@@ -2586,14 +2586,16 @@ def _run(argv=None) -> int:
+             return 2
+         rows = kept
+     all_differing = [r for r in rows if r["status"] != "same"]
++    # `compared_both_sides` has to mean the same thing whether or not --skip-absent was
++    # passed: facts both inputs printed and that disagree. Counting one-sided rows there
++    # let the same pair report 27 compared settings without the flag and 0 with it, so a
++    # CI job reading the field could not tell a comparison from a table of <absent>.
++    both_sides = [r for r in all_differing if r["status"] == "changed"]
++    hidden_absent: list[dict] = [r for r in all_differing if r["status"] != "changed"]
+     # A run that died at startup leaves every later fact <absent>, so one-sided rows
+     # outnumber real differences roughly 10:1 and bury them. --skip-absent keeps only
+     # the facts both logs printed: what changed on the same code path.
+-    differing = all_differing
+-    hidden_absent: list[dict] = []
+-    if args.skip_absent:
+-        hidden_absent = [r for r in all_differing if r["status"] != "changed"]
+-        differing = [r for r in all_differing if r["status"] == "changed"]
++    differing = both_sides if args.skip_absent else all_differing
+     identical = len(rows) - len(all_differing)
+     notes = []
+     for side, parsed in (("baseline", a), ("candidate", b)):
+@@ -2620,7 +2622,7 @@ def _run(argv=None) -> int:
+     why = _why_rows(differing if not args.all else rows) if getattr(args, "why", False) else ({}, 0)
+     if args.json:
+         payload = {"differences": len(all_differing),
+-                   "compared_both_sides": len(differing),
++                   "compared_both_sides": len(both_sides),
+                    "hidden_absent": len(hidden_absent),
+                    "notes": notes, "rows": differing if args.skip_absent else rows}
+         if why[0]:
+@@ -2666,7 +2668,7 @@ def _run(argv=None) -> int:
+                   f" {c_cell} {r['status']}"
+                   f"{('  ' + r['delta']) if r.get('delta') else ''}")
+         line = f"\n{len(differing)} difference(s); {identical} fact(s) identical."
+-        if hidden_absent:
++        if args.skip_absent and hidden_absent:
+             line += (f" {len(hidden_absent)} difference(s) skipped because one side never printed"
+                      " those lines (--skip-absent).")
+         print(line + " Absent means the log did not print it, not that it was off.")
+diff --git a/tests/test_cli.py b/tests/test_cli.py
+index a5d7b7d..768cda4 100644
+--- a/tests/test_cli.py
++++ b/tests/test_cli.py
+@@ -963,6 +963,17 @@ def test_skip_absent_keeps_only_rows_both_logs_printed(tmp_path, capsys):
+     assert payload["differences"] == 3 and payload["compared_both_sides"] == 1
+     assert payload["hidden_absent"] == 2
+     assert [r["key"] for r in payload["rows"]] == ["startup"]
++    # Same pair, same inputs, only the flag differs: the three counts must not move. With
++    # `compared_both_sides` counting every one-sided row whenever the flag was absent, this
++    # pair reported 3 settings "compared" here and 1 there, so a CI job reading the field
++    # could not tell a comparison from a table full of <absent>.
++    capsys.readouterr()
++    assert servediff.main(["diff", str(a), str(b), "--json"]) == 1
++    plain = json.loads(capsys.readouterr().out)
++    for field in ("differences", "compared_both_sides", "hidden_absent"):
++        assert plain[field] == payload[field], (field, plain[field], payload[field])
++    assert plain["compared_both_sides"] == len(
++        [r for r in plain["rows"] if r["status"] == "changed"])
+ 
+ 
+ def test_cuda_graph_captures_and_pool():
+-- 
+2.34.1
+

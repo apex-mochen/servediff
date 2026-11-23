@@ -480,9 +480,11 @@ startup                          failed                                   ["read
 3 difference(s); 14 fact(s) identical. 50 difference(s) skipped because one side never printed those lines (--skip-absent). Absent means the log did not print it, not that it was off.
 ```
 
-The exit code is still 1: the inputs do differ. `--json` reports both counts
-(`differences` including the hidden ones, and `compared_both_sides` without them), so a
-script cannot mistake a smaller table for a cleaner result.
+The exit code is still 1: the inputs do differ. `--json` reports three counts that
+always add up: `differences` (every row that is not identical), `compared_both_sides` (only
+the rows both inputs printed **and** that disagree) and `hidden_absent` (the rest, one side
+never printed the line). All three are the same with or without `--skip-absent`; only the
+`rows` array shrinks, so a script cannot mistake a smaller table for a cleaner result.
 
 ## Validated against real TP>1 logs
 
