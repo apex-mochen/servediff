@@ -2232,6 +2232,8 @@ def _run(argv=None) -> int:
             for name, g in _gloss_families():
                 first = g.what.split(". ")[0].rstrip(".") + "."
                 print(f"  {name:20s} {first}")
+            print()
+            print("All of them, per key, as one page: <https://apex-mochen.github.io/servediff/facts.html>")
             return 0
         matched, gloss = _gloss_lookup(args.key)
         # `kv_cache.tokenz` used to answer with the family gloss and exit 0, which reads
@@ -2267,6 +2269,9 @@ def _run(argv=None) -> int:
             print()
             print(f"  no per-key entry; the family {matched} covers it:")
             print(f"  {_gloss_lookup(matched)[1].what}")
+        # Everyone who runs this is standing at one key of a 274-key table and has no
+        # way to know the other 273 exist; the page is the plain-HTML version of it.
+        print("  read more: <https://apex-mochen.github.io/servediff/facts.html>")
         return 0
 
     if args.command == "show":

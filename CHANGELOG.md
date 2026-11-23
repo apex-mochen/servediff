@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.86 — 2026-11-23
+
+`facts.html` existed and nothing pointed at it. The page is the only place that lists all
+274 keys with what each one counts, and it was reachable from the site index alone: the PyPI
+page — where anyone installing the tool lands — mentioned `explain` but never the page, so an
+external reader had no reason to believe there was more than the one key they asked about.
+
+Two links, in the two places a stranger actually stands:
+
+- `README.md`, next to the other note links: "Every fact key, with what it counts and what it
+  does not" → the page, described as the same table `servediff explain` reads.
+- `servediff explain` now ends a single-key answer, and the family list, with the page URL.
+  Someone reading `explain kv_cache.tokens` learns that 273 other keys exist, without a flag.
+
+No parser or glossary change: the output gains one trailing line, the JSON payloads are
+untouched.
 ## 0.4.85 — 2026-11-23
 
 A reading in 0.4.82 was wrong in a way a real issue shows. vllm#69280 (open, unanswered)
@@ -1788,3 +1804,4 @@ First version.
 - `servediff env [--python PATH]`: snapshot package versions, GPU and engine env vars of a
   server environment, with secret-looking values redacted. `servediff diff` on two
   snapshots lists inference-relevant changes first.
+

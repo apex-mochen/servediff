@@ -812,6 +812,8 @@ prove, are in [writeups/audit-noise-real-logs.md](https://github.com/apex-mochen
 - The same notes as a plain web page: <https://apex-mochen.github.io/servediff/> —
   generated from `writeups/*.md` by `tools/build_site.py`, each page titled with the exact
   error string it is about.
+- Every fact key, with what it counts and what it does not: <https://apex-mochen.github.io/servediff/facts.html>
+  — the same table `servediff explain` reads, 43 families plus 13 per-key entries.
 - One worked example end to end: [writeups/wsl-uva-028-vs-030.md](https://github.com/apex-mochen/servediff/blob/main/writeups/wsl-uva-028-vs-030.md)
   — same flags on a laptop GPU under WSL2, 0.28.0 dies with `RuntimeError: UVA is not
   available`, 0.30.0 starts; the startup-log diff is 53 differences and 14 identical facts,
@@ -855,3 +857,4 @@ prove, are in [writeups/audit-noise-real-logs.md](https://github.com/apex-mochen
 ## License
 
 Apache-2.0.
+
