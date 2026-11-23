@@ -812,6 +812,12 @@ prove, are in [writeups/audit-noise-real-logs.md](https://github.com/apex-mochen
   the three arithmetic checks that separate a full `/dev/shm`, a capture still running, and
   one reader that stopped draining — worked through a real 102-line TP2 log, against the two
   answers that dominate search results.
+- When the log says `min_p and logit_bias parameters won't work with speculative decoding`,
+  [writeups/spec-decode-overrides.md](https://github.com/apex-mochen/servediff/blob/main/writeups/spec-decode-overrides.md)
+  lists the three settings speculative decoding changes behind your back — the scheduled-token
+  budget reset to 2048 while `--max-num-batched-tokens` stays in the args, `min_p`/`logit_bias`
+  dropped, the MTP layer forwarded once per draft token — read from one 86-line forum paste that
+  also names the quantised GEMM kernels the flags never do.
 
 ## License
 

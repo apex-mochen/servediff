@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.4.65 — 2026-11-23
+
+Speculative decoding overrides three settings you passed and says so only in warnings; a log
+pasted through a forum lost two facts to typographic quotes.
+
+Nine facts from one forum paste (vLLM 0.28.0, Qwen3.5-27B-NVFP4 served plain and again with
+`--speculative-config method=mtp num_speculative_tokens=2`): `sched.max_num_scheduled_tokens`
+(the budget reset to 2048 while `--max-num-batched-tokens` stays in the args),
+`sampling.ignored_with_spec` (`min_p, logit_bias`), `spec.mtp_forward_repeat`,
+`spec.mtp_weights_shared`, `quant.kernel.nvfp4`, `quant.kernel.selected`,
+`compile.deep_gemm`, `compile.deep_gemm_feature`, `gdn.prefill_kernel`, `gdn.decode_kernel`,
+`mm.prefix_attention`. A flag names a format (`--quantization compressed-tensors`), never the
+kernel; the kernel is where a throughput delta between two runs on one checkpoint comes from.
+
+**Pasted logs keep their quotes.** The forum serves `Mamba cache mode is set to ‘align’` and
+`won’t`; the server writes ASCII and every rule is ASCII, so a copy from a browser, a chat
+client or a word processor silently lost the mamba cache mode and the spec warning. `parse`
+and `audit` now curl U+2018/U+2019/U+201C/U+201D back before matching. Before: 2 shapes
+unread on that fixture; after: 0.
+
+Also: new corpus `tests/fixtures/vllm-forum-2026-09/` with a `PROVENANCE.md` that states how
+the forum's paragraph-per-line rendering became a file (it has no `<pre>` block, so this is
+extraction, not a verbatim block), a writeup
+`writeups/spec-decode-overrides.md`, and the fact-key inventory is now **222 keys**.
+
 ## 0.4.64 — 2026-11-22
 
 CPU serving was only half readable: the log pins each worker to a core list and lets
