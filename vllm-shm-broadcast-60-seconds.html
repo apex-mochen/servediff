@@ -96,6 +96,16 @@ irregular; this is not.</p>
   A regular gap is one wait being re-logged, not N separate failures: compare that span with
   anything that could have blocked a reader.
 </code></pre>
+<p>A span is a duration only while the file holds one run. Paste a failed run and a working run
+into the same file and the same warning repeats minutes apart; that gap is the distance between
+the two runs, not how long anything lasted. <code>repeats</code> labels those groups <code>split</code> and prints the
+run count plus the longest single run instead of a file-wide span:</p>
+<pre><code>6x split  09:01:12 -&gt; 09:56:45  span 3333 s in 3 runs, longest 180 s
+</code></pre>
+<p>A gap becomes a boundary only when it is both ≥300 s and ≥5× the group's median gap, so a 60 s
+watchdog that logs five times still reads <code>regular</code>. <code>--json</code> keeps the span keys and adds
+<code>segments</code> and <code>longest_segment_s</code>, so a script can tell "one 3333 s wait" from "three runs,
+the longest 180 s".</p>
 <h3>The timestamp is the end of the wait, not its start</h3>
 <p>Every one of these lines is printed <em>after</em> the watchdog has already been waiting for the
 interval it names. So <code>09:03:37</code> means the wait began at <code>09:02:37</code>, and comparing that with
