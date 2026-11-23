@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.4.91 — 2026-11-24
+
+The two numbers 0.4.90 added sit eleven seconds apart in a table: `shm.broadcast_stalls 49`
+and `shm.broadcast_wait_s 2940`. The question they answer is "why did this startup take
+fifty minutes", and nobody multiplying 49 by 60 to get 49 minutes out of two strings is a
+reader we can spare. `show` now states the product in the units a person uses, with the
+startup outcome attached so a 5-minute wait and a 49-minute one do not read alike:
+
+```
+note: this startup waited 2940 s (49 min) for a free broadcast block, across 49 interval(s)
+      before `startup` reported ready; the sum is a floor, the first wait began before line 1
+```
+
+The same sentence is in `show --markdown` as `> ℹ️`, which is the artifact that gets pasted
+into an issue, and it stays out of the report for logs that never waited. The fact rows and
+the key set are unchanged: no new fact, no glossary entry, `facts.html` untouched.
+
+This exists because a vLLM issue reports "50m for vLLM startup" and the log it pasted
+accounted for that in one line shape: 49 waits, 2 940 s, weights 3.99 s, compile warmup
+16.39 s. The counters made it visible; the sentence makes it quotable.
+
 ## 0.4.90 — 2026-11-23
 
 `No available shared memory broadcast block found in 60 seconds` was classified as noise.

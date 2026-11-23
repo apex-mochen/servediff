@@ -1306,6 +1306,38 @@ def config_notes(parsed: dict) -> list[str]:
             f" ({', '.join(names)}): the run is not configured the way the command reads"]
 
 
+def stall_notes(parsed: dict) -> list[str]:
+    """Multiply the two numbers a stalled startup prints, because nobody does it.
+
+    `shm.broadcast_stalls` is a count and `shm.broadcast_wait_s` is a sum, and the sum
+    only means something next to the startup it belongs to: 49 rows reading "60
+    seconds" look like a log full of noise until you notice one of them is 49 minutes
+    of wall clock on a startup that then reported `ready`. The fact rows stay as they
+    are; this states the product in the units a person uses, and says which startup
+    outcome it belongs to, so a five-minute wait and a fifty-minute one do not read
+    alike.
+    """
+    stalls = parsed["facts"].get("shm.broadcast_stalls")
+    wait = parsed["facts"].get("shm.broadcast_wait_s")
+    if not stalls or not wait:
+        return []
+    try:
+        count = int(stalls.values[0])
+        seconds = int(wait.values[0])
+    except (ValueError, IndexError):
+        return []
+    if seconds <= 0 or count <= 0:
+        return []
+    outcome = parsed["facts"].get("startup")
+    state = f" before `startup` reported {outcome.values[0]}" if outcome else ""
+    if seconds >= 60:
+        human = f"{seconds // 60} min" + (f" {seconds % 60} s" if seconds % 60 else "")
+    else:
+        human = f"{seconds} s"
+    return [f"this startup waited {seconds} s ({human}) for a free broadcast block, across {count}"
+            f" interval(s){state}; the sum is a floor, the first wait began before line 1"]
+
+
 _WHY_LIMIT = 6
 
 
@@ -2365,7 +2397,8 @@ def _run(argv=None) -> int:
                              indent=2, ensure_ascii=False))
         elif args.markdown:
             print(_render_show_markdown(label=_label(args.log), engine=parsed["engine"],
-                                        facts=parsed["facts"], notes=config_notes(parsed),
+                                        facts=parsed["facts"],
+                                        notes=config_notes(parsed) + stall_notes(parsed),
                                         evidence=args.evidence))
         else:
             for key, fact in sorted(parsed["facts"].items()):
@@ -2377,7 +2410,7 @@ def _run(argv=None) -> int:
                     # 3 000 out of a 100 MB file by hand is where that stops happening.
                     for lineno, raw in fact.evidence:
                         print(f"    line {lineno}: {raw}")
-            notes = config_notes(parsed)
+            notes = config_notes(parsed) + stall_notes(parsed)
             if notes:
                 print()
                 for note in notes:

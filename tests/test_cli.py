@@ -1531,6 +1531,26 @@ def test_a_stalled_startup_reports_how_long_it_waited():
     assert not shapes, shapes
 
 
+def test_a_stalled_startup_states_the_total_in_minutes_not_only_two_rows(capsys):
+    # Two fact rows eleven seconds apart in a reader's head are not the answer to "why
+    # did this take fifty minutes". The product is stated in the report, with the startup
+    # outcome attached, so a 5-minute wait and a 49-minute one do not read alike -- and
+    # the same sentence has to survive into the markdown report, which is the artifact
+    # that gets pasted into an issue.
+    log = FIX / "full-cpu-2026-11/vllm-0.34.0rc1-cpu-avx2-qwen3.5.log"
+    assert servediff.main(["show", str(log)]) == 0
+    out = capsys.readouterr().out
+    note = [line for line in out.splitlines() if "waited 2940 s" in line][0]
+    assert "49 min" in note and "49 interval(s)" in note and "`startup` reported ready" in note
+    assert servediff.main(["show", str(log), "--markdown"]) == 0
+    md = capsys.readouterr().out
+    assert "> ℹ️ this startup waited 2940 s (49 min)" in md
+    # A log that never waited must not grow a sentence about waiting.
+    quiet = FIX / "sglang-2026-10/sglang-42684.log"
+    assert servediff.main(["show", str(quiet)]) == 0
+    assert "waited" not in capsys.readouterr().out
+
+
 def test_the_tp8_report_log_leaves_nothing_unread_because_these_facts_are_read():    # Every line below is a shape the audit named as "no rule reads them" on a real
     # vLLM 0.23.1 TP=8 startup log. They are the configuration that made that run
     # different, so each one has to become a fact rather than stay in a list of
