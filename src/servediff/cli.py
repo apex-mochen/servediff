@@ -1710,6 +1710,9 @@ def _run(argv=None) -> int:
     e = sub.add_parser("env", help="snapshot package versions, GPU and engine env vars of a server environment")
     e.add_argument("--python", help="interpreter of the server's environment (default: this one)")
     e.add_argument("-o", "--output", type=Path, help="write JSON here instead of stdout")
+    # `env` already writes JSON; the flag exists so the habit `--json` works on every
+    # command instead of hitting an argparse usage dump.
+    e.add_argument("--json", action="store_true", help="accepted for symmetry: the output is JSON")
     c = sub.add_parser("capture", help="run a server command, tee its log, and snapshot its environment")
     c.add_argument("-o", "--output", type=Path, default=Path("servediff-capture.log"),
                    help="log file (default: servediff-capture.log)")

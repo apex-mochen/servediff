@@ -2150,6 +2150,17 @@ def test_repeats_json_carries_the_span_and_the_median(tmp_path, capsys):
     assert group["first"] == 11 * 3600 + 10 * 60  # the log quotes 11:10:00
 
 
+def test_show_only_says_nothing_when_the_log_had_nothing_to_read(capsys):
+    # `show` exits 2 with "no configuration lines recognised". That sentence is a promise:
+    # on a log that does carry facts it must never be printed, or the tool has quietly
+    # stopped covering a real server's output. This walks the whole corpus rather than the
+    # hand-picked logs the other tests use.
+    for path in sorted(FIX.rglob("*.log")):
+        facts = servediff.parse(path.read_text(encoding="utf-8", errors="replace"))["facts"]
+        assert servediff.main(["show", str(path)]) == (0 if facts else 2), path
+        capsys.readouterr()
+
+
 def test_repeats_survives_a_repeat_whose_lines_share_one_clock():
     # vllm-project/vllm forum, `ray-4-node-random-fail`: five copies of the same traceback
     # frame, all stamped 16:38:14. `count >= 2` with a single distinct clock reached a

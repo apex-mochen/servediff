@@ -22,6 +22,8 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: pip install ".[dev]"
       - run: pytest -q
+      - name: Every command over every log, and the ways to mistype them
+        run: python tools/cli_sweep.py
       - name: README quick start
         shell: bash
         run: |

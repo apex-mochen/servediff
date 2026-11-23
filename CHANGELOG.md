@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.4.79 — 2026-11-23
+
+The corpus tests pin what the commands *print*. Nothing pinned that they *return*.
+
+`tools/cli_sweep.py` runs every command — `show`, `show --json`, `audit` (three flag
+shapes), `repeats` (four), `diff`, plus the ways to mistype them — over all 87 logs
+and seven hostile files (empty, binary, one 4 MB line, a UTF-16 PowerShell redirect,
+CRLF, a `.log.gz`, a file of dashes): 1 009 invocations in 26 s, and it fails the
+build on a traceback. Run against the 0.4.77 wheel it reports exactly the four
+cases that release shipped broken (`repeats` on `ray-4-node-random-fail.log` and
+`qwen-vram-enough-but-oom.log`, plain and `--json`), which is the point of keeping
+it: the bug that motivated the harness was one nobody's test would have caught,
+because a crash is not a different printed line. It is now a CI step.
+
+A sweep-level check cannot see a wrong sentence, so one invariant moved into
+`pytest`: `show` exits 2 *only* when the log carried no facts. That promise was
+already load-bearing ("no configuration lines recognised") and was only tested on
+the handful of logs each test happened to name.
+
+`servediff env --json` no longer dies in argparse: `env` writes JSON already, and
+`--json` is accepted so the habit works on every command instead of printing a
+usage dump.
+
+`pytest` 181 passed.
+
 ## 0.4.78 — 2026-11-23
 
 `repeats` read the file twice. Two fixes came out of removing that, plus one crash.
