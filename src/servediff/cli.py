@@ -658,8 +658,8 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
      lambda m: [("startup", "failed (worker died)")]),
     # Sampling defaults are silently taken from the model's generation_config.json;
     # two runs of the same flags can sample differently because of it.
-    (re.compile(r"generation_config\.json[`'\":]+ ?(.+)$"),
-     lambda m: [("sampling.overridden", m[1].strip().strip("`"))]),
+    (re.compile(r"generation_config\.json[`'\":]+ ?(`?\{[^}]*\})"),
+     lambda m: [("sampling.overridden", m[1].strip("`"))]),
     # A silent numeric change: the checkpoint's dtype was coerced to something the GPU
     # path wants. Nothing in the flags says so, and it changes every result.
     (re.compile(r"Casting (torch\.\w+) to (torch\.\w+)"),

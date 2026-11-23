@@ -111,8 +111,12 @@ def test_real_server_log_from_033_is_parsed():
     # Serving torch threads are cut, and the pair is the setting: "1" alone would not say
     # whether the cut came from 16 or from 4.
     assert f["cpu.torch_threads"].value == "16 -> 1"
-    # Sampling defaults came from the model, not from the flags.
-    assert "repetition_penalty" in f["sampling.overridden"].value
+    # Sampling defaults came from the model, not from the flags. The value is the dict
+    # the warning quotes and nothing else: the rule used to read to end of line, so the
+    # row carried the log's own follow-up sentence ("If this is not intended, please
+    # relaunch ...") and an unbalanced backtick into a markdown table cell.
+    assert f["sampling.overridden"].value == ("{'repetition_penalty': 1.1, 'temperature': 0.7,"
+                                              " 'top_k': 20, 'top_p': 0.8}")
     # One fact per op: the whole IrOpPriorityConfig line is too wide for the table and
     # two different configs would truncate to the same visible string.
     assert f["kernel.ir_op.rms_norm"].value == "native"
@@ -185,6 +189,27 @@ def test_cpu_backend_choices_are_read_not_offered_back_as_unread():
         "(Worker pid=122) WARNING 11-14 03:20:20 [utils.py:885] Failed to create oneDNN linear, fallback to torch linear. Exception: could not create a primitive descriptor for the matmul primitive.",
     ):
         assert audit.shape(line) not in unread, line
+
+
+def test_no_rule_reads_a_value_to_the_end_of_a_quoted_sentence():
+    # `sampling.overridden` captured `(.+)$` and shipped "{...}`. If this is not intended,
+    # please relaunch vLLM ..." as a fact value: the log's own advice became part of the
+    # value, and its unbalanced backtick split a markdown table cell. A rule that starts
+    # at a quoted literal has to end at that literal's closing brace, so every value of
+    # this key in the corpus must be a dict a reader could eval, not a sentence.
+    import ast
+    seen = 0
+    for path in sorted(FIX.rglob("*.log")):
+        facts = servediff.parse(path.read_text(encoding="utf-8", errors="replace"))["facts"]
+        fact = facts.get("sampling.overridden")
+        if not fact:
+            continue
+        for value in fact.values:
+            seen += 1
+            parsed = ast.literal_eval(value)
+            assert "temperature" in parsed, (path.name, value)
+            assert "please relaunch" not in value, (path.name, value)
+    assert seen >= 1
 
 
 def test_the_cpu_log_has_nothing_left_worth_a_look(capsys):

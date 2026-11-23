@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.4.92 — 2026-11-24
+
+`sampling.overridden` read to end of line, so the value it shipped was not the dict the
+warning quotes but the dict plus the log's own advice about it:
+
+```
+{'repetition_penalty': 1.1, ... 'top_p': 0.8}`. If this is not intended, please relaunch ...
+```
+
+Two defects in one string. The fact is not the sampling parameters any more, and the stray
+backtick it carries is unbalanced, which in a markdown table cell is a code span that runs
+into the next column. The rule now ends at the dict's closing brace; the value is the dict.
+
+Found by scanning every value in the 87-log corpus for characters that break a markdown
+table, which turned up exactly two: this one, and `kernel.ir_op.gelu_and_mul_sparse =
+triton|native`. The second is not a defect: `|` is how the log lists two candidate kernels,
+and `_md_cell` has escaped pipes since the first report, so it renders as `triton\|native`.
+
+The corpus invariant left behind is general: every `sampling.overridden` value in
+`tests/fixtures` must be a dict `ast.literal_eval` can read and must not contain the log's
+follow-up sentence. 201 tests.
+
 ## 0.4.91 — 2026-11-24
 
 The two numbers 0.4.90 added sit eleven seconds apart in a table: `shm.broadcast_stalls 49`
