@@ -832,8 +832,6 @@ prove, are in [writeups/audit-noise-real-logs.md](https://github.com/apex-mochen
   matching; one fold of the characters that have an ASCII twin is the whole fix.
 - When the log says `CUDA out of memory` on a card that looked free,
   [writeups/cuda-oom-holder.md](https://github.com/apex-mochen/servediff/blob/main/writeups/cuda-oom-holder.md)
-  [writeups/powershell-redirect-is-utf16.md](https://github.com/apex-mochen/servediff/blob/main/writeups/powershell-redirect-is-utf16.md)
-  — a log captured with PowerShell's `>` is UTF-16, and reads as nothing.
   reads the three numbers in that line as an occupancy report: the older wording names the process
   holding the card (94.41 of a 95.00 GiB card, 600.06 MiB left, 768 MiB asked), while the newer one
   reports *the allocator pool's* free memory (9.19 MiB) on a card with 78.46 GiB free — and only
@@ -843,6 +841,14 @@ prove, are in [writeups/audit-noise-real-logs.md](https://github.com/apex-mochen
   [writeups/ray-async-scheduling.md](https://github.com/apex-mochen/servediff/blob/main/writeups/ray-async-scheduling.md)
   shows the two-line warning pair, the `tp 16 > gpus 4` printed right beside it, and why
   `scheduler.async` and `scheduler.async_reason` have to be separate rows.
+- Why `show` took a minute on a 100 MB startup log, and what the fix actually was:
+  [writeups/stop-matching-every-rule.md](https://github.com/apex-mochen/servediff/blob/main/writeups/stop-matching-every-rule.md)
+  — 198 regexes per line, the two ideas that made it slower, the per-shape rule cache
+  that did, and the byte-for-byte comparison over 87 logs that caught the regression
+  hiding inside it.
+- A log captured with PowerShell's `>`, which writes UTF-16LE and so reads as mojibake
+  everywhere else:
+  [writeups/powershell-redirect-is-utf16.md](https://github.com/apex-mochen/servediff/blob/main/writeups/powershell-redirect-is-utf16.md)
 
 ## License
 
