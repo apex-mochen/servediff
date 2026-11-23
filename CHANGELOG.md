@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.4.72 — 2026-11-23
+
+`show` now says when the problem is cadence rather than configuration.
+
+A hang log answers `show` with a dozen ordinary startup facts — KV cache size, capture time,
+compile totals — and then repeats one watchdog line. That is the wrong answer to the question the
+run actually failed at, and nothing pointed at the command that reads it. Adding one line on
+**stderr** (so `servediff show log | grep` stays pipeable):
+
+```
+note: this log repeats one message 6 times at a 60.000 s cadence — a watchdog re-logging one
+wait, not 6 failures; `servediff repeats <log>` says when that wait began and whether anything
+printed inside it
+```
+
+A log that repeats nothing gets no pointer; a log with several regular groups names the most
+frequent one. Tests 169 → 170, one of them asserts the pointer is not on stdout.
+
+Also: PyPI's sidebar now links the notes site (`Notes = https://apex-mochen.github.io/servediff/`),
+so the install page and the nine articles are one click apart instead of two.
+
 ## 0.4.71 — 2026-11-23
 
 `servediff demo` now shows both claims, not just the first one.

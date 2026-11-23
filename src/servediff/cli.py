@@ -1352,6 +1352,27 @@ def _gate_corpus(args) -> int:
     return 1 if changed_logs else 0
 
 
+def _repeat_hint(text: str) -> str:
+    """A one-line pointer when the log's problem is cadence, not configuration.
+
+    A hang prints a dozen ordinary startup facts and then repeats one watchdog line: `show`
+    answers a question the user did not ask. Saying which command reads the cadence costs one
+    line on stderr, keeps stdout pipeable, and turns a dead end into the right command.
+    """
+    from servediff import repeats as repeatsmod
+
+    _, found = repeatsmod.groups(text, 2)
+    regular = [group for group in found
+               if group["regular"] and group["count"] >= 2 and group["median_gap_s"]]
+    if not regular:
+        return ""
+    top = max(regular, key=lambda group: group["count"])
+    return (f"note: this log repeats one message {top['count']} times at a "
+            f"{top['median_gap_s']:.3f} s cadence — a watchdog re-logging one wait, not "
+            f"{top['count']} failures; `servediff repeats <log>` says when that wait began and "
+            "whether anything printed inside it")
+
+
 def _no_facts_hint(text: str) -> str:
     """Why a paste produced nothing, said in terms of what the tool reads.
 
@@ -1858,12 +1879,12 @@ def _run(argv=None) -> int:
 
     if args.command == "show":
         try:
-            parsed = parse(_read_log(args.log))
+            text = _read_log(args.log)
+            parsed = parse(text)
         except InputError as exc:
             print(f"show: {exc}", file=sys.stderr)
             return 2
         if not parsed["facts"]:
-            text = _read_log(args.log)
             print(f"{_label(args.log)}: no vLLM or SGLang configuration lines recognised",
                   file=sys.stderr)
             hint = _no_facts_hint(text)
@@ -1886,6 +1907,9 @@ def _run(argv=None) -> int:
                 print()
                 for note in notes:
                     print(f"note: {note}")
+            hint = _repeat_hint(text)
+            if hint:
+                print(hint, file=sys.stderr)
         return 0
 
     if args.against is not None and args.candidate is not None:

@@ -2502,3 +2502,21 @@ def test_a_wait_that_began_when_a_kernel_began_compiling_is_said_in_one_line():
     assert "3x regular  22:02:40 -> 22:04:40" in out.stdout
     assert "began at 22:01:40" in out.stdout
     assert "0 other line(s) inside that span" in out.stdout
+
+
+def test_show_points_at_repeats_when_the_cadence_is_the_problem():
+    # A hang log answers `show` with a dozen normal startup facts; without a pointer the
+    # reader never runs the command that reads the cadence. The pointer goes to stderr so
+    # `servediff show log | grep` stays pipeable.
+    out = subprocess.run([sys.executable, "-m", "servediff", "show",
+                          str(FIX / "vllm-forum-2026-07" / "a2-stuck-on-shm-broadcast.log")],
+                         capture_output=True, text=True)
+    assert out.returncode == 0
+    assert "servediff repeats <log>" in out.stderr
+    assert "6 times at a 60.000 s cadence" in out.stderr
+    assert "servediff repeats <log>" not in out.stdout
+    # A log that repeats nothing gets no pointer.
+    quiet = subprocess.run([sys.executable, "-m", "servediff", "show",
+                            str(FIX / "vllm-47047-v0.23-marlin.log")],
+                           capture_output=True, text=True)
+    assert "servediff repeats <log>" not in quiet.stderr
