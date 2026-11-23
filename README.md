@@ -746,6 +746,14 @@ N stalls: 16 lines, one 959 s wait. `burst` is a retry loop, with millisecond ga
 usually one much longer gap between bursts. `untimed` is a shape that carries no clock,
 so only its count is reported.
 
+A third reading exists for one file that holds two runs. Two runs pasted together repeat the
+same warnings minutes apart, and the span then measures the gap between the runs, not how
+long anything lasted: those groups print `split` with the number of runs and the longest
+single run instead of a file-wide span, e.g. `6x split ... span 3333 s in 3 runs, longest
+180 s` for the broadcast warning in a failed-then-working paste. A gap counts as a boundary
+only when it is both ≥300 s and ≥5× the median, so ordinary watchdogs keep their `regular`
+reading.
+
 The two readings decide different fixes. A warning that repeats every 60 s points at one
 blocked reader holding a ring buffer; a burst of OOM lines points at one allocator budget
 being hit repeatedly, and the free memory elsewhere in the log decides which. The
@@ -760,7 +768,7 @@ their lines and a captured log can carry them out of order.
 
 `--min N` hides shapes below the bar, `--top N` keeps the most frequent, `--markdown`
 wraps the report in a fence for an issue, and `--json` emits
-`{log, lines, repeated: [{count, first, last, span_s, median_gap_s, max_gap_s, regular}]}`
+`{log, lines, repeated: [{count, first, last, span_s, median_gap_s, max_gap_s, regular, segments, longest_segment_s}]}`
 so a pipeline does not parse the text. Exit codes: `0` reported — a log that repeats
 nothing is a valid answer; `2` unreadable path, or more than one `-`.
 

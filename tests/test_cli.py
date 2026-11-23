@@ -2284,6 +2284,28 @@ def test_repeats_reads_a_fixed_gap_as_one_wait(tmp_path, capsys):
     assert "one wait being re-logged" in out
 
 
+def test_repeats_does_not_span_two_runs_in_one_file(tmp_path, capsys):
+    # The failing run and the working run pasted into one file: the same warning appears in
+    # both, minutes apart. Reporting "span 2400 s" claims one run lasted forty minutes, and
+    # the watchdog reading would have called it one continuous wait re-logged.
+    body = ("(EngineCore pid=226) INFO 01-21 {clock} shm_broadcast.py:542] {wait}")
+    rows = [body.format(clock=clock, wait=WAIT) for clock in
+            ("12:02:47", "12:03:47", "12:04:47", "12:45:20", "12:46:20", "12:47:20")]
+    log = _write_log(tmp_path, rows)
+    assert servediff.main(["repeats", str(log)]) == 0
+    out = capsys.readouterr().out
+    assert "6x split" in out
+    assert "in 2 runs, longest 120 s" in out
+    # The sentence that would have called it a single wait is not printed for a split group.
+    assert "one wait being re-logged" not in out
+    capsys.readouterr()
+    assert servediff.main(["repeats", str(log), "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)[0]
+    group = payload["repeated"][0]
+    assert group["segments"] == 2 and group["longest_segment_s"] == 120
+    assert group["span_s"] == 2673
+
+
 def test_repeats_reads_a_tight_burst_as_retries(tmp_path, capsys):
     # An allocator retrying an allocation prints the same line every few milliseconds:
     # regular it is not, and the median gap says so.

@@ -117,6 +117,8 @@ Ctrl-C 会停掉 server、保留日志、退出码 `130`；server 自己结束�
 
 把「崩掉的那次」和「能起来的那次」粘进同一个文件，会让日志里只有一条 `ready`，而等待行分布在它两侧。`show` 仍然数全部区间，但会说明它们各自属于哪一侧：例如「6 interval(s) with no free broadcast block, 360 s in total; 5 of them came after `startup` reported ready, so they belong to another run or a shutdown in the same file, not to this startup」——没有这句拆分，那段说明读起来就像一次并不存在的 55 分钟启动。
 
+同一份文件里放了两次 run 时还有第三种读法：崩掉的那次和能起来的那次相隔几分钟重复同样的告警，此时 span 量的是两次 run 之间的间隔，而不是任何东西持续了多久。这类分组会打成 `split`，给出 run 的段数和单段最长跨度（例如上面那组广播等待是 `6x split ... span 3333 s in 3 runs, longest 180 s`）。只有当间隔同时满足 ≥300 s 且 ≥5 倍中位间隔时才切成一段，普通看门狗仍然保持 `regular`。
+
 ## 命令行说的，和实际跑的不是一回事
 
 最不让人安心、也最值得有的一条事实是 `frontend.ignored_arg`：server 接受了这个 flag，然后把它丢了。`vllm#58580` 里那行命令带着 `--enable-auto-tool-choice` 和 `--structured-outputs-config`，Rust frontend 却打出 `argument 'enable_auto_tool_choice' currently has no effect in Rust frontend, ignoring` ——命令行读起来像配好了，实际上没有。`servediff` 把它记成一条事实，所以「两次运行只差哪些 flag 活下来」是一行，而不是要你自己在 80 行里翻出来；自 0.4.56 起它还在表下面把那句后果直接说出来，因为十八行里的一行仍可能被读成杂项：

@@ -39,6 +39,13 @@ _REGULAR_FLOOR = 0.02  # seconds; comparing 60.0 with 60.0 should not have to be
 # magnitude does. Below this, an even cadence is a retry burst and gets the burst reading.
 _REGULAR_MIN_GAP = 1.0
 
+# Two runs of the same server pasted into one file print the same warnings twice, minutes
+# apart. The median gap between the copies still says "watchdog", but the span says
+# "55 minutes", and nothing in the log lasted 55 minutes. A gap this large, and this much
+# larger than the cadence, is a boundary between runs, not a tick.
+_SEGMENT_MIN_GAP = 300.0
+_SEGMENT_RATIO = 5.0
+
 # A tqdm progress bar has no newline of its own: it rewrites the same terminal row with \r and
 # a captured log keeps that, so the next process's line lands on the same physical line —
 # `... 100%|█████| 51/51 [...] (EngineCore pid=260) INFO 08-31 11:37:30 shm_broadcast.py:801]`.
@@ -164,6 +171,16 @@ def _scan(text: str, min_count: int = 2) -> tuple[int, dict, list[dict]]:
             floor = max(median * _REGULAR_TOLERANCE, _REGULAR_FLOOR)
             close = sum(1 for gap in gaps if abs(gap - median) <= floor)
             regular = close / len(gaps) >= _REGULAR_SHARE
+        # Where a run boundary falls: the copies on each side are still the same line, but
+        # their spans are about different runs and must not be added together.
+        cut = max(_SEGMENT_MIN_GAP, (median or 0.0) * _SEGMENT_RATIO)
+        segments: list[list[float]] = []
+        for clock in times:
+            if segments and clock - segments[-1][-1] < cut:
+                segments[-1].append(clock)
+            else:
+                segments.append([clock])
+        longest = max((seg[-1] - seg[0] for seg in segments), default=0.0)
         found.append({
             "message": key,
             "sample": bucket["samples"][0] if bucket["samples"] else key,
@@ -175,6 +192,8 @@ def _scan(text: str, min_count: int = 2) -> tuple[int, dict, list[dict]]:
             "max_gap_s": max(gaps) if gaps else None,
             "gaps": len(gaps),
             "regular": regular,
+            "segments": len(segments),
+            "longest_segment_s": longest,
         })
     found.sort(key=lambda group: (-group["count"], group["message"]))
     return lines, buckets, found
@@ -213,7 +232,12 @@ def report(path: Path, text: str, min_count: int = 2, top: int = 0) -> tuple[int
         if group["first"] is not None:
             where = (f"{_clock_text(group['first'])} -> {_clock_text(group['last'])}"
                      f"  span {_span(group['span_s'])}")
-            cadence = "regular" if group["regular"] else "burst"
+            if group.get("segments", 1) > 1:
+                # The span crosses a gap between runs, so it is not how long anything lasted.
+                where += (f" in {group['segments']} runs, longest {_span(group['longest_segment_s'])}")
+                cadence = "split"
+            else:
+                cadence = "regular" if group["regular"] else "burst"
             if group["median_gap_s"] is None:
                 # Count says 2+ but only one of the lines carried a clock, or the two
                 # carried the same one. There is no gap to read; saying so is the answer.
@@ -226,14 +250,14 @@ def report(path: Path, text: str, min_count: int = 2, top: int = 0) -> tuple[int
         out.append(f"  {group['count']:4d}x {cadence:8s} {where}")
         out.append(f"        {gap}")
         out.append(f"        {group['sample'][:150]}")
-        if group["regular"] and group["first"] is not None:
+        if group["regular"] and group["first"] is not None and group.get("segments", 1) <= 1:
             period = _WAIT_PERIOD.search(group["sample"])
             if period:
                 seconds = int(period.group(1))
                 began = (group["first"] - seconds) % 86400
                 out.append(f"        this line is the end of a {seconds} s wait: the first one"
                            f" began at {_clock_text(began)}")
-        if group["regular"] and group["last"] is not None:
+        if group["regular"] and group["last"] is not None and group.get("segments", 1) <= 1:
             inside, kinds = _inside(buckets, group)
             if inside:
                 out.append(f"        {inside:4d} other line(s) inside that span,"

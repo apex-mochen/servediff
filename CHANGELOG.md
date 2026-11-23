@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.4.100
+
+One file holding two runs made `repeats` report a span that measured the gap between them.
+
+The question: when a failing run and a working run are pasted into one file, does the span of
+a repeated shape still mean "how long this lasted"? On `nemotron3-nano-v100-tp4.log` it did
+not: six broadcast warnings spread over three runs printed `6x burst 12:02:47 -> 12:58:20
+span 3333 s`, and nine other shapes printed spans of 3000 s or more for bursts that lasted a
+second — the number was the distance between runs, not a duration.
+
+A gap now counts as a run boundary when it is both at least 300 s and at least five times the
+group's median gap, and such groups print `split` with the run count and the longest single
+run:
+
+```text
+6x split    12:02:47 -> 12:58:20  span 3333 s in 3 runs, longest 180 s
+    gaps 60.000 s median, 1626.000 s max
+```
+
+The watchdog reading is unchanged where it was true: the 49-stall CPU log from vllm#67598
+still prints `49x regular ... span 2916 s`, and `--json` keeps its keys, adding `segments` and
+`longest_segment_s`.
+
+Corpus check: of the 71 logs, exactly one contains segmented groups (the two-run paste, 9
+shapes there), so the 300 s / 5x rule does not fire on ordinary watchdogs. Regression test
+builds a two-run file by hand and asserts `segments == 2`, `longest_segment_s == 120`, the
+`in 2 runs, longest 120 s` wording, and that the "one wait being re-logged" footer is not
+printed for a split group.
+
 ## 0.4.99
 
 `show` said "this startup waited 360 s before `startup` reported ready" about waits that were
