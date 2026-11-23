@@ -2321,24 +2321,50 @@ def _run(argv=None) -> int:
                 return 2
         labels = ["stdin" if str(name) == "-" else Path(name).name for name in args.logs]
         rows = series(parsed_list, raw_args=args.raw_args)
-        differing = [row for row in rows if row["status"] == "changed"]
+        # `diff` and `--against` drop errors logged after "ready" (a shutdown traceback says
+        # nothing about how the server started), and `series` was counting them as the one
+        # thing that differs among otherwise identical runs. Same rule here, same escape
+        # hatch: --all is the switch that shows everything, and the count is reported so a
+        # hidden row is never a silent one.
+        post_ready = [row for row in rows if row["key"].startswith("after_ready.")]
+        # The comparable rows decide the count and the exit code with or without --all, so a
+        # gate that adds --all for detail cannot flip its own verdict by listing more.
+        comparable = [row for row in rows if not row["key"].startswith("after_ready.")]
+        differing = [row for row in comparable if row["status"] == "changed"]
         shown = rows if args.all else differing
         why = _why_rows(shown) if getattr(args, "why", False) else ({}, 0)
         if args.json:
-            payload = {"logs": labels, "differences": len(differing), "rows": shown}
+            payload = {"logs": labels, "differences": len(differing), "rows": shown,
+                       "not_compared_after_ready": len(post_ready)}
             if why[0]:
                 payload["why"] = why[0]
                 payload["why_omitted"] = why[1]
             print(json.dumps(payload, indent=2, ensure_ascii=False))
         elif args.markdown:
             print(_render_markdown_series(labels=labels, rows=shown, differing=len(differing),
-                                          identical=len(rows) - len(differing),
+                                          identical=len(comparable) - len(differing),
                                           why=why[0], why_omitted=why[1]))
+            if post_ready:
+                print(f"\n{len(post_ready)} error(s) logged after the server reported ready"
+                      f" {'are listed above but ' if args.all else 'were not '}not counted as a"
+                      " difference: the run had already started, so they say nothing about the"
+                      " configuration." if args.all else
+                      f"\n{len(post_ready)} error(s) logged after the server reported ready were"
+                      " not compared: the run had already started, so they say nothing about the"
+                      " configuration (--all shows them).")
         else:
             print(_render_text_series(labels, shown))
             print(f"\n{len(differing)} fact(s) differ across {len(labels)} logs;"
-                  f" {len(rows) - len(differing)} identical. <absent> means the log did not print it,"
+                  f" {len(comparable) - len(differing)} identical. <absent> means the log did not print it,"
                   " not that it was off.")
+            if post_ready and not args.all:
+                print(f"{len(post_ready)} error(s) logged after the server reported ready were"
+                      " not compared: the run had already started, so they say nothing about the"
+                      " configuration (--all shows them).")
+            elif post_ready:
+                print(f"{len(post_ready)} error(s) logged after the server reported ready are"
+                      " listed above but not counted as a difference: the run had already"
+                      " started, so they say nothing about the configuration.")
             if why[0]:
                 _print_why(*why)
         return 1 if differing else 0

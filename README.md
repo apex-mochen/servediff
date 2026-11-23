@@ -690,6 +690,12 @@ servediff series v0.23.log v0.26.log v0.26-flag.log --markdown
 `--all` adds the rows that hold the same value across every log; exit codes match
 `diff` (`0` identical, `1` differences, `2` nothing recognised).
 
+The same rule `diff` uses for `after_ready.*` applies here: a traceback logged after the
+server reported `ready` is a shutdown problem, not a configuration difference, so it is not
+counted. Three runs of one config with one trailing shutdown error report **0 fact(s)
+differ**, and the count of rows left out is printed under the summary. `--all` lists those
+rows without letting them change the count or the exit code.
+
 ### Capturing a run in one step
 
 ```bash

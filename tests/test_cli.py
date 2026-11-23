@@ -473,6 +473,37 @@ def test_errors_after_ready_are_not_startup_errors():
     assert f["after_ready.error"].value.startswith("RuntimeError: reentrant call")
 
 
+def test_series_does_not_count_errors_after_ready(tmp_path, capsys):
+    # Three runs of one config: two started, the third logged a shutdown traceback. `diff`
+    # already refuses to let that row stand in for a configuration change; `series` was
+    # reporting the same three logs as "1 fact(s) differ", so the same evidence read
+    # differently depending on which table it was printed in.
+    base = FALLBACK_STARTUP
+    a, b, c = tmp_path / "a.log", tmp_path / "b.log", tmp_path / "c.log"
+    for path in (a, b):
+        path.write_text(base)
+    c.write_text(base + "RuntimeError: reentrant call inside <_io.BufferedWriter>\n")
+    assert servediff.main(["series", str(a), str(b), str(c)]) == 0
+    out = capsys.readouterr().out
+    assert "0 fact(s) differ across 3 logs" in out, out
+    assert "logged after the server reported ready" in out
+    assert "after_ready" not in out
+    # --all is the switch that shows everything, so the row is reachable.
+    # --all lists the row for detail, but must not flip the verdict: the counted differences
+    # stay the comparable ones, so a gate that adds --all cannot change its own exit code.
+    capsys.readouterr()
+    assert servediff.main(["series", str(a), str(b), str(c), "--all"]) == 0
+    out = capsys.readouterr().out
+    assert "after_ready.error" in out
+    assert "0 fact(s) differ across 3 logs" in out
+    assert "are listed above but not counted" in out
+    # The JSON says how many rows it withheld instead of leaving the count implicit.
+    capsys.readouterr()
+    assert servediff.main(["series", str(a), str(b), str(c), "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["differences"] == 0 and payload["not_compared_after_ready"] == 1
+
+
 def test_failed_side_is_warned_about(tmp_path, capsys):
     a, b = tmp_path / "a.log", tmp_path / "b.log"
     a.write_text(FAILED_STARTUP)

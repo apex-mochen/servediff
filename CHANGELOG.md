@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.4.98
+
+`series` counted a shutdown traceback as the one thing that differs between identical runs.
+
+The question: three runs of the same configuration, one of which logged a traceback after
+reporting `ready`. `diff` of any pair says nothing changed — it drops `after_ready.*`
+because a post-ready error says nothing about how the server started. `series` of the three
+said **1 fact(s) differ** and exited `1`, and there was no flag to stop it: rows that came
+after `ready` were always counted, while `--all` meant something else in this command ("also
+print identical rows").
+
+Now `series` applies the same rule as `diff`: the comparable rows decide the count and the
+exit code, `after_ready.*` rows are left out, and the number left out is printed under the
+summary instead of vanishing. `--all` lists them for detail without changing either the
+count or the verdict, so a gate that adds `--all` cannot flip its own result. `--json`
+carries `not_compared_after_ready`.
+
+Checked on the fixture corpus: series keys now equal the union of pairwise `diff` keys
+across 8 triplets (0 violations, previously 1), and over 12 triplets the exit code matches
+`differences > 0` in text, markdown, `--json` and `--all` forms. The regression test builds
+three logs by hand, asserts `0 fact(s) differ` with the count printed, and that `--all`
+shows the row while still exiting `0`.
+
 ## 0.4.97
 
 `--json` had two counts with one meaning each, and the meaning depended on a flag.
