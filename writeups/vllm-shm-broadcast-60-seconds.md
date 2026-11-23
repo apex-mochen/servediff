@@ -60,6 +60,38 @@ $ servediff repeats repro.log --top 3
   anything that could have blocked a reader.
 ```
 
+### The timestamp is the end of the wait, not its start
+
+Every one of these lines is printed *after* the watchdog has already been waiting for the
+interval it names. So `09:03:37` means the wait began at `09:02:37`, and comparing that with
+anything else in the log is the check that actually separates the readings. `servediff repeats`
+does the subtraction — it reads the period out of the message itself ("found in 60 seconds"):
+
+```
+6x regular  09:03:37 -> 09:08:37  span 300 s
+   gap 60.000 s median, 60.000 s max
+   No available shared memory broadcast block found in 60 seconds …
+   this line is the end of a 60 s wait: the first one began at 09:02:37
+     0 other line(s) inside that span: nothing moved during the wait
+```
+
+Two numbers, one diagnosis each:
+
+| log | wait began at | what printed at that second | reading |
+|---|---|---|---|
+| A2, TP2 (`vllm-forum-2026-07`) | `09:02:37` | nothing — graph capture was still running (it ended `09:02:40`) | the wait outlived capture by 5 min with nothing inside: a reader stopped draining |
+| RTX 6000 Ada, TP2 (`vllm#45198`) | `22:01:40` | `Triton kernel JIT compilation during inference: _zero_kv_blocks_kernel` | the wait began the same second a kernel started compiling: this one *is* compilation |
+
+`vllm#45198` is the case the guides are right about — and it still is not a `/dev/shm` problem.
+The reporter `--ipc=host` with `/dev/shm` bind-mounted, and his own workaround was
+`--disable-custom-all-reduce`, not a bigger shm. What made it look like a shm hang was that the
+only lines after the warning are the waits, 60 s apart, with nothing in between.
+
+`0 other line(s) inside that span` is not decoration: it is the difference between "compilation
+was still working through the window" (something would be printing) and "nothing at all was
+working" (a stuck reader). Both cases in the table read zero — the thing that separates them is
+*what preceded the wait*, which is the line `repeats` now puts under the wait.
+
 (This demo runs on a 56-line synthetic log carrying the two shapes; on the real log below the same
 two shapes read 2.318 s and 959 s.)
 

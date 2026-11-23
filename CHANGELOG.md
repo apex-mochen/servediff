@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.4.69 — 2026-11-23
+
+A wait line marks the *end* of the wait, and `repeats` now does that subtraction.
+
+**The timestamp arithmetic, in the tool.** `No available shared memory broadcast block found in
+60 seconds` is printed after the watchdog has already waited 60 s, so `09:03:37` means the wait
+began at `09:02:37`. `repeats` reads the period out of the message and prints where the wait
+actually started, then whether anything else was printed inside the window:
+
+```
+6x regular  09:03:37 -> 09:08:37  span 300 s
+   this line is the end of a 60 s wait: the first one began at 09:02:37
+     0 other line(s) inside that span: nothing moved during the wait
+```
+
+That is the check that separates the three published readings by arithmetic instead of opinion. On
+a TP2 A2 box the wait begins 3 s before graph capture ends and then outlives it by five minutes
+with nothing inside. On vllm#45198 it begins at `22:01:40` — the same second
+`Triton kernel JIT compilation during inference: _zero_kv_blocks_kernel` is printed. One is a
+stuck reader, the other *is* compilation; both look identical without the subtraction.
+
+- new fact `kernel.jit_during_inference` — a Triton kernel that compiled during inference rather
+  than warmup, which is what the request actually paid for (vllm#45198)
+- `repeats` also reports how many other lines printed inside a regular wait's span, and how many
+  distinct shapes they were: "something was moving" vs "nothing moved during the wait"
+- new fixture `vllm-issue-2026-06/qwen3.5-tp2-jit-then-wait.log` (issue 45198), four lines,
+  verbatim with the reporter's own instrumentation left out, PROVENANCE says why
+- writeup `vllm-shm-broadcast-60-seconds.md`: new section "The timestamp is the end of the wait,
+  not its start", with both cases side by side
+
+Fact keys 261 → 262; tests 168 → 169; corpus 86 → 87 logs.
+
 ## 0.4.68 — 2026-11-23
 
 The "显存足够却启动不了" thread answers itself once the holder is read, and the six-line

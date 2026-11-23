@@ -167,6 +167,7 @@ kernel.flashinfer_autotune
 kernel.ir_op.fused_add_rms_norm
 kernel.ir_op.gelu_and_mul_sparse
 kernel.ir_op.rms_norm
+kernel.jit_during_inference
 kv_cache.attention_block_size
 kv_cache.cpu_node
 kv_cache.dtype

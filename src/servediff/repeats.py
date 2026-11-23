@@ -43,6 +43,11 @@ _REGULAR_MIN_GAP = 1.0
 # `... 100%|█████| 51/51 [...] (EngineCore pid=260) INFO 08-31 11:37:30 shm_broadcast.py:801]`.
 # Splitting there is what keeps that warning in its own shape instead of hiding it behind a
 # progress bar's digits.
+# The watchdog names its own period in the message: "found in 60 seconds". The timestamp on
+# that line is the moment the wait *ended*, not the moment it began, which is why a run looks
+# like it started waiting three seconds before its own graph capture finished.
+_WAIT_PERIOD = re.compile(r"found in (\d+) seconds?")
+
 _EMBEDDED = re.compile(r"(?=\([^)]*pid=\d+\)\s+(?:DEBUG|INFO|WARNING|ERROR|CRITICAL|VERBOSE)\b)")
 
 
@@ -72,6 +77,28 @@ def _clock_text(seconds: float | None) -> str:
     frac = seconds - whole
     text = f"{whole // 3600:02d}:{(whole % 3600) // 60:02d}:{whole % 60:02d}"
     return f"{text}.{int(round(frac * 1000)):03d}" if frac else text
+
+
+def _timed(text: str) -> list[tuple[float, str, str]]:
+    """(clock, shape, sample) for every message line that carries a clock.
+
+    Used to answer the one question the cadence cannot: was anything else printed *during*
+    the wait. A run compiling Triton kernels keeps writing inside the window; a run whose
+    reader has stopped writes nothing at all.
+    """
+    out = []
+    for raw in text.splitlines():
+        for part in _EMBEDDED.split(raw):
+            if not part.strip():
+                continue
+            body = message(part)
+            if not body:
+                continue
+            clock = _clock(part)
+            if clock is None:
+                continue
+            out.append((clock, shape(body), body))
+    return out
 
 
 def groups(text: str, min_count: int = 2) -> tuple[int, list[dict]]:
@@ -137,6 +164,7 @@ def report(path: Path, text: str, min_count: int = 2, top: int = 0) -> tuple[int
         out.append(f"  nothing repeats {min_count} or more times.")
     if top and len(found) > top:
         out.append(f"  showing the {top} most frequent; {len(found) - top} more below the cut.")
+    timed = _timed(text) if any(group["regular"] for group in shown) else []
     for group in shown:
         if group["first"] is not None:
             where = (f"{_clock_text(group['first'])} -> {_clock_text(group['last'])}"
@@ -149,6 +177,23 @@ def report(path: Path, text: str, min_count: int = 2, top: int = 0) -> tuple[int
         out.append(f"  {group['count']:4d}x {cadence:8s} {where}")
         out.append(f"        {gap}")
         out.append(f"        {group['sample'][:150]}")
+        if group["regular"] and group["first"] is not None:
+            period = _WAIT_PERIOD.search(group["sample"])
+            if period:
+                seconds = int(period.group(1))
+                began = (group["first"] - seconds) % 86400
+                out.append(f"        this line is the end of a {seconds} s wait: the first one"
+                           f" began at {_clock_text(began)}")
+        if group["regular"] and group["last"] is not None:
+            inside = [item for item in timed
+                      if group["first"] < item[0] < group["last"] and item[1] != group["message"]]
+            if inside:
+                kinds = len({item[1] for item in inside})
+                out.append(f"        {len(inside):4d} other line(s) inside that span,"
+                           f" {kinds} shape(s): something was moving")
+            else:
+                out.append("          0 other line(s) inside that span:"
+                           " nothing moved during the wait")
     if any(group["regular"] for group in found):
         out.append("")
         out.append("  A regular gap is one wait being re-logged, not N separate failures:"

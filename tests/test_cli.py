@@ -2453,6 +2453,10 @@ def test_the_sixty_second_wait_is_one_wait_relogged_on_two_a2_cards():
                           "--top", "3"], capture_output=True, text=True)
     assert "6x regular" in out.stdout
     assert "60.000 s median" in out.stdout
+    # The timestamp on a wait line is the end of the wait, so the first one began at 09:02:37 —
+    # 3 s before a capture that finished at 09:02:40 started waiting on nothing.
+    assert "began at 09:02:37" in out.stdout
+    assert "0 other line(s) inside that span" in out.stdout
 
 
 def test_audit_of_a_corpus_directory_reaches_the_dated_subdirectories(tmp_path):
@@ -2477,3 +2481,18 @@ def test_the_whole_fixture_corpus_is_audited_not_a_slice_of_it():
                           str(FIX)], capture_output=True, text=True)
     assert f"{len(logs)} log(s):" in out.stdout
     assert "0 with shapes worth a look" in out.stdout
+
+
+
+def test_a_wait_that_began_when_a_kernel_began_compiling_is_said_in_one_line():
+    # vllm#45198: the JIT warning is at 22:01:40, the first wait line at 22:02:40. A wait line
+    # is the end of a 60 s wait, so the wait began at the same second the kernel started
+    # compiling — that is the whole diagnosis, and it is arithmetic on two timestamps.
+    f = facts("vllm-issue-2026-06/qwen3.5-tp2-jit-then-wait.log")
+    assert f["kernel.jit_during_inference"].value == "_zero_kv_blocks_kernel"
+    out = subprocess.run([sys.executable, "-m", "servediff", "repeats",
+                          str(FIX / "vllm-issue-2026-06" / "qwen3.5-tp2-jit-then-wait.log")],
+                         capture_output=True, text=True)
+    assert "3x regular  22:02:40 -> 22:04:40" in out.stdout
+    assert "began at 22:01:40" in out.stdout
+    assert "0 other line(s) inside that span" in out.stdout

@@ -690,6 +690,12 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
                 # The pid is left out on purpose: it differs every run and would show up in
                 # every diff. The size the other process holds is the number that matters.
                 ("torch.oom_holder_gib", float(m[7]))]),
+    # A Triton kernel compiled *during inference* rather than during warmup: the request pays
+    # the compile, and the 60-second broadcast wait that follows starts at that same second.
+    # vllm#45198 is this shape and the reporter's own fix was `--disable-custom-all-reduce`.
+    (re.compile(r"\[jit_monitor\.py:\d+\] Triton kernel JIT compilation during inference: "
+                r"(\w+)"),
+     lambda m: [("kernel.jit_during_inference", m[1])]),
     # Exception classes arrive fully qualified in some versions
     # (`vllm.v1.engine.exceptions.EngineDeadError: …`), so the type may be mid-line.
     (re.compile(r"((?:RuntimeError|ValueError|IndexError|torch\.OutOfMemoryError|AssertionError|AttributeError|KeyError|TypeError|EngineDeadError): .+)$"),
