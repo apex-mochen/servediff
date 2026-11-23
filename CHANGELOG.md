@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.4.99
+
+`show` said "this startup waited 360 s before `startup` reported ready" about waits that were
+logged after ready.
+
+The question: a file with two runs pasted together — the one that failed and the one that
+worked — how many of its broadcast waits belong to the startup the note describes? One of
+the 71 corpus logs answered "not all of them": `nemotron3-nano-v100-tp4.log` holds a `ready`
+line at line 111 and waits at lines 112, 214, 215, 216 and 217. The note multiplied 6
+intervals × 60 s into "this startup waited 360 s (6 min) ... before `startup` reported
+ready", which is a claim about the second run's shutdown attributed to the first run's
+startup.
+
+Now `parse()` records where each wait sits relative to the first `ready` line
+(`stall_split`), and the note branches on it:
+
+- all waits before ready: unchanged — "this startup waited N s (M min) ... before
+  `startup` reported ready".
+- some waits after ready: "6 interval(s) with no free broadcast block, 360 s (6 min) in
+  total; 5 of them came after `startup` reported ready, so they belong to another run or a
+  shutdown in the same file, not to this startup".
+
+The fact rows are untouched: `shm.broadcast_stalls` and `shm.broadcast_wait_s` still
+describe the whole file, and the new sentence says so instead of implying a single startup.
+
+Corpus check: 75 broadcast-wait lines across 71 logs, exactly one log has waits on both
+sides of a ready line, and every log's note now matches its own split (no log prints both
+forms). The regression test builds the two-run file by hand, asserts
+`stall_split == {"total": 3, "after_ready": 2}`, asserts the new sentence and the absence of
+"this startup waited", and asserts a single-run file still gets the old sentence.
+
 ## 0.4.98
 
 `series` counted a shutdown traceback as the one thing that differs between identical runs.

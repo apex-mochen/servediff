@@ -1097,6 +1097,7 @@ def parse(text: str) -> dict:
         match = _SHM_STALL.search(line)
         if match:
             stalls.append((int(match[1]), lineno, line))
+    stall_split = {"total": len(stalls), "after_ready": 0}
     if stalls:
         # A startup that prints this is not failed, it is waiting: one line per interval the
         # engine found no free block, and the seconds in each line are that interval. Forty-
@@ -1106,6 +1107,16 @@ def parse(text: str) -> dict:
             len(stalls), stalls[0][1], stalls[0][2])
         facts.setdefault("shm.broadcast_wait_s", Fact()).add(
             sum(seconds for seconds, _, _ in stalls), stalls[0][1], stalls[0][2])
+        # Where these waits sit relative to "ready" decides what the sum can be claimed to
+        # measure. A file with two runs pasted together (the failing one, then the working
+        # one) has waits on either side of a single ready line, and the note under `show`
+        # used to attribute every one of them to "this startup".
+        ready = facts.get("startup")
+        ready_line = None
+        if ready is not None and "ready" in ready.values and ready.evidence:
+            ready_line = ready.evidence[0][0]
+        after_ready = sum(1 for _, lineno, _ in stalls if ready_line and lineno > ready_line)
+        stall_split = {"total": len(stalls), "after_ready": after_ready}
     if staging:
         # One line says one buffer; the question is how many, and how much of the card they
         # take together. Counted here because `Fact.add` collapses identical values on purpose.
@@ -1144,7 +1155,8 @@ def parse(text: str) -> dict:
             if isinstance(value, list) and len(value) == 1:
                 value = value[0]
             put(f"arg.{name}", value, 0, f"{'non-default args' if engine == 'vllm' else 'server_args'}[{key!r}]")
-    return {"engine": engine, "facts": facts, "args": args}
+    return {"engine": engine, "facts": facts, "args": args,
+            "stall_split": stall_split}
 
 
 def _is_number(value) -> bool:
@@ -1339,11 +1351,23 @@ def stall_notes(parsed: dict) -> list[str]:
     if seconds <= 0 or count <= 0:
         return []
     outcome = parsed["facts"].get("startup")
-    state = f" before `startup` reported {outcome.values[0]}" if outcome else ""
     if seconds >= 60:
         human = f"{seconds // 60} min" + (f" {seconds % 60} s" if seconds % 60 else "")
     else:
         human = f"{seconds} s"
+    split = parsed.get("stall_split") or {}
+    after_ready = int(split.get("after_ready") or 0)
+    if after_ready:
+        # Every one of these waits belonged to "this startup" only if the file holds one
+        # run. When a failing run and a working one are pasted together, the later run's
+        # waits sit after the earlier run's ready line, and claiming them for the startup
+        # that printed line 111 is a statement about a run the reader cannot see.
+        return [f"{count} interval(s) with no free broadcast block, {seconds} s ({human}) in"
+                f" total; {after_ready} of them came after `startup` reported"
+                f" {outcome.values[0] if outcome else 'ready'}, so they belong to another run"
+                " or a shutdown in the same file, not to this startup; the sum is a floor,"
+                " the first wait began before line 1"]
+    state = f" before `startup` reported {outcome.values[0]}" if outcome else ""
     return [f"this startup waited {seconds} s ({human}) for a free broadcast block, across {count}"
             f" interval(s){state}; the sum is a floor, the first wait began before line 1"]
 

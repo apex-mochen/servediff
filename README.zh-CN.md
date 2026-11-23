@@ -115,6 +115,8 @@ Ctrl-C 会停掉 server、保留日志、退出码 `130`；server 自己结束�
 
 最常见的真实场景是「一次崩了、一次同样的参数能起来」。崩掉的那份日志提前结束，之后每条 fact 在它那侧都是 `<absent>`——0.28.0 对 0.30.0 这一对里 53 行差异有 50 行都是这一类，正好把解释结果的那几行埋掉。`servediff diff a.log b.log --skip-absent` 只保留两份日志都打印过的事实，也就是同一条代码路径上真正变了的东西，并明确报出它隐藏了多少行，而不是把它们悄悄算成「相同」（真实的 0.28/0.30 一对：53 差异 → 3 行 + 「50 行被隐藏」）。退出码仍是 `1`，`--json` 里三个数字永远对得上：`differences`（所有不相同的行）、`compared_both_sides`（**两边都打印过且确实不同**的行）、`hidden_absent`（其余，即一边从没打印过的那行）；加不加 `--skip-absent` 这三个数都一样，变的只是 `rows` 数组，所以脚本不会把更短的表当成更干净的结果。
 
+把「崩掉的那次」和「能起来的那次」粘进同一个文件，会让日志里只有一条 `ready`，而等待行分布在它两侧。`show` 仍然数全部区间，但会说明它们各自属于哪一侧：例如「6 interval(s) with no free broadcast block, 360 s in total; 5 of them came after `startup` reported ready, so they belong to another run or a shutdown in the same file, not to this startup」——没有这句拆分，那段说明读起来就像一次并不存在的 55 分钟启动。
+
 ## 命令行说的，和实际跑的不是一回事
 
 最不让人安心、也最值得有的一条事实是 `frontend.ignored_arg`：server 接受了这个 flag，然后把它丢了。`vllm#58580` 里那行命令带着 `--enable-auto-tool-choice` 和 `--structured-outputs-config`，Rust frontend 却打出 `argument 'enable_auto_tool_choice' currently has no effect in Rust frontend, ignoring` ——命令行读起来像配好了，实际上没有。`servediff` 把它记成一条事实，所以「两次运行只差哪些 flag 活下来」是一行，而不是要你自己在 80 行里翻出来；自 0.4.56 起它还在表下面把那句后果直接说出来，因为十八行里的一行仍可能被读成杂项：

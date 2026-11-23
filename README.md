@@ -570,6 +570,13 @@ One log can also hold said-and-done failures that look like many. The
 counts them by cadence instead: 39 allocator OOM lines turn out to be two retry bursts inside
 2.3 s, and 16 broadcast-wait lines turn out to be one wait of 959 s re-logged every minute.
 
+Pasting "the run that failed and the run that worked" into one file gives one `ready` line
+and waits on both sides of it. `show` counts every interval but says which side they came
+from — e.g. *6 interval(s) with no free broadcast block, 360 s in total; 5 of them came
+after `startup` reported ready, so they belong to another run or a shutdown in the same
+file, not to this startup*. Without that split, the note reads as one 55-minute startup that
+never happened.
+
 ## Dependency versions: `servediff env`
 
 Logs do not print torch / triton / flashinfer versions, and upgrades of those change

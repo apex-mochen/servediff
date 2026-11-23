@@ -473,6 +473,34 @@ def test_errors_after_ready_are_not_startup_errors():
     assert f["after_ready.error"].value.startswith("RuntimeError: reentrant call")
 
 
+def test_stall_note_does_not_claim_a_later_runs_waits(tmp_path, capsys):
+    # A file with two runs pasted together (the failing one, then the working one) has one
+    # ready line and waits on both sides of it. The note used to say "this startup waited
+    # 360 s ... before `startup` reported ready" about waits that were logged after ready,
+    # i.e. a statement about a run the reader cannot see.
+    stall = ("(EngineCore_DP0 pid=226) INFO 01-21 12:02:47 [shm_broadcast.py:542] No available"
+             " shared memory broadcast block found in 60 seconds. This typically happens when"
+             " some processes are hanging or doing some time-consuming work"
+             " (e.g. compilation, weight/kv cache quantization).\n")
+    ready = "(APIServer pid=1) INFO:     Application startup complete.\n"
+    one = tmp_path / "one.log"
+    one.write_text(stall + ready)
+    two = tmp_path / "two.log"
+    two.write_text(stall + ready + stall + stall)
+    parsed = servediff.parse(two.read_text(encoding="utf-8"))
+    assert parsed["stall_split"] == {"total": 3, "after_ready": 2}
+    assert servediff.main(["show", str(two)]) == 0
+    out = capsys.readouterr().out
+    assert "2 of them came after `startup` reported ready" in out, out
+    assert "this startup waited" not in out
+    # The single-run file keeps the sentence that was true for it.
+    capsys.readouterr()
+    assert servediff.main(["show", str(one)]) == 0
+    out = capsys.readouterr().out
+    assert "this startup waited 60 s" in out, out
+    assert servediff.parse(one.read_text(encoding="utf-8"))["stall_split"]["after_ready"] == 0
+
+
 def test_series_does_not_count_errors_after_ready(tmp_path, capsys):
     # Three runs of one config: two started, the third logged a shutdown traceback. `diff`
     # already refuses to let that row stand in for a configuration change; `series` was
