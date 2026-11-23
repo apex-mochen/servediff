@@ -1,0 +1,166 @@
+INFO 07-30 15:06:56 [__init__.py:243] Automatically detected platform cuda.
+INFO 07-30 15:07:00 [__init__.py:31] Available plugins for group vllm.general_plugins:
+INFO 07-30 15:07:00 [__init__.py:33] - lora_filesystem_resolver -> vllm.plugins.lora_resolvers.filesystem_resolver:register_filesystem_resolver
+INFO 07-30 15:07:00 [__init__.py:36] All plugins in this group will be loaded. Set `VLLM_PLUGINS` to control which plugins to load.
+INFO 07-30 15:07:02 [api_server.py:1289] vLLM API server version 0.9.0
+INFO 07-30 15:07:03 [cli_args.py:300] non-default args: {'host': '0.0.0.0', 'port': 6668, 'trust_remote_code': True, 'dtype': 'half', 'served_model_name': ['Qwen3-235B-A22B'], 'distributed_executor_backend': 'mp', 'tensor_parallel_size': 4, 'disable_custom_all_reduce': True, 'enable_prefix_caching': True, 'enable_chunked_prefill': True, 'disable_log_stats': True, 'disable_log_requests': True}
+WARNING 07-30 15:07:03 [config.py:3135] Casting torch.bfloat16 to torch.float16.
+INFO 07-30 15:07:10 [config.py:793] This model supports multiple tasks: {'generate', 'classify', 'reward', 'embed', 'score'}. Defaulting to 'generate'.
+INFO 07-30 15:07:10 [config.py:2118] Chunked prefill is enabled with max_num_batched_tokens=8192.
+INFO 07-30 15:07:14 [__init__.py:243] Automatically detected platform cuda.
+INFO 07-30 15:07:17 [core.py:438] Waiting for init message from front-end.
+INFO 07-30 15:07:17 [__init__.py:31] Available plugins for group vllm.general_plugins:
+INFO 07-30 15:07:17 [__init__.py:33] - lora_filesystem_resolver -> vllm.plugins.lora_resolvers.filesystem_resolver:register_filesystem_resolver
+INFO 07-30 15:07:17 [__init__.py:36] All plugins in this group will be loaded. Set `VLLM_PLUGINS` to control which plugins to load.
+INFO 07-30 15:07:17 [core.py:65] Initializing a V1 LLM engine (v0.9.0) with config: model='/mnt/afs/share_models/git_models/Qwen/Qwen3-235B-A22B/', speculative_config=None, tokenizer='/mnt/afs/share_models/git_models/Qwen/Qwen3-235B-A22B/', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, override_neuron_config={}, tokenizer_revision=None, trust_remote_code=True, dtype=torch.float16, max_seq_len=40960, download_dir=None, load_format=LoadFormat.AUTO, tensor_parallel_size=4, pipeline_parallel_size=1, disable_custom_all_reduce=True, quantization=None, enforce_eager=False, kv_cache_dtype=auto,  device_config=cuda, decoding_config=DecodingConfig(backend='auto', disable_fallback=False, disable_any_whitespace=False, disable_additional_properties=False, reasoning_backend=''), observability_config=ObservabilityConfig(show_hidden_metrics_for_version=None, otlp_traces_endpoint=None, collect_detailed_traces=None), seed=0, served_model_name=Qwen3-235B-A22B, num_scheduler_steps=1, multi_step_stream_outputs=True, enable_prefix_caching=True, chunked_prefill_enabled=True, use_async_output_proc=True, pooler_config=None, compilation_config={"level": 3, "custom_ops": ["none"], "splitting_ops": ["vllm.unified_attention", "vllm.unified_attention_with_output"], "compile_sizes": [], "inductor_compile_config": {"enable_auto_functionalized_v2": false}, "use_cudagraph": true, "cudagraph_num_of_warmups": 1, "cudagraph_capture_sizes": [512, 504, 496, 488, 480, 472, 464, 456, 448, 440, 432, 424, 416, 408, 400, 392, 384, 376, 368, 360, 352, 344, 336, 328, 320, 312, 304, 296, 288, 280, 272, 264, 256, 248, 240, 232, 224, 216, 208, 200, 192, 184, 176, 168, 160, 152, 144, 136, 128, 120, 112, 104, 96, 88, 80, 72, 64, 56, 48, 40, 32, 24, 16, 8, 4, 2, 1], "max_capture_size": 512}
+WARNING 07-30 15:07:17 [multiproc_worker_utils.py:306] Reducing Torch parallelism from 64 threads to 1 to avoid unnecessary CPU contention. Set OMP_NUM_THREADS in the external environment to tune this value as needed.
+INFO 07-30 15:07:17 [shm_broadcast.py:250] vLLM message queue communication handle: Handle(local_reader_ranks=[0, 1, 2, 3], buffer_handle=(4, 10485760, 10, 'psm_1bced2b8'), local_subscribe_addr='ipc:///tmp/a61ae567-695a-403b-bc31-553ebcd8d26f', remote_subscribe_addr=None, remote_addr_ipv6=False)
+INFO 07-30 15:07:20 [__init__.py:243] Automatically detected platform cuda.
+INFO 07-30 15:07:20 [__init__.py:243] Automatically detected platform cuda.
+INFO 07-30 15:07:20 [__init__.py:243] Automatically detected platform cuda.
+INFO 07-30 15:07:21 [__init__.py:243] Automatically detected platform cuda.
+INFO 07-30 15:07:25 [__init__.py:31] Available plugins for group vllm.general_plugins:
+INFO 07-30 15:07:25 [__init__.py:33] - lora_filesystem_resolver -> vllm.plugins.lora_resolvers.filesystem_resolver:register_filesystem_resolver
+INFO 07-30 15:07:25 [__init__.py:36] All plugins in this group will be loaded. Set `VLLM_PLUGINS` to control which plugins to load.
+WARNING 07-30 15:07:25 [utils.py:2671] Methods determine_num_available_blocks,device_config,get_cache_block_size_bytes,initialize_cache not implemented in <vllm.v1.worker.gpu_worker.Worker object at 0x7fb8dd2b1910>
+(VllmWorker rank=0 pid=445618) INFO 07-30 15:07:25 [shm_broadcast.py:250] vLLM message queue communication handle: Handle(local_reader_ranks=[0], buffer_handle=(1, 10485760, 10, 'psm_3cbe2f01'), local_subscribe_addr='ipc:///tmp/719d0b82-f680-42d7-af52-c2787a3027a2', remote_subscribe_addr=None, remote_addr_ipv6=False)
+INFO 07-30 15:07:26 [__init__.py:31] Available plugins for group vllm.general_plugins:
+INFO 07-30 15:07:26 [__init__.py:33] - lora_filesystem_resolver -> vllm.plugins.lora_resolvers.filesystem_resolver:register_filesystem_resolver
+INFO 07-30 15:07:26 [__init__.py:36] All plugins in this group will be loaded. Set `VLLM_PLUGINS` to control which plugins to load.
+INFO 07-30 15:07:26 [__init__.py:31] Available plugins for group vllm.general_plugins:
+INFO 07-30 15:07:26 [__init__.py:33] - lora_filesystem_resolver -> vllm.plugins.lora_resolvers.filesystem_resolver:register_filesystem_resolver
+INFO 07-30 15:07:26 [__init__.py:36] All plugins in this group will be loaded. Set `VLLM_PLUGINS` to control which plugins to load.
+INFO 07-30 15:07:26 [__init__.py:31] Available plugins for group vllm.general_plugins:
+INFO 07-30 15:07:26 [__init__.py:33] - lora_filesystem_resolver -> vllm.plugins.lora_resolvers.filesystem_resolver:register_filesystem_resolver
+INFO 07-30 15:07:26 [__init__.py:36] All plugins in this group will be loaded. Set `VLLM_PLUGINS` to control which plugins to load.
+WARNING 07-30 15:07:26 [utils.py:2671] Methods determine_num_available_blocks,device_config,get_cache_block_size_bytes,initialize_cache not implemented in <vllm.v1.worker.gpu_worker.Worker object at 0x7fddb381cb10>
+(VllmWorker rank=3 pid=445621) INFO 07-30 15:07:26 [shm_broadcast.py:250] vLLM message queue communication handle: Handle(local_reader_ranks=[0], buffer_handle=(1, 10485760, 10, 'psm_a60dcafd'), local_subscribe_addr='ipc:///tmp/5630b57d-c07e-4ae6-887c-d6461888d04e', remote_subscribe_addr=None, remote_addr_ipv6=False)
+WARNING 07-30 15:07:26 [utils.py:2671] Methods determine_num_available_blocks,device_config,get_cache_block_size_bytes,initialize_cache not implemented in <vllm.v1.worker.gpu_worker.Worker object at 0x7fe739aa7e10>
+(VllmWorker rank=1 pid=445619) INFO 07-30 15:07:26 [shm_broadcast.py:250] vLLM message queue communication handle: Handle(local_reader_ranks=[0], buffer_handle=(1, 10485760, 10, 'psm_8b7998e7'), local_subscribe_addr='ipc:///tmp/5d43fe4e-8db0-4e3d-b30a-76ef39676483', remote_subscribe_addr=None, remote_addr_ipv6=False)
+WARNING 07-30 15:07:26 [utils.py:2671] Methods determine_num_available_blocks,device_config,get_cache_block_size_bytes,initialize_cache not implemented in <vllm.v1.worker.gpu_worker.Worker object at 0x7f0d8cc902d0>
+(VllmWorker rank=2 pid=445620) INFO 07-30 15:07:26 [shm_broadcast.py:250] vLLM message queue communication handle: Handle(local_reader_ranks=[0], buffer_handle=(1, 10485760, 10, 'psm_9feafae8'), local_subscribe_addr='ipc:///tmp/db508776-8d74-482b-8786-e142132362fe', remote_subscribe_addr=None, remote_addr_ipv6=False)
+(VllmWorker rank=0 pid=445618) INFO 07-30 15:07:29 [utils.py:1077] Found nccl from library libnccl.so.2
+(VllmWorker rank=1 pid=445619) INFO 07-30 15:07:29 [utils.py:1077] Found nccl from library libnccl.so.2
+(VllmWorker rank=2 pid=445620) INFO 07-30 15:07:29 [utils.py:1077] Found nccl from library libnccl.so.2
+(VllmWorker rank=3 pid=445621) INFO 07-30 15:07:29 [utils.py:1077] Found nccl from library libnccl.so.2
+(VllmWorker rank=2 pid=445620) INFO 07-30 15:07:29 [pynccl.py:69] vLLM is using nccl==2.26.2
+(VllmWorker rank=1 pid=445619) INFO 07-30 15:07:29 [pynccl.py:69] vLLM is using nccl==2.26.2
+(VllmWorker rank=0 pid=445618) INFO 07-30 15:07:29 [pynccl.py:69] vLLM is using nccl==2.26.2
+(VllmWorker rank=3 pid=445621) INFO 07-30 15:07:29 [pynccl.py:69] vLLM is using nccl==2.26.2
+(VllmWorker rank=0 pid=445618) INFO 07-30 15:07:33 [shm_broadcast.py:250] vLLM message queue communication handle: Handle(local_reader_ranks=[1, 2, 3], buffer_handle=(3, 4194304, 6, 'psm_980f6fb3'), local_subscribe_addr='ipc:///tmp/30292a27-adf4-4e05-9328-0358f3051928', remote_subscribe_addr=None, remote_addr_ipv6=False)
+(VllmWorker rank=0 pid=445618) INFO 07-30 15:07:33 [parallel_state.py:1064] rank 0 in world size 4 is assigned as DP rank 0, PP rank 0, TP rank 0, EP rank 0
+(VllmWorker rank=2 pid=445620) INFO 07-30 15:07:33 [parallel_state.py:1064] rank 2 in world size 4 is assigned as DP rank 0, PP rank 0, TP rank 2, EP rank 2
+(VllmWorker rank=3 pid=445621) INFO 07-30 15:07:33 [parallel_state.py:1064] rank 3 in world size 4 is assigned as DP rank 0, PP rank 0, TP rank 3, EP rank 3
+(VllmWorker rank=1 pid=445619) INFO 07-30 15:07:33 [parallel_state.py:1064] rank 1 in world size 4 is assigned as DP rank 0, PP rank 0, TP rank 1, EP rank 1
+(VllmWorker rank=0 pid=445618) WARNING 07-30 15:07:33 [topk_topp_sampler.py:58] FlashInfer is not available. Falling back to the PyTorch-native implementation of top-p & top-k sampling. For the best performance, please install FlashInfer.
+(VllmWorker rank=2 pid=445620) WARNING 07-30 15:07:33 [topk_topp_sampler.py:58] FlashInfer is not available. Falling back to the PyTorch-native implementation of top-p & top-k sampling. For the best performance, please install FlashInfer.
+(VllmWorker rank=3 pid=445621) WARNING 07-30 15:07:33 [topk_topp_sampler.py:58] FlashInfer is not available. Falling back to the PyTorch-native implementation of top-p & top-k sampling. For the best performance, please install FlashInfer.
+(VllmWorker rank=1 pid=445619) WARNING 07-30 15:07:33 [topk_topp_sampler.py:58] FlashInfer is not available. Falling back to the PyTorch-native implementation of top-p & top-k sampling. For the best performance, please install FlashInfer.
+(VllmWorker rank=1 pid=445619) INFO 07-30 15:07:33 [gpu_model_runner.py:1531] Starting to load model /mnt/afs/share_models/git_models/Qwen/Qwen3-235B-A22B/...
+(VllmWorker rank=3 pid=445621) INFO 07-30 15:07:33 [gpu_model_runner.py:1531] Starting to load model /mnt/afs/share_models/git_models/Qwen/Qwen3-235B-A22B/...
+(VllmWorker rank=2 pid=445620) INFO 07-30 15:07:33 [gpu_model_runner.py:1531] Starting to load model /mnt/afs/share_models/git_models/Qwen/Qwen3-235B-A22B/...
+(VllmWorker rank=0 pid=445618) INFO 07-30 15:07:33 [gpu_model_runner.py:1531] Starting to load model /mnt/afs/share_models/git_models/Qwen/Qwen3-235B-A22B/...
+(VllmWorker rank=3 pid=445621) INFO 07-30 15:07:33 [cuda.py:217] Using Flash Attention backend on V1 engine.
+(VllmWorker rank=1 pid=445619) INFO 07-30 15:07:33 [cuda.py:217] Using Flash Attention backend on V1 engine.
+(VllmWorker rank=0 pid=445618) INFO 07-30 15:07:33 [cuda.py:217] Using Flash Attention backend on V1 engine.
+(VllmWorker rank=2 pid=445620) INFO 07-30 15:07:33 [cuda.py:217] Using Flash Attention backend on V1 engine.
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487] WorkerProc failed to start.
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487] Traceback (most recent call last):
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]   File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/site-packages/vllm/v1/executor/multiproc_executor.py", line 461, in worker_main
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]     worker = WorkerProc(*args, **kwargs)
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]   File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/site-packages/vllm/v1/executor/multiproc_executor.py", line 358, in __init__
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]     self.worker.load_model()
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]   File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/site-packages/vllm/v1/worker/gpu_worker.py", line 164, in load_model
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]     self.model_runner.load_model()
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]   File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/site-packages/vllm/v1/worker/gpu_model_runner.py", line 1534, in load_model
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]     self.model = get_model(vllm_config=self.vllm_config)
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]   File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/site-packages/vllm/model_executor/model_loader/__init__.py", line 58, in get_model
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]     return loader.load_model(vllm_config=vllm_config,
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]   File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/site-packages/vllm/model_executor/model_loader/default_loader.py", line 273, in load_model
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]     model = initialize_model(vllm_config=vllm_config,
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]   File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/site-packages/vllm/model_executor/model_loader/utils.py", line 61, in initialize_model
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]     return model_class(vllm_config=vllm_config, prefix=prefix)
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]   File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_moe.py", line 497, in __init__
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]     self.model = Qwen3MoeModel(vllm_config=vllm_config,
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]   File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/site-packages/vllm/compilation/decorators.py", line 151, in __init__
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]     old_init(self, vllm_config=vllm_config, prefix=prefix, **kwargs)
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]   File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_moe.py", line 333, in __init__
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]     self.start_layer, self.end_layer, self.layers = make_layers(
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]                                                     ^^^^^^^^^^^^
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]   File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/site-packages/vllm/model_executor/models/utils.py", line 625, in make_layers
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]     [PPMissingLayer() for _ in range(start_layer)] + [
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]                                                      ^
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]   File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/site-packages/vllm/model_executor/models/utils.py", line 626, in <listcomp>
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]     maybe_offload_to_cpu(layer_fn(prefix=f"{prefix}.{idx}"))
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]   File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_moe.py", line 335, in <lambda>
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]     lambda prefix: Qwen3MoeDecoderLayer(config=config,
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]   File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_moe.py", line 277, in __init__
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]     self.mlp = Qwen3MoeSparseMoeBlock(config=config,
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]   File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_moe.py", line 112, in __init__
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]     self.experts = FusedMoE(num_experts=config.num_experts,
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]   File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/site-packages/vllm/model_executor/layers/fused_moe/layer.py", line 829, in __init__
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]     self.quant_method.create_weights(layer=self, **moe_quant_params)
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]   File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/site-packages/vllm/model_executor/layers/fused_moe/layer.py", line 381, in create_weights
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]     w13_weight = torch.nn.Parameter(torch.empty(
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]                                     ^^^^^^^^^^^^
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]   File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/site-packages/torch/utils/_device.py", line 104, in __torch_function__
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]     return func(*args, **kwargs)
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487]            ^^^^^^^^^^^^^^^^^^^^^
+(VllmWorker rank=3 pid=445621) ERROR 07-30 15:07:33 [multiproc_executor.py:487] torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 768.00 MiB. GPU 3 has a total capacity of 95.00 GiB of which 600.06 MiB is free. Process 3617065 has 94.41 GiB memory in use. Of the allocated memory 93.14 GiB is allocated by PyTorch, and 3.39 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+[rank0]:[W730 15:07:35.990148347 ProcessGroupNCCL.cpp:1476] Warning: WARNING: destroy_process_group() was not called before program exit, which can leak resources. For more info, please see https://pytorch.org/docs/stable/distributed.html#shutdown (function operator())
+ERROR 07-30 15:07:36 [core.py:500] EngineCore failed to start.
+ERROR 07-30 15:07:36 [core.py:500] Traceback (most recent call last):
+ERROR 07-30 15:07:36 [core.py:500]   File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/site-packages/vllm/v1/engine/core.py", line 491, in run_engine_core
+ERROR 07-30 15:07:36 [core.py:500]     engine_core = EngineCoreProc(*args, **kwargs)
+ERROR 07-30 15:07:36 [core.py:500]                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ERROR 07-30 15:07:36 [core.py:500]   File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/site-packages/vllm/v1/engine/core.py", line 390, in __init__
+ERROR 07-30 15:07:36 [core.py:500]     super().__init__(vllm_config, executor_class, log_stats,
+ERROR 07-30 15:07:36 [core.py:500]   File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/site-packages/vllm/v1/engine/core.py", line 71, in __init__
+ERROR 07-30 15:07:36 [core.py:500]     self.model_executor = executor_class(vllm_config)
+ERROR 07-30 15:07:36 [core.py:500]                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ERROR 07-30 15:07:36 [core.py:500]   File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/site-packages/vllm/executor/executor_base.py", line 52, in __init__
+ERROR 07-30 15:07:36 [core.py:500]     self._init_executor()
+ERROR 07-30 15:07:36 [core.py:500]   File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/site-packages/vllm/v1/executor/multiproc_executor.py", line 93, in _init_executor
+ERROR 07-30 15:07:36 [core.py:500]     self.workers = WorkerProc.wait_for_ready(unready_workers)
+ERROR 07-30 15:07:36 [core.py:500]                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ERROR 07-30 15:07:36 [core.py:500]   File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/site-packages/vllm/v1/executor/multiproc_executor.py", line 422, in wait_for_ready
+ERROR 07-30 15:07:36 [core.py:500]     raise e from None
+ERROR 07-30 15:07:36 [core.py:500] Exception: WorkerProc initialization failed due to an exception in a background process. See stack trace for root cause.
+Traceback (most recent call last):
+  File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/multiprocessing/process.py", line 314, in _bootstrap
+  File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/multiprocessing/process.py", line 108, in run
+  File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/site-packages/vllm/v1/engine/core.py", line 504, in run_engine_core
+  File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/site-packages/vllm/v1/engine/core.py", line 491, in run_engine_core
+  File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/site-packages/vllm/v1/engine/core.py", line 390, in __init__
+  File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/site-packages/vllm/v1/engine/core.py", line 71, in __init__
+  File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/site-packages/vllm/executor/executor_base.py", line 52, in __init__
+  File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/site-packages/vllm/v1/executor/multiproc_executor.py", line 93, in _init_executor
+  File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/site-packages/vllm/v1/executor/multiproc_executor.py", line 422, in wait_for_ready
+Traceback (most recent call last):
+  File "/usr/local/lib/miniconda3/envs/SenseRL/bin/vllm", line 10, in <module>
+  File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/site-packages/vllm/entrypoints/cli/main.py", line 56, in main
+  File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/site-packages/vllm/entrypoints/cli/serve.py", line 42, in cmd
+  File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/site-packages/uvloop/__init__.py", line 105, in run
+  File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/asyncio/runners.py", line 118, in run
+  File "uvloop/loop.pyx", line 1518, in uvloop.loop.Loop.run_until_complete
+  File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/site-packages/uvloop/__init__.py", line 61, in wrapper
+  File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/site-packages/vllm/entrypoints/openai/api_server.py", line 1324, in run_server
+  File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/contextlib.py", line 210, in __aenter__
+  File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/site-packages/vllm/entrypoints/openai/api_server.py", line 153, in build_async_engine_client
+  File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/contextlib.py", line 210, in __aenter__
+  File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/site-packages/vllm/entrypoints/openai/api_server.py", line 185, in build_async_engine_client_from_engine_args
+  File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/site-packages/vllm/v1/engine/async_llm.py", line 157, in from_vllm_config
+  File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/site-packages/vllm/v1/engine/async_llm.py", line 123, in __init__
+  File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/site-packages/vllm/v1/engine/core_client.py", line 734, in __init__
+  File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/site-packages/vllm/v1/engine/core_client.py", line 418, in __init__
+  File "/usr/local/lib/miniconda3/envs/SenseRL/lib/python3.11/site-packages/vllm/v1/engine/core_client.py", line 484, in _wait_for_engine_startup

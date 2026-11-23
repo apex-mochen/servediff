@@ -235,6 +235,11 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
      lambda m: [("server.url", m[1])]),
     # A model whose attention heads differ in width cannot run one backend for both groups, so
     # the engine overrides the chosen backend to keep the two numerics on one kernel set.
+    # A worker that never came up leaves this wrapper in the engine core; the root cause is in
+    # the worker's own stack, so this line is recorded as-is rather than guessed at. A oneDNN
+    # fallback also contains the word "Exception:" mid-sentence, which is why it is pinned here.
+    (re.compile(r"Exception: WorkerProc initialization failed due to an exception"),
+     lambda m: [("startup.error", "Exception: WorkerProc initialization failed (see worker stack)")]),
     # Ray re-raises a worker exception wrapped in a task error; the class pair is the cause.
     (re.compile(r"\[core\.py:\d+\] ray\.exceptions\.(\w+)\((\w+)\)"),
      lambda m: [("startup.error", f"ray.exceptions.{m[1]}({m[2]})")]),
@@ -262,7 +267,7 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
     (re.compile(r"Tensor parallel size \((\d+)\) exceeds available GPUs \((\d+)\)"),
      lambda m: [("parallel.tp_exceeds_gpus", f"tp {m[1]} > gpus {m[2]}")]),
     # The platform is detected, not chosen; a CPU or ROCm log says something else here.
-    (re.compile(r"\[init\.py:\d+\] Automatically detected platform (\w+)"),
+    (re.compile(r"\[(?:init|__init__)\.py:\d+\] Automatically detected platform (\w+)"),
      lambda m: [("engine.platform", m[1])]),
     (re.compile(r"Using model weights format \[(.+?)\]"),
      lambda m: [("weights.format", m[1])]),
@@ -272,6 +277,17 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
     # version number; on a heterogeneous-head model the same decision arrives as a forcing line.
     (re.compile(r"Using (.+?) backend on (\w+) engine"),
      lambda m: [("backend.attention", f"{m[1]} ({m[2]} engine)")]),
+    # A plugin group is loaded wholesale unless VLLM_PLUGINS narrows it: the list is the only
+    # record of code that runs before the model does, and it changes between environments.
+    (re.compile(r"\[__init__\.py:\d+\] - ([\w.]+) -> ([\w.]+):"),
+     lambda m: [("plugins.loaded", f"{m[1]} -> {m[2]}")]),
+    # FlashInfer missing on an older card silently moves sampling to the torch kernel.
+    (re.compile(r"FlashInfer is not available\. Falling back to the PyTorch-native implementation"),
+     lambda m: [("sampling.topk_topp_fallback", "torch-native (FlashInfer unavailable)")]),
+    # A multimodal checkpoint served without a task flag defaults to generate; which tasks the
+    # config declares is the only place that says so.
+    (re.compile(r"This model supports multiple tasks: \{([^}]+)\}\. Defaulting to '(\w+)'"),
+     lambda m: [("model.tasks", f"{m[2]} (default of {m[1]})")]),
     # Which env vars Ray carries to the workers is a setting: a prefix list that differs
     # between two runs explains a worker that sees a different NCCL or cache config.
     (re.compile(r"Env var prefixes to copy: \[(.+?)\]"),
@@ -660,6 +676,20 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
                 ("torch.oom_requested_mib", round(int(m[2]) / 2**20, 2)),
                 ("torch.oom_free_mib", round(int(m[3]) / 2**20, 2)),
                 ("torch.oom_total_gib", round(int(m[4]) / 2**30, 2))]),
+    # The older wording names the same four numbers plus the process that is holding the card.
+    # That holder is the answer to "VRAM is enough, why does it die": on this A100 another
+    # process holds 94.41 of 95.00 GiB, and vLLM asked for 768 MiB of the remaining 600.
+    (re.compile(r"OutOfMemoryError: CUDA out of memory\. Tried to allocate ([\d.]+) (MiB|GiB)\. "
+                r"GPU (\d+) has a total capacity of ([\d.]+) GiB of which ([\d.]+) MiB is free\. "
+                r"Process (\d+) has ([\d.]+) GiB memory in use"),
+     lambda m: [("torch.oom_device", int(m[3])),
+                ("torch.oom_requested_mib",
+                 round(float(m[1]) * (1024 if m[2] == "GiB" else 1), 2)),
+                ("torch.oom_free_mib", float(m[5])),
+                ("torch.oom_total_gib", float(m[4])),
+                # The pid is left out on purpose: it differs every run and would show up in
+                # every diff. The size the other process holds is the number that matters.
+                ("torch.oom_holder_gib", float(m[7]))]),
     # Exception classes arrive fully qualified in some versions
     # (`vllm.v1.engine.exceptions.EngineDeadError: …`), so the type may be mid-line.
     (re.compile(r"((?:RuntimeError|ValueError|IndexError|torch\.OutOfMemoryError|AssertionError|AttributeError|KeyError|TypeError|EngineDeadError): .+)$"),
@@ -1212,11 +1242,17 @@ class InputError(Exception):
 
 
 def _expand_logs(paths):
-    """Directories become every *.log inside them, so one command audits a corpus."""
+    """Directories become every *.log inside them, so one command audits a corpus.
+
+    Recursive on purpose: a corpus is kept in dated subdirectories (`vllm-forum-2026-07/`),
+    and a one-level glob silently audits 21 of 86 logs while the summary still reports a
+    count — the exact silent-scope failure this tool exists to catch. Sorting is by full path
+    so a nested corpus reads in one stable order.
+    """
     out = []
     for path in paths:
         if str(path) != "-" and path.is_dir():
-            out.extend(sorted(path.glob("*.log")))
+            out.extend(sorted(path.rglob("*.log")))
         else:
             out.append(path)
     return out

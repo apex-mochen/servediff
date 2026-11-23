@@ -685,9 +685,10 @@ def test_the_held_out_corpus_reports_nothing_to_look_at(capsys):
 
 
 def test_a_directory_is_audited_as_one_corpus_with_a_line_per_log(capsys):
-    # The claim "twenty logs from public reports, nothing worth a look" should be
-    # checkable in one command rather than twenty.
-    logs = sorted(FIX.glob("*.log"))
+    # The claim "the whole corpus from public reports, nothing worth a look" should be
+    # checkable in one command rather than eighty. rglob, because the corpus is kept in
+    # dated subdirectories and a one-level glob quietly audited less than a quarter of it.
+    logs = sorted(FIX.rglob("*.log"))
     assert servediff.main(["audit", str(FIX)]) == 0
     out = capsys.readouterr().out
     assert f"{len(logs)} log(s): 0 with shapes worth a look" in out
@@ -2411,3 +2412,68 @@ def test_the_oldest_log_in_the_corpus_still_yields_its_rank_line():
     assert f["backend.attention"].value == "Flash Attention (V1 engine)"
     assert f["weights.format"].value == "'*.safetensors'"
     assert f["weights.download_s"].value == 17.724022
+
+
+def test_a_vram_is_enough_thread_names_the_process_holding_the_card():
+    # thread 1234: vLLM 0.9.0, TP4, OOM on GPU 3 while the card looks free. The older wording
+    # prints the holder: 94.41 of 95.00 GiB is another process, and vLLM asked for 768 MiB of
+    # the remaining 600. The pid is deliberately not a fact — it changes every run.
+    f = facts("vllm-forum-2025-07/qwen-vram-enough-but-oom.log")
+    assert f["engine.version"].value == "0.9.0"
+    assert f["torch.oom_device"].value == 3
+    assert f["torch.oom_requested_mib"].value == 768.0
+    assert f["torch.oom_free_mib"].value == 600.06
+    assert f["torch.oom_total_gib"].value == 95.0
+    assert f["torch.oom_holder_gib"].value == 94.41
+    assert "oom_holder_pid" not in f
+
+
+def test_a_plugin_group_and_a_multitask_default_are_facts():
+    # Same log: this is the build that still loads a plugin group, and the only record of what
+    # runs before the model is the list it prints. A five-task checkpoint served with no task
+    # flag also says which one it defaulted to.
+    f = facts("vllm-forum-2025-07/qwen-vram-enough-but-oom.log")
+    assert f["plugins.loaded"].value == (
+        "lora_filesystem_resolver -> vllm.plugins.lora_resolvers.filesystem_resolver")
+    assert f["model.tasks"].value.startswith("generate (default of 'generate', 'classify'")
+    assert f["sampling.topk_topp_fallback"].value == "torch-native (FlashInfer unavailable)"
+
+
+def test_the_sixty_second_wait_is_one_wait_relogged_on_two_a2_cards():
+    # thread 2828: TP2 on A2, six wait lines exactly 60.000 s apart after graph capture had
+    # already finished. The numbers that rule out "still compiling" are the capture time and
+    # the KV budget; `repeats` turns the cadence into one line.
+    f = facts("vllm-forum-2026-07/a2-stuck-on-shm-broadcast.log")
+    assert f["kv_cache.memory_gib"].value == 4.91
+    assert f["kv_cache.tokens"].value == 407080
+    assert f["cuda_graph.capture_s"].value == 4
+    assert f["model_loading.gib"].value == 8.29
+    out = subprocess.run([sys.executable, "-m", "servediff", "repeats",
+                          str(FIX / "vllm-forum-2026-07" / "a2-stuck-on-shm-broadcast.log"),
+                          "--top", "3"], capture_output=True, text=True)
+    assert "6x regular" in out.stdout
+    assert "60.000 s median" in out.stdout
+
+
+def test_audit_of_a_corpus_directory_reaches_the_dated_subdirectories(tmp_path):
+    # The corpus keeps every batch in its own `vllm-forum-2026-07/` style folder. A one-level
+    # glob audited 21 of 86 logs and still printed a count, which is the silent-scope failure
+    # this tool is supposed to catch; the count now equals what an rglob finds.
+    nested = tmp_path / "batch-2026-07"
+    nested.mkdir()
+    (nested / "one.log").write_text("INFO 07-01 10:00:00 [core.py:1] hello\n")
+    (tmp_path / "flat.log").write_text("INFO 07-01 10:00:00 [core.py:1] hello\n")
+    expected = len([p for p in sorted(tmp_path.rglob("*.log"))])
+    assert expected == 2
+    out = subprocess.run([sys.executable, "-m", "servediff", "audit", "--max-shapes", "0",
+                          str(tmp_path)], capture_output=True, text=True)
+    assert f"{expected} log(s):" in out.stdout
+
+
+def test_the_whole_fixture_corpus_is_audited_not_a_slice_of_it():
+    logs = sorted(FIX.rglob("*.log"))
+    assert len(logs) > 50, "the corpus should be the many-directory kind this guards"
+    out = subprocess.run([sys.executable, "-m", "servediff", "audit", "--max-shapes", "0",
+                          str(FIX)], capture_output=True, text=True)
+    assert f"{len(logs)} log(s):" in out.stdout
+    assert "0 with shapes worth a look" in out.stdout

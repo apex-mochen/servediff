@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.4.68 — 2026-11-23
+
+The "显存足够却启动不了" thread answers itself once the holder is read, and the six-line
+broadcast wait gets its arithmetic written down.
+
+**The OOM line names the process holding the card.** The older wording
+(`Tried to allocate 768.00 MiB. GPU 3 has a total capacity of 95.00 GiB of which 600.06 MiB is
+free. Process 3617065 has 94.41 GiB memory in use`) is now read as
+`torch.oom_device=3`, `torch.oom_requested_mib=768.0`, `torch.oom_free_mib=600.06`,
+`torch.oom_total_gib=95.0` and `torch.oom_holder_gib=94.41`. The pid is deliberately dropped:
+it differs every run and would appear in every diff.
+
+Seven more keys from vLLM 0.9.0 and a TP2 A2 box:
+
+- `plugins.loaded` — the plugin group this build still loads, the only record of code that runs
+  before the model does
+- `model.tasks` — a five-task checkpoint served with no task flag, defaulting to `generate`
+- `sampling.topk_topp_fallback` — FlashInfer missing, sampling moved to the torch kernel
+- `engine.platform` now also matches the `__init__.py` module, which is where 0.9.x prints it
+- the engine core's worker wrapper (`Exception: WorkerProc initialization failed`) is recorded
+  as a startup error instead of being lost, without turning the oneDNN fallback sentence into a
+  fake failure (`Exception: could not create a primitive descriptor` stayed a warning)
+
+**`audit` on a directory reads the whole directory.** It globbed one level, so
+`servediff audit tests/fixtures` audited 21 of the 86 logs and printed "21 log(s)" as if that
+were the corpus — the same silent-scope failure the tool is built to catch, in the tool itself.
+It now uses `rglob`. Running it on the full corpus immediately exposed one unruled shape family
+the later batches had: the page-cache prefetch trio (`started` / `percentage` / `finished`),
+which a `RayWorkerWrapper` prefix had kept out of view. Both are now covered, and a test holds
+the printed count equal to what an `rglob` finds.
+
+Two new fixtures: `vllm-forum-2025-07/qwen-vram-enough-but-oom.log` (topic 1234) and
+`vllm-forum-2026-07/a2-stuck-on-shm-broadcast.log` (topic 2828). The broadcast writeup gains a
+second worked example computed from that 24-line log: the wait starts 3 s before capture ends
+and outlives it by five minutes, six lines 60.000 s apart. Fact keys 253 → 261; tests 163 → 168.
+
 ## 0.4.67 — 2026-11-23
 
 A multi-node run says, once, in a warning, that the async scheduler it was asked for is not

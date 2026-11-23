@@ -199,6 +199,7 @@ mm.warmup_s
 model.architecture
 model.cast
 model.max_len
+model.tasks
 model_init.seconds
 model_loading.gib
 model_loading.seconds
@@ -215,6 +216,7 @@ parallel.tp
 parallel.tp_exceeds_gpus
 parallel.world_size
 pd.warmup
+plugins.loaded
 quant.checkpoint_format
 quant.kernel.config
 quant.kernel.nvfp4
@@ -223,6 +225,7 @@ ray.env_prefixes
 sampling.ignored_with_spec
 sampling.overridden
 sampling.topk_topp_backend
+sampling.topk_topp_fallback
 sched.max_num_scheduled_tokens
 sched.max_running_requests
 scheduler.async
@@ -240,6 +243,11 @@ spec.mtp_weights_shared
 startup
 startup.cause
 startup.error
+torch.oom_device
+torch.oom_free_mib
+torch.oom_holder_gib
+torch.oom_requested_mib
+torch.oom_total_gib
 transfer.nixl_backend
 triton.drivers
 uva_buffers

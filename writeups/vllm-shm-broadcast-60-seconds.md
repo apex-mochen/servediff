@@ -63,6 +63,42 @@ $ servediff repeats repro.log --top 3
 (This demo runs on a 56-line synthetic log carrying the two shapes; on the real log below the same
 two shapes read 2.318 s and 959 s.)
 
+## A second worked example: TP2 on two A2 cards, six waits after capture
+
+This is the smallest complete instance in the corpus — 24 lines, from
+[forum topic 2828](https://discuss.vllm.ai/t/2828), a poster who said "unsure how to debug":
+
+```
+09:02:36  Available KV cache memory: 4.91 GiB
+09:02:36  GPU KV cache size: 407,080 tokens
+09:02:40  Graph capturing finished in 4 secs, took 0.11 GiB
+09:03:37  No available shared memory broadcast block found in 60 seconds.  (×6, to 09:08:37)
+```
+
+Run the three checks on it:
+
+1. **`/dev/shm` capacity** — no `Insufficient space in /dev/shm` line, so the buffer was created
+   fine. This is not a shm-size problem.
+2. **Did the wait outlive capture?** The first wait line is 57 s after `Graph capturing finished`,
+   i.e. the wait began at `09:02:37` — **3 seconds before capture ended**. Capture overlapped the
+   start of the wait, and then capture finished and the waiting continued for 5 more minutes.
+   "Still compiling" predicts the opposite: the lines stop when capture ends. They do not.
+3. **Cadence** — `servediff repeats` on the file:
+
+```
+6x regular  09:03:37 -> 09:08:37  span 300 s
+   gap 60.000 s median, 60.000 s max
+   No available shared memory broadcast block found in 60 seconds …
+```
+
+Exactly one interval, six times: **one** wait being re-logged, not six failures.
+
+What is left is a reader that stopped draining. The run's own numbers bound it: 8.29 GiB of
+weights per rank on 16 GB cards, 4.91 GiB of KV left, capture 0.11 GiB, `torch.compile` 43.57 s
+total. There is no allocator OOM in this log, so the pool is not the suspect — the consumer is.
+The next command is the one the thread lacked: `py-spy dump` on each worker pid while the wait
+line is being printed, to see which rank is sitting in a broadcast read.
+
 ## The rest: what to compare between two runs
 
 The question behind most of these posts is "what changed", and a benchmark number cannot answer it.

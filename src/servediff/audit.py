@@ -272,7 +272,23 @@ NOISE = (
     re.compile(r"\[system_utils\.py:\d+\] Overwriting environment variable (?:LD_LIBRARY_PATH|PYTHONPATH)"),
     re.compile(r"\[worker_base\.py:\d+\] Missing `shared_worker_lock` argument from executor"),
     # Prefetch progress is a byte counter printed per file per worker.
-    re.compile(r"\[weight_utils\.py:\d+\] Prefetching checkpoint files"),
+    # CuTeDSL warmup prints this on every worker when the model has no CuTeDSL kernels; it is
+    # the same line on every such run, and `compile.fusions` already says what was compiled.
+    re.compile(r"\[cutedsl_warmup\.py:\d+\] Skipping CuTeDSL warmup because no compile units were requested"),
+    # The plugin group prints one header and one footer around the list; `plugins.loaded` is
+    # the list itself.
+    re.compile(r"\[__init__\.py:\d+\] (?:Available plugins for group|All plugins in this group will be loaded)"),
+    # One per rank at import time; `nccl.version` is the number, this is only "found it".
+    re.compile(r"\[utils\.py:\d+\] Found nccl from library libnccl\.so"),
+    # One per rank: the handle names the peers and a shared-memory address. The ranks are
+    # `parallel.roles`; the address changes every run.
+    re.compile(r"\[shm_broadcast\.py:\d+\] vLLM message queue communication handle: Handle\("),
+    # A legacy worker that does not implement the block-manager interface: the warning fires
+    # once per rank on the same run and says nothing that differs between two runs.
+    re.compile(r"\[utils\.py:\d+\] Methods determine_num_available_blocks,device_config"),
+    # The wrapper that follows a worker crash: `startup.error` has the exception, these three
+    # lines are the marker, one echoed source line and a caret.
+    re.compile(r"\[multiproc_executor\.py:\d+\] (?:WorkerProc failed to start\.|\s*\[PPMissingLayer\(\)|\s*\^)"),
     re.compile(r"^CUDA available: (True|False)"),
     re.compile(r"^GPU \d+ Compute Capability: "),
     re.compile(r"^NVIDIA Topology:|^\t"),
@@ -365,6 +381,11 @@ NOISE = (
     re.compile(r"^\s*\(.*\)\s*:\s*$"),
     re.compile(r"^\s*[A-Za-z_][\w.]*\(.*\)(?:\.\w+\(.*\))+\s*$"),
     re.compile(r"^\s*finally\s*:"),
+    # Page-cache prefetch progress: three shapes per checkpoint (started, percentage,
+    # finished), printed once per rank. They report I/O the weights already imply and the
+    # percentage line is the only one that moves. A `RayWorkerWrapper` prefix hid them from
+    # the one-level glob for two releases; the recursive audit found them.
+    re.compile(r"\[weight_utils\.py:\d+\] Prefetching "),
 )
 
 # A line that is nothing but the prefix: `(EngineCore pid=3811)`.
