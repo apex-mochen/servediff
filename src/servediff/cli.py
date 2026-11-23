@@ -508,7 +508,7 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
     (re.compile(r"Dynamo bytecode transform time: ([\d.]+) s"),
      lambda m: [("compile.dynamo_s", float(m[1]))]),
     (re.compile(r"Compiling a graph for compile range \((\d+), (\d+)\) takes ([\d.]+) s"),
-     lambda m: [("compile.range", f"{m[1]},{m[2]}"), ("compile.graph_s", float(m[3]))]),
+     lambda m: [("compile.range", f"({m[1]}, {m[2]})"), ("compile.graph_s", float(m[3]))]),
     (re.compile(r"Initial profiling/warmup run took ([\d.]+) s"),
      lambda m: [("compile.warmup_s", float(m[1]))]),
     # Serving torch threads are cut to one by default; the pair matters, because "1" alone
@@ -626,7 +626,7 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
     # A compiled graph reused across compile ranges is a real startup saving, and its
     # range is what a later recompile is compared against.
     (re.compile(r"Cache the graph of compile range \((\d+), (\d+)\) for later use"),
-     lambda m: [("compile.cached_range", f"{m[1]},{m[2]}")]),
+     lambda m: [("compile.cached_range", f"({m[1]}, {m[2]})")]),
     # Kernel-level failures that do not stop startup but do change what runs: a wrong
     # kernel here is degraded output or a slower path, not a crash, so it is easy to miss.
     (re.compile(r"CUDA error \((.+?)\): (.+)$"), lambda m: [("kernel.cuda_error", f"{m[2].strip()} ({m[1].strip()})")]),
@@ -2563,3 +2563,4 @@ def _run(argv=None) -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+

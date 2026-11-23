@@ -102,7 +102,10 @@ def test_real_server_log_from_033_is_parsed():
     # upgrade that doubles startup is usually one of these three moving, not all of them.
     assert f["compile.total_s"].value == 9.82
     assert f["compile.dynamo_s"].value == 3.61
-    assert f["compile.range"].value == "1,2048"
+    # The log prints the pair as `(1, 2048)`; joining the two captures with a comma alone
+    # rendered "1,2048", which reads as one malformed number rather than a range, and it
+    # was shipped that way in every table until 0.4.88.
+    assert f["compile.range"].value == "(1, 2048)"
     assert f["compile.graph_s"].value == 4.17
     assert f["compile.warmup_s"].value == 0.13
     # Serving torch threads are cut, and the pair is the setting: "1" alone would not say
@@ -1544,7 +1547,7 @@ def test_the_tp8_report_log_leaves_nothing_unread_because_these_facts_are_read()
     # FUSE.OFS has a dot; `\w+` stopped at `FUSE` and the rest of the line stopped matching.
     assert f["weights.filesystem"].value == "FUSE.OFS"
     assert f["weights.prefetch"].value == "disabled (FUSE.OFS is not a network FS)"
-    assert f["compile.cached_range"].value == "1,102"
+    assert f["compile.cached_range"].value == "(1, 102)"
     assert f["sampling.topk_topp_backend"].value == "flashinfer"
     assert "decode_backend=xqa" in f["kernel.flashinfer_dtypes"].value
     assert f["nccl.version"].value == "2.28.9"

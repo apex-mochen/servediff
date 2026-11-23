@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.88 — 2026-11-23
+
+Found while looking at the first `show --markdown` report of 0.4.87, an hour after it shipped.
+
+`compile.range` and `compile.cached_range` rendered as `1,3248`. The log prints a pair —
+`compile range (1, 3248)` — and the two captures were joined with a bare comma, so a
+`(min_batch, max_batch)` range came out as one number with a misplaced thousands separator.
+Everyone who read a table took `1,3248` for a broken value, which is the worst thing a fact
+can look like in a report that is pasted into an issue.
+
+Both now read `(1, 3248)`, the way the server prints it. A test had asserted the broken
+string (`== "1,2048"`), so the defect was preserved as expected output; it now asserts the
+pair and says why.
+
+Nothing else changed: the diff still compares these as strings, so a range change still
+shows as one changed row.
 ## 0.4.87 — 2026-11-23
 
 `diff` had a pasteable report and `show` did not. That left the most common situation — one
@@ -1826,6 +1842,7 @@ First version.
 - `servediff env [--python PATH]`: snapshot package versions, GPU and engine env vars of a
   server environment, with secret-looking values redacted. `servediff diff` on two
   snapshots lists inference-relevant changes first.
+
 
 
 
