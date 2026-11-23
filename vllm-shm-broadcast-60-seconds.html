@@ -96,6 +96,50 @@ irregular; this is not.</p>
   A regular gap is one wait being re-logged, not N separate failures: compare that span with
   anything that could have blocked a reader.
 </code></pre>
+<h3>The timestamp is the end of the wait, not its start</h3>
+<p>Every one of these lines is printed <em>after</em> the watchdog has already been waiting for the
+interval it names. So <code>09:03:37</code> means the wait began at <code>09:02:37</code>, and comparing that with
+anything else in the log is the check that actually separates the readings. <code>servediff repeats</code>
+does the subtraction — it reads the period out of the message itself ("found in 60 seconds"):</p>
+<pre><code>6x regular  09:03:37 -&gt; 09:08:37  span 300 s
+   gap 60.000 s median, 60.000 s max
+   No available shared memory broadcast block found in 60 seconds …
+   this line is the end of a 60 s wait: the first one began at 09:02:37
+     0 other line(s) inside that span: nothing moved during the wait
+</code></pre>
+<p>Two numbers, one diagnosis each:</p>
+<table>
+<thead>
+<tr>
+<th>log</th>
+<th>wait began at</th>
+<th>what printed at that second</th>
+<th>reading</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A2, TP2 (<code>vllm-forum-2026-07</code>)</td>
+<td><code>09:02:37</code></td>
+<td>nothing — graph capture was still running (it ended <code>09:02:40</code>)</td>
+<td>the wait outlived capture by 5 min with nothing inside: a reader stopped draining</td>
+</tr>
+<tr>
+<td>RTX 6000 Ada, TP2 (<code>vllm#45198</code>)</td>
+<td><code>22:01:40</code></td>
+<td><code>Triton kernel JIT compilation during inference: _zero_kv_blocks_kernel</code></td>
+<td>the wait began the same second a kernel started compiling: this one <em>is</em> compilation</td>
+</tr>
+</tbody>
+</table>
+<p><code>vllm#45198</code> is the case the guides are right about — and it still is not a <code>/dev/shm</code> problem.
+The reporter <code>--ipc=host</code> with <code>/dev/shm</code> bind-mounted, and his own workaround was
+<code>--disable-custom-all-reduce</code>, not a bigger shm. What made it look like a shm hang was that the
+only lines after the warning are the waits, 60 s apart, with nothing in between.</p>
+<p><code>0 other line(s) inside that span</code> is not decoration: it is the difference between "compilation
+was still working through the window" (something would be printing) and "nothing at all was
+working" (a stuck reader). Both cases in the table read zero — the thing that separates them is
+<em>what preceded the wait</em>, which is the line <code>repeats</code> now puts under the wait.</p>
 <p>(This demo runs on a 56-line synthetic log carrying the two shapes; on the real log below the same
 two shapes read 2.318 s and 959 s.)</p>
 <h2>A second worked example: TP2 on two A2 cards, six waits after capture</h2>
