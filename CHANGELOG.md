@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.4.70 — 2026-11-23
+
+A second entry point, for the other error people paste: `CUDA out of memory`.
+
+The line carries three numbers, and the whole question is which pool `free` belongs to:
+
+- **wording 1** — `Process N has M GiB memory in use` — `free` is the *device*, and `free + holder
+  ≈ total` means the card is fully occupied by another job. `--gpu-memory-utilization` divides
+  memory that has to be free first, so no flag helps. This is forum topic 1234.
+- **wording 2** — `memory allocation failed with OOM ... (free: ..., total: ...)` — `free` is
+  *PyTorch's caching allocator*, not the card. Our corpus has 39 of these in 2.318 s with 20 MiB
+  requested and 9.19 MiB free, while `gpu.free_gib` was 78.46: the pool was sized by
+  `gpu_memory_utilization × total` and was full, with a three-quarters-empty card.
+
+New writeup `writeups/cuda-oom-holder.md` (the arithmetic, both wordings, how to find the holder,
+what `CUDA_VISIBLE_DEVICES` renumbering does to "GPU 3", and when the card has already been
+partitioned). The 60-second broadcast article now links to it, since the two messages are forever
+confused. Site 9 → 10 files, both pages in the sitemap.
+
+No rule changes, no fact changes: this release is the article plus its cross-link.
+
 ## 0.4.69 — 2026-11-23
 
 A wait line marks the *end* of the wait, and `repeats` now does that subtraction.

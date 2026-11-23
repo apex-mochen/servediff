@@ -264,6 +264,12 @@ diff did not solve the issue; it told both sides what to test. A log says what i
 what it costs. Reading the dispatch list as "every collective used FlashInfer" is specifically
 wrong: it is a candidate set tried in order, falling through when a backend rejects the input.
 
+## If the log says `CUDA out of memory` instead
+
+That message means something else and has its own two wordings — the device's free memory vs the
+allocator pool's — with the arithmetic and the command in
+[`CUDA out of memory` on a card that looks free](cuda-oom-holder.html).
+
 ## What servediff is, and what it refuses to do
 
 It reads startup logs from vLLM and SGLang and answers "what did each server actually run with":

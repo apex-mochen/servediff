@@ -823,6 +823,12 @@ prove, are in [writeups/audit-noise-real-logs.md](https://github.com/apex-mochen
   — a forum turns `models--Qwen--Qwen3.6` into `models–Qwen–Qwen3.6` and `'align'` into
   `‘align’`, so a pasted path can never equal the server's own path and a pasted flag stops
   matching; one fold of the characters that have an ASCII twin is the whole fix.
+- When the log says `CUDA out of memory` on a card that looked free,
+  [writeups/cuda-oom-holder.md](https://github.com/apex-mochen/servediff/blob/main/writeups/cuda-oom-holder.md)
+  reads the three numbers in that line as an occupancy report: the older wording names the process
+  holding the card (94.41 of a 95.00 GiB card, 600.06 MiB left, 768 MiB asked), while the newer one
+  reports *the allocator pool's* free memory (9.19 MiB) on a card with 78.46 GiB free — and only
+  one of those two is fixed by a flag.
 - When the log says `Async scheduling will be disabled because it is not supported with the
   ray distributed executor backend`,
   [writeups/ray-async-scheduling.md](https://github.com/apex-mochen/servediff/blob/main/writeups/ray-async-scheduling.md)
