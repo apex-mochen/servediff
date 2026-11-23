@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Your PowerShell redirect wrote UTF-16, and every log tool read it as mojibake</title>
+<meta name="description" content="You captured a server log on Windows the natural way:">
+<link rel="canonical" href="https://apex-mochen.github.io/servediff/powershell-redirect-is-utf16.html">
+<style>
+:root { --fg:#1c1c1e; --muted:#6b6b70; --line:#e4e4e7; --code:#f6f6f7; }
+body { margin:0 auto; max-width:44rem; padding:2.5rem 1.25rem 6rem;
+  font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  color:var(--fg); }
+h1 { font-size:1.9rem; line-height:1.25; margin:0 0 1rem; letter-spacing:-0.01em; }
+h2 { font-size:1.25rem; margin:2.2rem 0 .6rem; }
+h3 { font-size:1.05rem; margin:1.6rem 0 .4rem; }
+p, li { color:var(--fg); }
+pre { background:var(--code); border:1px solid var(--line); border-radius:6px;
+  padding:.85rem 1rem; overflow-x:auto; font-size:.86rem; line-height:1.5; }
+code { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:.9em; }
+p code, li code { background:var(--code); padding:.1em .3em; border-radius:3px; }
+a { color:#0b62d0; }
+.note { color:var(--muted); font-size:.9rem; }
+nav { border-bottom:1px solid var(--line); padding-bottom:.75rem; margin-bottom:2rem;
+  font-size:.9rem; }
+nav a { margin-right:1rem; }
+ul.index li { margin:.5rem 0; }
+</style>
+</head>
+<body>
+<nav><a href="./index.html">servediff notes</a><a href="https://github.com/apex-mochen/servediff">source</a><a href="https://pypi.org/project/servediff/">pip install servediff</a></nav>
+<h1>Your PowerShell redirect wrote UTF-16, and every log tool read it as mojibake</h1>
+<p>You captured a server log on Windows the natural way:</p>
+<pre><code class="language-powershell">vllm serve Qwen/Qwen3-4B 2&gt;&amp;1 &gt; serve.log
+</code></pre>
+<p>Then you opened it and told yourself the log is fine — it is, in Notepad. Then you fed it to
+<code>servediff show serve.log</code>, or to <code>grep</code>, or to any of the log-upload forms, and got back:</p>
+<pre><code>serve.log: no vLLM or SGLang configuration lines recognised
+</code></pre>
+<p>The log is not the problem. The file is UTF‑16LE, and you are not.</p>
+<h2>The one line that costs an hour</h2>
+<p><code>&gt;</code> and <code>Out-File</code> are not byte copy. In PowerShell 5.1 — still the default <code>powershell.exe</code> on
+every Windows machine that has not been told otherwise — both write <strong>UTF‑16LE with a BOM</strong>. The
+redirect encoding is <code>$OutputEncoding</code>'s cousin, not the console's code page, so a server that
+prints clean UTF‑8 to the terminal ends up in a file where every ASCII byte is followed by a
+<code>0x00</code>.</p>
+<p>Read that as UTF‑8 and nothing fails loudly: the decoder produces <code>\x00</code> and replacement
+characters, every <code>[module.py:851]</code> anchor is broken, and a parser looking for
+<code>[kv_cache_utils.py:851]</code> finds a line of NULs. You conclude the log has no configuration in it,
+which is exactly wrong.</p>
+<pre><code class="language-powershell">PS&gt; $b = [IO.File]::ReadAllBytes(&quot;serve.log&quot;)
+PS&gt; $b[0..5] -join ','
+255,254,73,0,78,0
+</code></pre>
+<p><code>FF FE</code> is the UTF‑16LE BOM, and <code>73,0,78,0</code> is <code>I</code>, NUL, <code>N</code>, NUL. That is all the diagnosis
+there is.</p>
+<h2>Four ways out, in the order I would try them</h2>
+<p><strong>1. Let the tool sniff the bytes.</strong> Since 0.4.74 <code>servediff</code> reads the BOM (and a NUL-density
+heuristic for files written without one) and decodes accordingly, saying so on stderr, so stdout
+stays pipeable:</p>
+<pre><code>note: serve.log was read as utf-16, not UTF-8
+</code></pre>
+<p>That covers <code>show</code>, <code>diff</code>, <code>audit</code>, <code>repeats</code>, and stdin (<code>ssh node 'cat serve.log' | servediff
+show -</code>) — a UTF‑16 paste over the wire is decoded the same way.</p>
+<p><strong>2. Convert once, then use everything else.</strong> <code>grep</code>, <code>awk</code>, <code>jq</code> and every upload form
+downstream also want UTF‑8:</p>
+<pre><code class="language-powershell">(Get-Content serve.log) | Set-Content -Encoding utf8 serve-utf8.log
+</code></pre>
+<p>The <code>(Get-Content ...)</code> wrapper matters: <code>Get-Content</code> is slow but decodes correctly, and
+<code>Set-Content</code> then writes the bytes you expect. Add <code>-ReadCount 0</code> on a 200 MB log to keep it to
+one pass.</p>
+<p><strong>3. Redirect through <code>cmd</code> instead of PowerShell.</strong> <code>cmd.exe</code>'s <code>&gt;</code> is a plain byte copy:</p>
+<pre><code class="language-powershell">cmd /c &quot;vllm serve Qwen/Qwen3-4B &gt; serve.log 2&gt;&amp;1&quot;
+</code></pre>
+<p><strong>4. Change the session default.</strong> <code>$OutputEncoding = [Text.UTF8Encoding]::new($false)</code> and
+<code>[Console]::OutputEncoding</code> both aim at the pipeline, not at <code>&gt;</code>; the reliable lever is
+<code>Out-File -Encoding utf8</code>, which in 5.1 writes UTF‑8 <strong>with</strong> a BOM — harmless to every reader
+here, but worth knowing before you diff two captures byte-for-byte.</p>
+<h2>Why this matters more than it looks</h2>
+<p>A log that reads as empty fails silently and blames the wrong thing: you go looking for a
+missing <code>--shm-size</code>, a wrong <code>CUDA_VISIBLE_DEVICES</code>, a build that printed nothing, when the
+capture never made it to disk as text. It also breaks the <em>comparison</em>, which is the entire point
+of keeping a log: two captures on the same box in different encodings will differ in ways no
+reader can attribute to the server.</p>
+<p>So: check <code>FF FE</code> first, or let the tool check it for you, and then argue about the server.</p>
+<p><code>servediff show</code> prints facts from a vLLM / SGLang startup log — the resolved backends, CUDA
+graph sizes, KV cache, the failure at the end — and <code>servediff diff a.log b.log</code> says which
+facts moved between two runs. <code>pip install servediff</code>. Source and notes:
+<a href="https://github.com/apex-mochen/servediff">https://github.com/apex-mochen/servediff</a>.</p>
+</body>
+</html>
