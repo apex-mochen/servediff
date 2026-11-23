@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Async scheduling will be disabled because it is not supported with the ray distributed executor backend</title>
+<meta name="description" content="The line is a WARNING on a 4-node vLLM run, and the flag it contradicts was accepted:">
+<link rel="canonical" href="https://apex-mochen.github.io/servediff/ray-async-scheduling.html">
+<style>
+:root { --fg:#1c1c1e; --muted:#6b6b70; --line:#e4e4e7; --code:#f6f6f7; }
+body { margin:0 auto; max-width:44rem; padding:2.5rem 1.25rem 6rem;
+  font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  color:var(--fg); }
+h1 { font-size:1.9rem; line-height:1.25; margin:0 0 1rem; letter-spacing:-0.01em; }
+h2 { font-size:1.25rem; margin:2.2rem 0 .6rem; }
+h3 { font-size:1.05rem; margin:1.6rem 0 .4rem; }
+p, li { color:var(--fg); }
+pre { background:var(--code); border:1px solid var(--line); border-radius:6px;
+  padding:.85rem 1rem; overflow-x:auto; font-size:.86rem; line-height:1.5; }
+code { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:.9em; }
+p code, li code { background:var(--code); padding:.1em .3em; border-radius:3px; }
+a { color:#0b62d0; }
+.note { color:var(--muted); font-size:.9rem; }
+nav { border-bottom:1px solid var(--line); padding-bottom:.75rem; margin-bottom:2rem;
+  font-size:.9rem; }
+nav a { margin-right:1rem; }
+ul.index li { margin:.5rem 0; }
+</style>
+</head>
+<body>
+<nav><a href="./index.html">servediff notes</a><a href="https://github.com/apex-mochen/servediff">source</a><a href="https://pypi.org/project/servediff/">pip install servediff</a></nav>
+<h1><code>Async scheduling will be disabled because it is not supported with the ray distributed executor backend</code></h1>
+<p>The line is a WARNING on a 4-node vLLM run, and the flag it contradicts was accepted:</p>
+<pre><code>(APIServer pid=2483545) WARNING 04-05 16:37:36 [vllm.py:780] Async scheduling will be disabled
+  because it is not supported with the `ray` distributed executor backend.
+(APIServer pid=2483545) INFO 04-05 16:37:36 [vllm.py:790] Asynchronous scheduling is disabled.
+</code></pre>
+<p>Two lines, one decision. The first says <em>why</em>, the second says <em>what</em>. Neither is in <code>--help</code>,
+and <code>--async-scheduling</code> stays in the printed args as if it applied.</p>
+<h2>What it changes</h2>
+<p>Async scheduling overlaps the scheduler step with the model step. When the executor is Ray,
+the engine refuses it and runs the fully synchronous path — a different token loop, a different
+step latency, and a KV-cache profile that no longer matches a single-node run with identical
+flags.</p>
+<p><code>servediff</code> therefore keeps the pair apart:</p>
+<pre><code>scheduler.async         disabled
+scheduler.async_reason  ray executor
+</code></pre>
+<p>A diff against a single-node baseline then reads "async on, then off", instead of two logs that
+look identical because both print the same flags. That distinction is the point: one value
+answers <em>is it on</em>, the other answers <em>why not</em>.</p>
+<h2>The same box, one line apart</h2>
+<p>The run also prints, before the refusal:</p>
+<pre><code>Tensor parallel size (16) exceeds available GPUs (4). This may result in Ray placement group …
+</code></pre>
+<p>which becomes <code>parallel.tp_exceeds_gpus=tp 16 &gt; gpus 4</code>. A TP16 request over four nodes of four
+GPUs each is legal on paper, and the warning is the only place the mismatch is stated. Together
+with <code>parallel.world_size=16</code> and the rank line from each node, it is enough to tell a
+mis-sized request from a cluster that lost a node.</p>
+<h2>Why this is a corpus problem, not a flag problem</h2>
+<p>The three facts above exist only in the warning block. <code>args</code> records what was asked;
+<code>--async-scheduling</code> and <code>--tensor-parallel-size</code> both appear there unchanged. Everything that
+decides whether the run is comparable to the last one is printed once, in a WARNING, and then
+the log moves on. That is the whole reason this tool reads warnings as configuration.</p>
+<p>The fixture (<code>tests/fixtures/vllm-forum-2026-04/ray-4-node-random-fail.log</code>, topic 2526) also
+ends in <code>startup.error=ray.exceptions.RayTaskError(KeyError)</code> — the failure that made the
+poster ask — so the log can be read as "these settings, then this crash" instead of two
+unrelated screenshots.</p>
+</body>
+</html>
