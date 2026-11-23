@@ -904,6 +904,127 @@ def _rank_of(line: str):
     return int(match[1]) if match else None
 
 
+_REGEX_SYNTAX = set("()[]{}|?*+^$.") | {"\\"}
+
+
+def _required_literal(source: str) -> str | None:
+    r"""The longest run of plain characters the pattern needs outside any group.
+
+    `Using (\S+) attention backend` cannot match a line without "attention backend", so a
+    substring test rejects the line before the regex engine is asked. Characters inside
+    parentheses are skipped, because an alternation there means no single run is required;
+    reading only depth zero keeps the test one-sided: if it passes the regex still decides,
+    and if it fails the regex had no chance.
+    """
+    best, run, depth, escaped = "", [], 0, False
+    top_alt = False
+    for ch in source:
+        if escaped:
+            escaped = False
+            if len(run) > len(best):
+                best = "".join(run)
+            run = []
+            continue
+        if ch == "\\":
+            escaped = True
+            if len(run) > len(best):
+                best = "".join(run)
+            run = []
+            continue
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth = max(0, depth - 1)
+        if ch == "|" and depth == 0:
+            top_alt = True
+        if ch in _REGEX_SYNTAX:
+            if len(run) > len(best):
+                best = "".join(run)
+            run = []
+            continue
+        if depth == 0:
+            run.append(ch)
+    if len(run) > len(best):
+        best = "".join(run)
+    best = best.strip()
+    if top_alt or len(best) < 4:
+        return None
+    return best
+
+
+def _build_rule_index():
+    """Sort the rules by the literal each needs, with one gate over all of them.
+
+    Every rule used to be tried against every line: on a 96 MB capture that is 1.45 million
+    lines times 198 patterns, a minute of regex work to recover a few dozen facts. A rule
+    that needs a literal can be skipped when the literal is absent, and a single alternation
+    of all the literals answers "is any of them on this line" in one scan. The rules without
+    a literal still have to be tried, so they are folded into one gate as well: the
+    individual patterns only run on the lines that could match something. Position is kept,
+    so the emitted sequence is the same as the flat loop's.
+    """
+    literal_rules, unfiltered, gate_parts = [], [], []
+    for position, (pattern, emit) in enumerate(LINE_RULES):
+        literal = _required_literal(pattern.pattern)
+        if literal is None:
+            unfiltered.append((position, pattern, emit, None))
+        else:
+            literal_rules.append((position, pattern, emit, literal))
+            gate_parts.append(literal)
+    return literal_rules, unfiltered
+
+
+_RULES_LITERAL, _RULES_UNFILTERED = _build_rule_index()
+
+# A startup log repeats itself: the same message with different numbers, thousands of times.
+# The set of rules that can match depends on the line minus its digits, so that is the cache
+# key: one digit-stripped string, one dict lookup, and on a repeat nothing but the few rules
+# that already matched are tried again (they still have to run, to read this line's numbers).
+_DIGITS = re.compile(r"\d+")
+_RULE_SHAPE_CACHE: dict[str, tuple] = {}
+
+
+def _rules_for(line: str) -> list:
+    shape = _DIGITS.sub("0", line)
+    cached = _RULE_SHAPE_CACHE.get(shape)
+    if cached is not None:
+        return [entry for entry in cached]
+    candidates = [entry for entry in _RULES_LITERAL if entry[3] in line]
+    candidates.extend(_RULES_UNFILTERED)
+    candidates.sort(key=lambda entry: entry[0])
+    matched = []
+    for entry in candidates:
+        if entry[1].search(line) is not None:
+            matched.append(entry)
+    result = tuple(matched)
+    if len(_RULE_SHAPE_CACHE) < 200_000:
+        _RULE_SHAPE_CACHE[shape] = result
+    return matched
+
+
+_TYPOGRAPHIC = ("\u2018", "\u2019", "\u201c", "\u201d", "\u2013", "\u2014")
+
+
+def _normalize(raw: str) -> str:
+    """Strip colour, a bracketed timestamp, and typographic punctuation — but only when the
+    line can contain any of them.
+
+    Every one of the three passes is a regex or a translate over the whole line, and on a
+    96 MB capture they ran on 1.45 million lines that mostly hold none of it. A character
+    test is a C-level scan; the passes stay available for the lines that need them.
+    """
+    line = raw
+    if "\x1b" in line or "e[" in line:
+        line = ANSI.sub("", line)
+    if line.startswith("["):
+        line = BRACKET_TS.sub("", line)
+    for ch in _TYPOGRAPHIC:
+        if ch in line:
+            line = line.translate(CURLY)
+            break
+    return line
+
+
 def parse(text: str) -> dict:
     facts: dict[str, Fact] = {}
     args: dict = {}
@@ -913,7 +1034,7 @@ def parse(text: str) -> dict:
         facts.setdefault(key, Fact()).add(value, lineno, line)
 
     for lineno, raw in enumerate(text.splitlines(), 1):
-        line = BRACKET_TS.sub("", ANSI.sub("", raw)).translate(CURLY)
+        line = _normalize(raw)
         if "non-default args:" in line:
             engine = engine or "vllm"
             parsed = _literal_dict(line.split("non-default args:", 1)[1].strip())
@@ -929,7 +1050,7 @@ def parse(text: str) -> dict:
                 put("args.source", "sglang server_args (all args)", lineno, line)
         if engine is None and ("vllm" in line.lower() and "[" in line and ".py:" in line):
             engine = "vllm"
-        for pattern, emit in LINE_RULES:
+        for _, pattern, emit, _literal in _rules_for(line):
             match = pattern.search(line)
             if match:
                 for key, value in emit(match):
@@ -944,7 +1065,7 @@ def parse(text: str) -> dict:
 
     staging = []
     for raw in text.splitlines():
-        line = BRACKET_TS.sub("", ANSI.sub("", raw)).translate(CURLY)
+        line = _normalize(raw)
         match = _STAGING_ALLOC.search(line)
         if match:
             staging.append((float(match[1]), int(match[2])))

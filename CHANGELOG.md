@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.4.77 — 2026-11-23
+
+A 96 MB startup log used to take a minute just to read. It now takes eleven seconds.
+
+`show`/`audit` ran every one of the 198 line regexes against every line. A log has
+five shapes and a million repetitions of them, so 99% of that work was guaranteed
+to fail. Each rule's longest literal (taken at bracket depth zero, so `|` inside a
+group can't leak) is lifted out once; lines are then bucketed by their digit-free
+shape and only the rules that matched that shape are retried. Shape caches in
+`audit` and `repeats` reuse the same trick, and `audit`'s unread-line sampler no
+longer walks the full rule list per line.
+
+Measured on the 1 456 284-line / 96 MB log (same machine, warmed page cache):
+
+| command   | before | after |
+|-----------|--------|-------|
+| `show`    |  59.0s | 11.1s |
+| `audit`   |  90.2s | 14.8s |
+| `repeats` |  37.9s | 22.8s |
+
+No output changed: every command was compared byte-for-byte against the previous
+build over all 87 corpus logs (`0 differing`), and `pytest` still reports 178
+passed. `tools/bench_parse.py` regenerates the synthetic log and prints the three
+timings, so the number stays checkable instead of remembered.
+
 ## 0.4.76 — 2026-11-23
 
 The two files a stranger is most likely to hand it were the two it handled worst.

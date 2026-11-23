@@ -18,7 +18,8 @@ import re
 from collections import Counter
 from pathlib import Path
 
-from servediff.cli import ANSI, BRACKET_TS, CURLY, LINE_RULES, parse
+from servediff.cli import (ANSI, BRACKET_TS, CURLY, LINE_RULES, _DIGITS, _normalize,
+                           _rules_for, parse)
 
 DIGITS = re.compile(r"\d+")
 
@@ -413,7 +414,7 @@ def unread_samples(text: str) -> tuple[Counter, dict[str, str]]:
     samples: dict[str, str] = {}
     in_doc = False
     for raw in text.splitlines():
-        line = BRACKET_TS.sub("", ANSI.sub("", raw)).translate(CURLY)
+        line = _normalize(raw)
         stripped = line.strip()
         # A docstring echoed by a pasted script: prose between two `"""`, which no log line
         # ever carries, so it is noise rather than a setting this tool failed to read.
@@ -427,9 +428,12 @@ def unread_samples(text: str) -> tuple[Counter, dict[str, str]]:
             continue
         if "non-default args:" in line or "server_args=" in line:
             continue  # consumed as argument dicts, not by line rules
-        if any(pattern.search(line) for pattern, _ in LINE_RULES):
+        # `_rules_for` answers the same question as the flat loop over LINE_RULES, but on a
+        # repeated line it only re-runs the rules that matched its shape last time: on a
+        # 96 MB capture the flat loop here was most of a ninety-second audit.
+        if _rules_for(line):
             continue
-        key = shape(line)
+        key = _DIGITS.sub("N", stripped)
         counts[key] += 1
         samples.setdefault(key, line.strip())
     return counts, samples

@@ -20,7 +20,7 @@ from collections import defaultdict
 from pathlib import Path
 
 from servediff.audit import message, shape
-from servediff.cli import ANSI, BRACKET_TS
+from servediff.cli import ANSI, BRACKET_TS, _DIGITS, _normalize
 
 # The time a log line carries. vLLM writes `08-31 11:34:32`, a rank-prefixed torch warning
 # writes `11:33:26.640394862`; only the clock is read, because the gap is what this report
@@ -53,13 +53,39 @@ _EMBEDDED = re.compile(r"(?=\([^)]*pid=\d+\)\s+(?:DEBUG|INFO|WARNING|ERROR|CRITI
 
 def _clock(line: str) -> float | None:
     """Seconds of day carried by this line, or None when it has no clock."""
-    match = _CLOCK.search(BRACKET_TS.sub("", ANSI.sub("", line)))
+    match = _CLOCK.search(_normalize(line))
     if match is None:
         return None
     text = match.group(0).replace(",", ".")
     head, _, frac = text.partition(".")
     hour, minute, second = (int(part) for part in head.split(":"))
     return hour * 3600 + minute * 60 + second + (float("0." + frac) if frac else 0.0)
+
+
+# The shape of a line depends only on the line minus its digits, and a server log repeats
+# itself with new numbers: the same message a thousand times. Keeping the shape per
+# digit-stripped line turns the whole normalisation (preamble removal, then digit collapse)
+# into one dict hit, which is most of what a 96 MB `repeats` spent its time on.
+_SHAPE_BY_STAMP: dict[str, str] = {}
+_SHAPE_CACHE_LIMIT = 200_000
+
+
+def _shape_of(part: str) -> tuple[str, str | None]:
+    """(shape of the message, its body when this shape is new), keyed by the digits-free line.
+
+    The body is returned only on a miss: a cache hit has already stored the sample text for
+    that shape, so the caller does not need to re-run the preamble stripper.
+    """
+    stamp = _DIGITS.sub("0", part)
+    if stamp in _SHAPE_BY_STAMP:
+        return _SHAPE_BY_STAMP[stamp], None
+    body = message(part)
+    # An empty body is a line that carries no message at all; caching `None` records that
+    # answer so the caller can skip it without running the stripper again.
+    key = shape(body) if body else None
+    if len(_SHAPE_BY_STAMP) < _SHAPE_CACHE_LIMIT:
+        _SHAPE_BY_STAMP[stamp] = key
+    return key, body
 
 
 def _span(seconds: float) -> str:
@@ -88,16 +114,18 @@ def _timed(text: str) -> list[tuple[float, str, str]]:
     """
     out = []
     for raw in text.splitlines():
-        for part in _EMBEDDED.split(raw):
+        for part in (_EMBEDDED.split(raw) if "pid=" in raw else (raw,)):
             if not part.strip():
                 continue
-            body = message(part)
-            if not body:
+            key, body = _shape_of(part)
+            if key is None:
                 continue
+            if body is None:
+                body = message(part)
             clock = _clock(part)
             if clock is None:
                 continue
-            out.append((clock, shape(body), body))
+            out.append((clock, key, body))
     return out
 
 
@@ -107,20 +135,24 @@ def groups(text: str, min_count: int = 2) -> tuple[int, list[dict]]:
     lines = 0
     for raw in text.splitlines():
         lines += 1
-        for part in _EMBEDDED.split(raw):
+        # A prompt line carrying several records is the only line that needs the lookahead
+        # split; running it on every line was a regex per line for nothing.
+        for part in (_EMBEDDED.split(raw) if "pid=" in raw else (raw,)):
             if not part.strip():
                 continue
-            body = message(part)
-            if not body:
+            key, body = _shape_of(part)
+            if key is None:
                 continue
-            key = shape(body)
             bucket = buckets[key]
             bucket["count"] += 1
             clock = _clock(part)
             if clock is not None:
                 bucket["times"].append(clock)
-            if len(bucket["samples"]) < 4 and body not in bucket["samples"]:
-                bucket["samples"].append(body)
+            if len(bucket["samples"]) < 4:
+                if body is None:
+                    body = message(part)
+                if body and body not in bucket["samples"]:
+                    bucket["samples"].append(body)
 
     found = []
     for key, bucket in buckets.items():
