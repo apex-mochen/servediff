@@ -832,6 +832,8 @@ prove, are in [writeups/audit-noise-real-logs.md](https://github.com/apex-mochen
   matching; one fold of the characters that have an ASCII twin is the whole fix.
 - When the log says `CUDA out of memory` on a card that looked free,
   [writeups/cuda-oom-holder.md](https://github.com/apex-mochen/servediff/blob/main/writeups/cuda-oom-holder.md)
+  [writeups/powershell-redirect-is-utf16.md](https://github.com/apex-mochen/servediff/blob/main/writeups/powershell-redirect-is-utf16.md)
+  — a log captured with PowerShell's `>` is UTF-16, and reads as nothing.
   reads the three numbers in that line as an occupancy report: the older wording names the process
   holding the card (94.41 of a 95.00 GiB card, 600.06 MiB left, 768 MiB asked), while the newer one
   reports *the allocator pool's* free memory (9.19 MiB) on a card with 78.46 GiB free — and only

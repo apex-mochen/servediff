@@ -2536,3 +2536,40 @@ def test_sglang_staging_buffers_and_its_library_block_are_facts():
     assert f["env.lib.torchao"].value == "Module Not Found"
     assert f["env.lib.flashinfer_jit_cache"].value == "0.6.18+cu130"
     assert f["gpu.compute_capability"].value == "9.0"
+
+
+def test_a_utf16_log_is_read_instead_of_mojibake(tmp_path):
+    # PowerShell's `>` and `Out-File` write UTF-16LE with a BOM. Decoded as UTF-8 that is
+    # NUL-separated mojibake: "no configuration lines recognised" on a perfectly good log,
+    # which is the first thing a Windows user would hit. The bytes are sniffed instead.
+    source = (FIX / "vllm-forum-2026-07" / "a2-stuck-on-shm-broadcast.log").read_text(
+        encoding="utf-8")
+    utf16 = tmp_path / "redirect.log"
+    utf16.write_bytes(source.encode("utf-16"))
+    out = subprocess.run([sys.executable, "-m", "servediff", "show", str(utf16)],
+                         capture_output=True, text=True)
+    assert out.returncode == 0
+    assert "read as utf-16" in out.stderr
+    assert "kv_cache.memory_gib" in out.stdout
+    assert "4.91" in out.stdout
+
+
+def test_utf16_on_stdin_is_decoded_too():
+    source = (FIX / "vllm-issue-2026-06" / "qwen3.5-tp2-jit-then-wait.log").read_bytes();
+    # Bytes, so the test's own encoding cannot influence what arrives on stdin.
+    out2 = subprocess.run([sys.executable, "-m", "servediff", "show", "-"],
+                          input=source.decode("utf-8").encode("utf-16"),
+                          capture_output=True)
+    assert out2.returncode == 0
+    assert "read as utf-16" in out2.stderr.decode()
+    assert "kernel.jit_during_inference" in out2.stdout.decode()
+
+
+def test_the_short_log_hint_counts_its_lines():
+    # The hint used to be a plain string with a `{}` placeholder in it, so a 2-line paste
+    # was told "only {} line(s) here".
+    out = subprocess.run([sys.executable, "-m", "servediff", "show", "-"],
+                         input="hello\nworld\n", capture_output=True, text=True)
+    assert out.returncode == 2
+    assert "only 2 line(s) here" in out.stderr
+    assert "{}" not in out.stderr

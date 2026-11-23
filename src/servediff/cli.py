@@ -1300,6 +1300,25 @@ def _expand_logs(paths):
     return out
 
 
+def _decode_log(data: bytes) -> tuple[str, str | None]:
+    """(text, the encoding this had to be read as) for a log.
+
+    Most logs are UTF-8, but PowerShell's `>` and `Out-File` still write UTF-16LE with a BOM:
+    on Windows, the most natural way to capture a server log produces a file that decodes to
+    NUL-separated mojibake and reports "no configuration lines recognised". The bytes are
+    sniffed rather than guessed from the name.
+    """
+    if data.startswith(b"\xff\xfe") or data.startswith(b"\xfe\xff"):
+        return data.decode("utf-16", errors="replace"), "utf-16"
+    if data.startswith(b"\xef\xbb\xbf"):
+        return data.decode("utf-8-sig", errors="replace"), "utf-8 with a BOM"
+    # A UTF-16 file written without a BOM still has a NUL in every second byte; UTF-8 text
+    # has none, so this is a safe sniff for the tail of a truncated capture.
+    if data.count(b"\x00") > max(4, len(data) // 8):
+        return data.decode("utf-16-le", errors="replace"), "utf-16le (no BOM)"
+    return data.decode("utf-8", errors="replace"), None
+
+
 def _read_log(path) -> str:
     """Read a log path, or stdin when the path is `-`.
 
@@ -1307,9 +1326,15 @@ def _read_log(path) -> str:
     `ssh node 'cat serve.log' | servediff show -` rather than scp first.
     """
     if str(path) == "-":
-        return sys.stdin.buffer.read().decode("utf-8", errors="replace")
+        text, encoding = _decode_log(sys.stdin.buffer.read())
+        if encoding:
+            print(f"note: stdin was read as {encoding}", file=sys.stderr)
+        return text
     try:
-        return path.read_text(encoding="utf-8", errors="replace")
+        text, encoding = _decode_log(path.read_bytes())
+        if encoding:
+            print(f"note: {path} was read as {encoding}, not UTF-8", file=sys.stderr)
+        return text
     except OSError as exc:
         # Exit 1 means "the two sides differ" to every caller and CI script, so an
         # unreadable path must not borrow it: raise a traceback here and a typo looks
@@ -1427,8 +1452,9 @@ def _no_facts_hint(text: str) -> str:
             head += f" This paste is {len(lines)} line(s) of stack, so there is nothing to compare."
         return head
     if len(lines) <= 6:
-        return ("hint: only {} line(s) here; a startup log carries a few hundred lines, including "
-                "the resolved configuration after `Initializing a V1 LLM engine`.")
+        return (f"hint: only {len(lines)} line(s) here; a startup log carries a few hundred "
+                "lines, including the resolved configuration after "
+                "`Initializing a V1 LLM engine`.")
     return "hint: run `servediff audit <log>` to see which lines are noise and which it could not read."
 
 def _non_none_pairs(literal: str) -> str:

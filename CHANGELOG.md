@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.74 — 2026-11-23
+
+A log captured on Windows was not being read at all.
+
+- **`_read_log` sniffs the bytes instead of assuming UTF-8.** PowerShell 5.1's `>` and `Out-File`
+  write UTF-16LE with a BOM, so the most natural way to capture a server log on Windows produced
+  a file that decoded to NULs and `?`: every `[module.py:851]` anchor broken, and
+  `show` answering "no configuration lines recognised" about a perfectly good log. The BOM is
+  honoured (UTF-16LE/BE, UTF-8 with BOM), and a NUL-density check covers UTF-16 written without
+  one. The chosen encoding is stated once on stderr, so stdout stays pipeable. Applies to
+  `show` / `diff` / `audit` / `repeats` and to stdin.
+- **The short-paste hint counts its lines again.** `hint: only {} line(s) here` was a plain
+  string, not an f-string, so a 2-line paste was scolded with a literal `{}`.
+- `writeups/powershell-redirect-is-utf16.md` — the diagnosis (`FF FE`), the four fixes in order,
+  and why a silently-empty log sends you after the wrong bug.
+
 ## 0.4.73 — 2026-11-23
 
 SGLang's half of the promise gets the numbers it was hiding.
