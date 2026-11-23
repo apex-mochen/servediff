@@ -2575,3 +2575,53 @@ def test_the_short_log_hint_counts_its_lines():
     assert out.returncode == 2
     assert "only 2 line(s) here" in out.stderr
     assert "{}" not in out.stderr
+
+
+def test_a_gzipped_log_is_read_without_zcat(tmp_path):
+    # Rotated logs stay gzipped on disk. Answering "no configuration lines recognised" about
+    # a .gz of a perfectly good log sends people to `zcat` and then back again.
+    import gzip as gz
+    source = (FIX / "vllm-forum-2026-07" / "a2-stuck-on-shm-broadcast.log").read_bytes()
+    packed = tmp_path / "serve.log.gz"
+    packed.write_bytes(gz.compress(source))
+    out = subprocess.run([sys.executable, "-m", "servediff", "show", str(packed)],
+                         capture_output=True, text=True)
+    assert out.returncode == 0
+    assert "gzip-compressed; decompressed" in out.stderr
+    assert "kv_cache.memory_gib" in out.stdout
+    assert "4.91" in out.stdout
+
+
+def test_show_on_a_directory_points_at_audit():
+    # `Is a directory` is a strerror, not an answer: reading a directory as one corpus is
+    # what `audit` does, and the message should say so.
+    out = subprocess.run([sys.executable, "-m", "servediff", "show", str(FIX)],
+                         capture_output=True, text=True)
+    assert out.returncode == 2
+    assert "is a directory" in out.stderr
+    assert "servediff audit" in out.stderr
+
+
+def test_audit_of_a_directory_includes_gzipped_logs(tmp_path):
+    import gzip as gz
+    source = (FIX / "vllm-forum-2026-07" / "a2-stuck-on-shm-broadcast.log").read_bytes()
+    (tmp_path / "plain.log").write_bytes(source)
+    (tmp_path / "rotated.log.gz").write_bytes(gz.compress(source))
+    out = subprocess.run([sys.executable, "-m", "servediff", "audit", str(tmp_path)],
+                         capture_output=True, text=True)
+    assert out.returncode == 0
+    assert "rotated.log.gz" in out.stdout
+    assert "2 log(s)" in out.stdout
+
+
+def test_a_bzip2_log_says_what_it_is_instead_of_that_it_has_no_config(tmp_path):
+    import bz2
+    source = (FIX / "vllm-forum-2026-07" / "a2-stuck-on-shm-broadcast.log").read_bytes()
+    packed = tmp_path / "serve.log.bz2"
+    packed.write_bytes(bz2.compress(source))
+    out = subprocess.run([sys.executable, "-m", "servediff", "show", str(packed)],
+                         capture_output=True, text=True)
+    assert out.returncode == 2
+    assert "bzip2-compressed" in out.stderr
+    assert "bunzip2" in out.stderr
+    assert "no vLLM or SGLang configuration lines" not in out.stderr

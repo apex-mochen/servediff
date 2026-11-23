@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.76 — 2026-11-23
+
+The two files a stranger is most likely to hand it were the two it handled worst.
+
+- **A rotated `.log.gz` is read directly.** It used to answer "no configuration lines
+  recognised" about a perfectly good compressed log, which sends you to `zcat` and back.
+  The gzip magic is checked on the bytes, the output says `decompressed N byte(s)` on stderr,
+  and `audit <dir>` now counts `*.log.gz` alongside `*.log` so a rotated corpus is not a
+  partial corpus. bzip2 / xz / zstd are named as containers with the command to unpack them,
+  instead of being reported as logs with no configuration in them.
+- **`show <directory>` points at `audit`.** `show: tests/fixtures: Is a directory` was a
+  strerror; reading a directory as one corpus is a feature of this tool, so the message
+  now names `servediff audit <dir>`.
+
 ## 0.4.75 — 2026-11-23
 
 The code in 0.4.74 was right; the test guarding it was not, and the Windows job said so.

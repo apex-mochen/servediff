@@ -24,6 +24,7 @@ Exit codes: 0 no differences, 1 differences found, 2 nothing recognised in an in
 from __future__ import annotations
 
 import argparse
+import gzip
 import ast
 import errno
 import json
@@ -1294,7 +1295,10 @@ def _expand_logs(paths):
     out = []
     for path in paths:
         if str(path) != "-" and path.is_dir():
-            out.extend(sorted(path.rglob("*.log")))
+            # A rotated corpus is usually already compressed, and a directory audit that
+            # skipped every .gz would report a count over the wrong set of files.
+            found = list(path.rglob("*.log")) + list(path.rglob("*.log.gz"))
+            out.extend(sorted(found, key=str))
         else:
             out.append(path)
     return out
@@ -1330,8 +1334,31 @@ def _read_log(path) -> str:
         if encoding:
             print(f"note: stdin was read as {encoding}", file=sys.stderr)
         return text
+    if path.is_dir():
+        # `show` on a directory used to answer `Is a directory`, a strerror from 1975, when
+        # reading a directory as one corpus is a feature of this tool.
+        raise InputError(f"{path}: is a directory; `servediff audit {path}` reads a directory "
+                         "as one corpus, and `servediff show <one of the logs>` reads one file")
     try:
-        text, encoding = _decode_log(path.read_bytes())
+        data = path.read_bytes()
+        if data[:2] == b"\x1f\x8b":
+            # Rotated logs are usually still gzipped on disk, and a log nobody can read is
+            # worse than no feature: decompress here rather than asking for zcat first.
+            try:
+                data = gzip.decompress(data)
+            except OSError as exc:
+                raise InputError(f"{path}: gzip header but the stream is broken ({exc})") from exc
+            print(f"note: {path} was gzip-compressed; decompressed {len(data)} byte(s)",
+                  file=sys.stderr)
+        elif data[:3] == b"BZh" or data[:6] == b"\xfd7zXZ\x00" or data[:4] == b"\x28\xb5\x2f\xfd":
+            # Same silent failure, one step further out: name the container instead of
+            # reporting that the decompressed bytes contain no configuration.
+            kind = {b"BZh": "bzip2", b"\xfd7zXZ\x00": "xz"}.get(
+                data[:6] if data[:6] == b"\xfd7zXZ\x00" else data[:3], "zstd")
+            raise InputError(f"{path}: {kind}-compressed, which is not read here; "
+                             f"`{'bunzip2' if kind == 'bzip2' else 'unxz' if kind == 'xz' else 'zstd -d'}'"
+                             " it first — gzip is read directly")
+        text, encoding = _decode_log(data)
         if encoding:
             print(f"note: {path} was read as {encoding}, not UTF-8", file=sys.stderr)
         return text
