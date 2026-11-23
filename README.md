@@ -818,6 +818,11 @@ prove, are in [writeups/audit-noise-real-logs.md](https://github.com/apex-mochen
   budget reset to 2048 while `--max-num-batched-tokens` stays in the args, `min_p`/`logit_bias`
   dropped, the MTP layer forwarded once per draft token — read from one 86-line forum paste that
   also names the quantised GEMM kernels the flags never do.
+- Why the log you pasted is not the log the server wrote:
+  [writeups/paste-typography.md](https://github.com/apex-mochen/servediff/blob/main/writeups/paste-typography.md)
+  — a forum turns `models--Qwen--Qwen3.6` into `models–Qwen–Qwen3.6` and `'align'` into
+  `‘align’`, so a pasted path can never equal the server's own path and a pasted flag stops
+  matching; one fold of the characters that have an ASCII twin is the whole fix.
 
 ## License
 

@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.4.66 — 2026-11-23
+
+Two pasted logs, two silent losses: quotes last time, **dashes** this time. Plus eleven facts
+from a pre-Ampere card and an eager-mode run.
+
+**Hyphens become en dashes.** Hugging Face writes a cache directory as
+`models--Qwen--Qwen3.6-35B-A3B-FP8`; a forum or word processor turns the `--` into an en dash,
+so a pasted `arg.model` reads `models–Qwen–…`. The fact was still read, with a value that
+could never equal the server's own path: a diff against the box reported a model change that
+never happened. `parse` and `audit` now also fold U+2013 → `--` and U+2014 → `---`, in the
+same table that folds the curly quotes. Before: `arg.model=…/models–Qwen–Qwen3.6-35B-A3B-FP8`;
+after: `…/models--Qwen--Qwen3.6-35B-A3B-FP8`.
+
+**A local rank is not a port.** `Starting vLLM API server 0 on http://0.0.0.0:8000` prints the
+rank inside a data-parallel group first. Read as a port it produced `server.port: 0` on a TP4
+box, differing from every other log for no reason; the rule now keeps only `server.url`.
+
+Eleven new fact keys, all settings no flag records:
+
+- **Hybrid cache rewriting (vLLM 0.14, Nemotron-3-Nano-30B-A3B, TP4 over V100):**
+  `kv_cache.mamba_ssm_dtype` (the engine moves it to float16 itself), `kv_cache.padding_layers`
+  and `kv_cache.padding_waste` (one padding layer, 4.35% of the cache), `moe.config`
+  (default because no config file exists), `parallel.dp_sync_nccl` (off under async scheduling).
+- **A card without bfloat16:** `gpu.bf16_support`, `model.cast=torch.bfloat16 -> torch.float16`,
+  `backend.flash_attn_blocked=FA2 needs sm80+`, and `backend.allreduce_reason` — custom
+  allreduce naming why it switched itself off (PCIe-only box).
+- **Eager mode and kernel fallbacks (vLLM 0.19, Qwen3.6-35B-A3B-FP8):**
+  `quant.kernel.config=default W8A8 (no config file)`, plus `chat.template_warmup` and
+  `server.url`.
+
+Two rules stopped requiring text newer builds no longer print: `parallel.roles` accepts any
+rank list (this build has no EPLB rank), and `gdn.prefill_kernel`'s `(requested=…,
+head_k_dim=…)` suffix is optional. Both were silently dropping facts.
+
+New corpus `tests/fixtures/vllm-forum-2026-01/` and `…-2026-04/`, each with a `PROVENANCE.md`
+stating what was extracted and left typographic. New writeup `writeups/paste-typography.md`.
+Fact keys 222 → 242; tests 155 → 160; every fixture still audits to zero shapes worth a look.
+
 ## 0.4.65 — 2026-11-23
 
 Speculative decoding overrides three settings you passed and says so only in warnings; a log
