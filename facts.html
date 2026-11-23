@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What each servediff fact key means</title>
+<meta name="description" content="Every key servediff prints from a vLLM or SGLang startup log, with what it counts and what it does not tell you.">
+<link rel="canonical" href="https://apex-mochen.github.io/servediff/facts.html">
+<style>
+:root { --fg:#1c1c1e; --muted:#6b6b70; --line:#e4e4e7; --code:#f6f6f7; }
+body { margin:0 auto; max-width:44rem; padding:2.5rem 1.25rem 6rem;
+  font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  color:var(--fg); }
+h1 { font-size:1.9rem; line-height:1.25; margin:0 0 1rem; letter-spacing:-0.01em; }
+h2 { font-size:1.25rem; margin:2.2rem 0 .6rem; }
+h3 { font-size:1.05rem; margin:1.6rem 0 .4rem; }
+p, li { color:var(--fg); }
+pre { background:var(--code); border:1px solid var(--line); border-radius:6px;
+  padding:.85rem 1rem; overflow-x:auto; font-size:.86rem; line-height:1.5; }
+code { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:.9em; }
+p code, li code { background:var(--code); padding:.1em .3em; border-radius:3px; }
+a { color:#0b62d0; }
+.note { color:var(--muted); font-size:.9rem; }
+nav { border-bottom:1px solid var(--line); padding-bottom:.75rem; margin-bottom:2rem;
+  font-size:.9rem; }
+nav a { margin-right:1rem; }
+ul.index li { margin:.5rem 0; }
+</style>
+</head>
+<body>
+<nav><a href="./index.html">servediff notes</a><a href="https://github.com/apex-mochen/servediff">source</a><a href="https://pypi.org/project/servediff/">pip install servediff</a></nav>
+<h1>What each servediff fact key means</h1>
+<p>Each entry is one key, or one family when every key in it shares a meaning. The third paragraph is the one that matters: what the number does <em>not</em> answer, which is how a diff gets misread.</p>
+<pre><code>servediff explain kv_cache.max_concurrency</code></pre>
+<ul class="index">
+<li><a href="#after_ready"><code>after_ready</code></a> &mdash; Errors printed after the server reported ready -- during serving or shutdown.</li>
+<li><a href="#api"><code>api</code></a> &mdash; Frontend behaviour: tool parser loaded, request fields the server accepted and then ignored, and chat-template ordering rules it rewrote.</li>
+<li><a href="#arg"><code>arg</code></a> &mdash; What the command line asked for</li>
+<li><a href="#args"><code>args</code></a> &mdash; Which block the args were read from and how complete it is.</li>
+<li><a href="#attn"><code>attn</code></a> &mdash; The attention backend as the platform printed it when the usual `Using X attention backend` line never appears (CPU builds); the value is the enum&#x27;s short name.</li>
+<li><a href="#backend"><code>backend</code></a> &mdash; Which kernel the build chose for each job -- attention, MoE, linear, all-reduce, sampling -- and, in backend.candidates, the set it would have considered.</li>
+<li><a href="#cache"><code>cache</code></a> &mdash; Request-level cache behaviour: prefix caching, radix tree, chunked prefill</li>
+<li><a href="#chat"><code>chat</code></a> &mdash; Chat template warmup: whether the template compiled at startup and how long it took.</li>
+<li><a href="#compile"><code>compile</code></a> &mdash; torch.compile / inductor on the backbone: backend, ranges compiled, fusions enabled, seconds spent, and why a recompile happened.</li>
+<li><a href="#cpu"><code>cpu</code></a> &mdash; CPU-side threading and affinity: torch threads, OMP threads, NUMA mode and membind, reserved cores, and the core ids bound.</li>
+<li><a href="#cuda_graph"><code>cuda_graph</code></a> &mdash; CUDA graph capture: mode, how many graphs, seconds and GiB spent, and the pool they reserve; cuda_graph.profiling says whether the profile pass includes them.</li>
+<li><a href="#engine"><code>engine</code></a> &mdash; Which build served: version string, git sha when the log carries one, platform it ran on, engine.init_s for construction time</li>
+<li><a href="#env"><code>env</code></a> &mdash; The environment the server ran in: the collect_env block vLLM asks every bug report to paste, plus SGLang&#x27;s equivalent</li>
+<li><a href="#gdn"><code>gdn</code></a> &mdash; Gated delta net kernels: which one is used for prefill and which for decode.</li>
+<li><a href="#gpu"><code>gpu</code></a> &mdash; Per-device memory accounting, phase by phase: total and free before weights, the budget the utilization fraction allows, what was consumed after profiling, what CUDA graphs reserved, and the peak activation the profile run saw.</li>
+<li><a href="#jit"><code>jit</code></a> &mdash; JIT behaviour inside the startup window: warmup seconds, and the mode used for compiles that happen during inference.</li>
+<li><a href="#kernel"><code>kernel</code></a> &mdash; Kernel-level choices and events: JIT during inference, FlashInfer autotune, and the final IR op priority per fused operator.</li>
+<li><a href="#kv_cache"><code>kv_cache</code></a> &mdash; The cache the engine sized after profiling: GiB and tokens it holds, the sequence length and concurrency that implies, its dtype and block layout, and anything the engine had to pad or set aside.</li>
+<li><a href="#mamba"><code>mamba</code></a> &mdash; State cache for hybrid/Mamba models: its size, and the effective size after the scheduler raised it to what the decode side needs.</li>
+<li><a href="#mm"><code>mm</code></a> &mdash; Multimodal behaviour: whether the model is effectively text-only, whether the per-frame pixel cap is applied, the encoder cache budget, chunked mm input, prefix attention, and the multimodal warmup seconds.</li>
+<li><a href="#model"><code>model</code></a> &mdash; What was served: architecture, max length, supported tasks, and the dtype the weights were cast to</li>
+<li><a href="#model_init"><code>model_init</code></a> &mdash; Time spent constructing the nn.Module before weights are read.</li>
+<li><a href="#model_loading"><code>model_loading</code></a> &mdash; The loader&#x27;s own accounting of reading the checkpoint: GiB resident after load and the seconds it took.</li>
+<li><a href="#model_runner"><code>model_runner</code></a> &mdash; A marker, not a number: the log came from the V1 engine (gpu_model_runner).</li>
+<li><a href="#moe"><code>moe</code></a> &mdash; MoE configuration the engine settled on.</li>
+<li><a href="#nccl"><code>nccl</code></a> &mdash; The collective library: version, and any environment overrides that changed how it behaves.</li>
+<li><a href="#parallel"><code>parallel</code></a> &mdash; The parallel layout the process actually runs: TP, PP, DP, world size, the roles assigned to ranks, and whether TP exceeds the GPUs present.</li>
+<li><a href="#pd"><code>pd</code></a> &mdash; Prefill/decode disaggregation warmup, as a startup step.</li>
+<li><a href="#plugins"><code>plugins</code></a> &mdash; Plugin registrations the server made: which name replaced which (`plugins.loaded: a -&gt; b`).</li>
+<li><a href="#quant"><code>quant</code></a> &mdash; Quantization as the build reports it: checkpoint format, the kernel selected, and the per-layer choice when the log lists it.</li>
+<li><a href="#ray"><code>ray</code></a> &mdash; Ray&#x27;s environment handling: which variable prefixes the workers inherit.</li>
+<li><a href="#sampling"><code>sampling</code></a> &mdash; Sampling kernel and overrides: which top-k/top-p implementation ran, whether it fell back, and which request settings were overridden by spec decoding.</li>
+<li><a href="#sched"><code>sched</code></a> &mdash; Scheduler limits that were changed from what was configured: max scheduled tokens from spec settings, max running requests capped by a state cache.</li>
+<li><a href="#scheduler"><code>scheduler</code></a> &mdash; The scheduler&#x27;s decisions: async scheduling on or off (and the reason), chunked prefill, and how it exited.</li>
+<li><a href="#server"><code>server</code></a> &mdash; The HTTP surface: the URL it binds, the command line it was started with, the tasks it advertises, and whether scale-out is enabled.</li>
+<li><a href="#serving"><code>serving</code></a> &mdash; How the served endpoint formats content (chat template content format).</li>
+<li><a href="#spec"><code>spec</code></a> &mdash; Speculative decoding specifics: draft length, MTP layer reuse and whether the draft shares embedding/lm_head weights with the target.</li>
+<li><a href="#startup"><code>startup</code></a> &mdash; How startup ended: ready, or failed and at which stage</li>
+<li><a href="#torch"><code>torch</code></a> &mdash; The CUDA allocator&#x27;s own OOM report: which device, how much was requested, how much was free at that instant, the card&#x27;s total, and torch.oom_holder_gib -- the GiB another process was holding.</li>
+<li><a href="#transfer"><code>transfer</code></a> &mdash; KV transfer between prefill and decode workers: staging buffers, their size and method, the custom memory pool, and the NIXL backend.</li>
+<li><a href="#triton"><code>triton</code></a> &mdash; Triton driver/library versions as the log prints them.</li>
+<li><a href="#uva_buffers"><code>uva_buffers</code></a> &mdash; Whether Unified Virtual Addressing buffers could use pinned memory, and what the server fell back to.</li>
+<li><a href="#weights"><code>weights</code></a> &mdash; Where the weights came from and how they were read: format, filesystem, cache, download and load seconds, checkpoint size, dtype, available RAM, and whether prefetch was possible (weights.prefetch says why not).</li>
+</ul>
+<h2 id="after_ready"><code>after_ready</code></h2>
+<p><strong>Measured in:</strong> exception text</p>
+<p>Errors printed after the server reported ready -- during serving or shutdown.</p>
+<p class="note">What it does not tell you: these say nothing about startup configuration, which is why they are kept apart from startup.error</p>
+<h2 id="api"><code>api</code></h2>
+<p><strong>Measured in:</strong> labels, a dict of ignored fields</p>
+<p>Frontend behaviour: tool parser loaded, request fields the server accepted and then ignored, and chat-template ordering rules it rewrote.</p>
+<p class="note">What it does not tell you: api.ignored_request_fields is the frontend telling you your request was not fully honoured; a benchmark that ignores it measures something else</p>
+<h2 id="arg"><code>arg</code></h2>
+<p><strong>Measured in:</strong> the flag&#x27;s own unit</p>
+<p>What the command line asked for. vLLM prints only non-default args, so an absent arg.X means &#x27;default&#x27;, not &#x27;unset&#x27;; SGLang prints its whole server_args dict. args.source names the block the values came from.</p>
+<p class="note">What it does not tell you: asked is not used: enforce_eager, hybrid dtype rewrites and kv-cache sizing all override an arg, and the non-arg facts are where the used value lives</p>
+<h2 id="args"><code>args</code></h2>
+<p><strong>Measured in:</strong> a label</p>
+<p>Which block the args were read from and how complete it is.</p>
+<p class="note">What it does not tell you: vLLM&#x27;s block is a diff against defaults, SGLang&#x27;s is the full set -- an arg comparison across engines is not symmetric</p>
+<h2 id="attn"><code>attn</code></h2>
+<p><strong>Measured in:</strong> backend name</p>
+<p>The attention backend as the platform printed it when the usual `Using X attention backend` line never appears (CPU builds); the value is the enum&#x27;s short name.</p>
+<p class="note">What it does not tell you: here `default` means no flag won and the platform default did, which is not the same as an explicitly configured backend</p>
+<h2 id="backend"><code>backend</code></h2>
+<p><strong>Measured in:</strong> backend names</p>
+<p>Which kernel the build chose for each job -- attention, MoE, linear, all-reduce, sampling -- and, in backend.candidates, the set it would have considered.</p>
+<p class="note">What it does not tell you: a chosen backend that did not change can still sit on a list that shrank; that is why candidates is a fact of its own</p>
+<h3><code>backend.attention</code></h3>
+<p><strong>Measured in:</strong> backend name</p>
+<p>The attention backend the engine selected after its own checks, which is not always the one the flag asked for (backend.attention_forced says when it was overridden).</p>
+<p class="note">What it does not tell you: FlashInfer and FlashAttention are different kernel sets for the same command line, so this key is the one to read before comparing tokens/s</p>
+<h3><code>backend.moe</code></h3>
+<p><strong>Measured in:</strong> backend name</p>
+<p>The MoE backend chosen, with the quantization it runs in when the log names it (e.g. VLLM_CUTLASS (NvFp4)).</p>
+<p class="note">What it does not tell you: the same name over a different quantization is a different kernel -- read the parenthesised part</p>
+<h2 id="cache"><code>cache</code></h2>
+<p><strong>Measured in:</strong> a label, or a size</p>
+<p>Request-level cache behaviour: prefix caching, radix tree, chunked prefill. These change what the server does, not what it allocated.</p>
+<p class="note">What it does not tell you: a disabled prefix cache usually costs throughput, not correctness, so it can hide in a diff that only looks at latency</p>
+<h2 id="chat"><code>chat</code></h2>
+<p><strong>Measured in:</strong> a label, milliseconds</p>
+<p>Chat template warmup: whether the template compiled at startup and how long it took.</p>
+<p class="note">What it does not tell you: a template that warms up here can still fail on a request shape the warmup did not cover</p>
+<h2 id="compile"><code>compile</code></h2>
+<p><strong>Measured in:</strong> seconds, token ranges</p>
+<p>torch.compile / inductor on the backbone: backend, ranges compiled, fusions enabled, seconds spent, and why a recompile happened.</p>
+<p class="note">What it does not tell you: compile.total_s hides which phase grew; compile.dynamo_s, graph_s and warmup_s split it</p>
+<h2 id="cpu"><code>cpu</code></h2>
+<p><strong>Measured in:</strong> counts, ids</p>
+<p>CPU-side threading and affinity: torch threads, OMP threads, NUMA mode and membind, reserved cores, and the core ids bound.</p>
+<p class="note">What it does not tell you: torch_parallelism on a many-core box can be far above the useful number and cost startup time; it is a real fact, not a typo</p>
+<h2 id="cuda_graph"><code>cuda_graph</code></h2>
+<p><strong>Measured in:</strong> count, seconds, GiB</p>
+<p>CUDA graph capture: mode, how many graphs, seconds and GiB spent, and the pool they reserve; cuda_graph.profiling says whether the profile pass includes them.</p>
+<p class="note">What it does not tell you: capture time is startup time and pool GiB is memory the cache cannot use; two runs can differ in both and only one of them is a regression</p>
+<h2 id="engine"><code>engine</code></h2>
+<p><strong>Measured in:</strong> version, sha, seconds</p>
+<p>Which build served: version string, git sha when the log carries one, platform it ran on, engine.init_s for construction time. Two logs whose facts are identical but whose versions differ are not the same run, because the reading rules change.</p>
+<p class="note">What it does not tell you: init_s is engine construction (weights, compile, cache sizing) and excludes a model download that happened before the process started</p>
+<h3><code>engine.init_s</code></h3>
+<p><strong>Measured in:</strong> seconds</p>
+<p>How long the engine took to construct, as the engine itself timed it.</p>
+<p class="note">What it does not tell you: it ends when init returns, so the first CUDA graph capture and any lazy warmup that happens on the first request are outside it</p>
+<h2 id="env"><code>env</code></h2>
+<p><strong>Measured in:</strong> versions, paths, environment variables</p>
+<p>The environment the server ran in: the collect_env block vLLM asks every bug report to paste, plus SGLang&#x27;s equivalent. `env.pip.*` says whether a wheel was importable and at which version; `env.var.*` is an environment variable the server printed; `env.ulimit.*` is the process limit.</p>
+<p class="note">What it does not tell you: a version here is a wheel that imported, not necessarily the kernel that ran, and two runs on the same versions can still differ in what they selected -- read env next to the other facts, never instead of them</p>
+<h2 id="gdn"><code>gdn</code></h2>
+<p><strong>Measured in:</strong> kernel names</p>
+<p>Gated delta net kernels: which one is used for prefill and which for decode.</p>
+<p class="note">What it does not tell you: the two are chosen separately, so a prefill speedup can leave decode untouched</p>
+<h2 id="gpu"><code>gpu</code></h2>
+<p><strong>Measured in:</strong> GiB; utilization is a fraction of total</p>
+<p>Per-device memory accounting, phase by phase: total and free before weights, the budget the utilization fraction allows, what was consumed after profiling, what CUDA graphs reserved, and the peak activation the profile run saw.</p>
+<p class="note">What it does not tell you: free_gib is measured before anything is loaded, and the OOM that follows is judged against consumed_gib -- the two are not the same pool</p>
+<h3><code>gpu.model</code></h3>
+<p><strong>Measured in:</strong> a name</p>
+<p>The card the log named.</p>
+<p class="note">What it does not tell you: vLLM prints it once per process in some versions; on a multi-GPU box it is the card the rank reporting happened to run on</p>
+<h3><code>gpu.utilization_effective</code></h3>
+<p><strong>Measured in:</strong> fraction of total device memory</p>
+<p>The utilization fraction the run actually reached (consumed / total), which vLLM prints as `equivalent to --gpu-memory-utilization=X`.</p>
+<p class="note">What it does not tell you: the value you passed and the value reached are different facts; a run that asked for 0.90 and reached 0.77 has 13% of the card idle, and that is the number to compare before blaming the model</p>
+<h3><code>gpu.utilization_to_match_kv_cache</code></h3>
+<p><strong>Measured in:</strong> fraction of total device memory</p>
+<p>What --gpu-memory-utilization you would have had to pass to get the KV cache you asked for.</p>
+<p class="note">What it does not tell you: it is advice printed after the engine failed to fit the cache, so it describes a configuration that was never run</p>
+<h2 id="jit"><code>jit</code></h2>
+<p><strong>Measured in:</strong> seconds, mode name</p>
+<p>JIT behaviour inside the startup window: warmup seconds, and the mode used for compiles that happen during inference.</p>
+<p class="note">What it does not tell you: a JIT that runs during inference stalls requests instead of startup; that is why kernel.jit_during_inference exists separately</p>
+<h2 id="kernel"><code>kernel</code></h2>
+<p><strong>Measured in:</strong> a label or an op name</p>
+<p>Kernel-level choices and events: JIT during inference, FlashInfer autotune, and the final IR op priority per fused operator.</p>
+<p class="note">What it does not tell you: kernel.ir_op.* is the priority list after platform defaults, so a diff there is a change in which fused op wins, not in what you asked for</p>
+<h2 id="kv_cache"><code>kv_cache</code></h2>
+<p><strong>Measured in:</strong> GiB for sizes, tokens for tokens, sequences for concurrency</p>
+<p>The cache the engine sized after profiling: GiB and tokens it holds, the sequence length and concurrency that implies, its dtype and block layout, and anything the engine had to pad or set aside.</p>
+<p class="note">What it does not tell you: this is what the engine decided the cache is, after auto-fitting; what you asked for is in arg.kv_cache_dtype / kv_cache.requested_gib</p>
+<h3><code>kv_cache.max_concurrency</code></h3>
+<p><strong>Measured in:</strong> sequences</p>
+<p>How many concurrent sequences the cache holds at the per-request token count the same sentence names.</p>
+<p class="note">What it does not tell you: it divides by that sentence&#x27;s token count, not by your real request size -- at half the length you get roughly twice the concurrency</p>
+<h3><code>kv_cache.non_kv_gib</code></h3>
+<p><strong>Measured in:</strong> GiB</p>
+<p>The part of the memory split that is not the KV cache: weights plus the buffers the engine keeps outside it.</p>
+<p class="note">What it does not tell you: in the extensible-cache split this is a residual, so it grows when the cache shrinks without any weight changing</p>
+<h3><code>kv_cache.padding_waste</code></h3>
+<p><strong>Measured in:</strong> percent of KV memory</p>
+<p>The share of KV memory lost to padding layers added so the hybrid attention layout fits the block size (kv_cache.padding_layers says how many).</p>
+<p class="note">What it does not tell you: it is a cost the engine chose to pay, not a leak, and it is absent on models that need no padding</p>
+<h3><code>kv_cache.requested_gib</code></h3>
+<p><strong>Measured in:</strong> GiB</p>
+<p>The cache size you asked for, when the version supports sizing it directly (--kv-cache-memory) instead of through a utilization fraction.</p>
+<p class="note">What it does not tell you: asking is not getting: the engine prints what it actually allocated next to it, and the difference is what a later short-sequence OOM is about</p>
+<h3><code>kv_cache.suggested_gib</code></h3>
+<p><strong>Measured in:</strong> GiB</p>
+<p>The --kv-cache-memory the engine suggests when the utilization fraction cannot express what it needs.</p>
+<p class="note">What it does not tell you: the suggestion is derived from one profile pass; a suggestion quoted in an issue is that run&#x27;s number, not a property of the model</p>
+<h3><code>kv_cache.tokens</code></h3>
+<p><strong>Measured in:</strong> tokens</p>
+<p>Total tokens the cache can hold, across all sequences.</p>
+<p class="note">What it does not tell you: tokens are the invariant here; the GiB moves with the dtype and the block layout</p>
+<h2 id="mamba"><code>mamba</code></h2>
+<p><strong>Measured in:</strong> slots, GiB</p>
+<p>State cache for hybrid/Mamba models: its size, and the effective size after the scheduler raised it to what the decode side needs.</p>
+<p class="note">What it does not tell you: the effective size can differ per DP/TP/EP rank in one launch, and the cap it imposes on concurrency is a different key (sched.max_running_requests)</p>
+<h2 id="mm"><code>mm</code></h2>
+<p><strong>Measured in:</strong> labels, tokens, seconds</p>
+<p>Multimodal behaviour: whether the model is effectively text-only, whether the per-frame pixel cap is applied, the encoder cache budget, chunked mm input, prefix attention, and the multimodal warmup seconds.</p>
+<p class="note">What it does not tell you: mm.text_only means every modality limit was 0, so the vision tower never ran -- the absence of every other mm.* fact is the evidence, not a reading gap</p>
+<h2 id="model"><code>model</code></h2>
+<p><strong>Measured in:</strong> names, token counts, dtypes</p>
+<p>What was served: architecture, max length, supported tasks, and the dtype the weights were cast to. model.cast is the pair `checkpoint dtype -&gt; running dtype`.</p>
+<p class="note">What it does not tell you: architecture is what the config declared; the backend keys are what the build actually ran with for that architecture</p>
+<h2 id="model_init"><code>model_init</code></h2>
+<p><strong>Measured in:</strong> seconds</p>
+<p>Time spent constructing the nn.Module before weights are read.</p>
+<p class="note">What it does not tell you: on a big model this is often small next to model_loading; a change here points at transformers or model code, not at the disk</p>
+<h2 id="model_loading"><code>model_loading</code></h2>
+<p><strong>Measured in:</strong> GiB, seconds</p>
+<p>The loader&#x27;s own accounting of reading the checkpoint: GiB resident after load and the seconds it took.</p>
+<p class="note">What it does not tell you: the GiB here is what the weights occupy, not what the card used -- CUDA context, allocator and non-torch buffers are outside it</p>
+<h2 id="model_runner"><code>model_runner</code></h2>
+<p><strong>Measured in:</strong> a label</p>
+<p>A marker, not a number: the log came from the V1 engine (gpu_model_runner).</p>
+<p class="note">What it does not tell you: the V0 engine printed a different runner line, so a V0-vs-V1 comparison shows as this key appearing rather than changing</p>
+<h2 id="moe"><code>moe</code></h2>
+<p><strong>Measured in:</strong> a label</p>
+<p>MoE configuration the engine settled on.</p>
+<p class="note">What it does not tell you: an absent MoE config is not a bug on a dense model; it only matters when the architecture has experts</p>
+<h2 id="nccl"><code>nccl</code></h2>
+<p><strong>Measured in:</strong> version, NAME=value</p>
+<p>The collective library: version, and any environment overrides that changed how it behaves.</p>
+<p class="note">What it does not tell you: overrides can come from the image rather than the command line, and they decide which algorithm NCCL picks</p>
+<h2 id="parallel"><code>parallel</code></h2>
+<p><strong>Measured in:</strong> counts</p>
+<p>The parallel layout the process actually runs: TP, PP, DP, world size, the roles assigned to ranks, and whether TP exceeds the GPUs present.</p>
+<p class="note">What it does not tell you: TP in this block is what ran; arg.tensor_parallel_size is what was asked and can differ when the engine re-plans</p>
+<h2 id="pd"><code>pd</code></h2>
+<p><strong>Measured in:</strong> a label</p>
+<p>Prefill/decode disaggregation warmup, as a startup step.</p>
+<p class="note">What it does not tell you: its cost lands in startup, before the first request, and no flag accounts for it</p>
+<h2 id="plugins"><code>plugins</code></h2>
+<p><strong>Measured in:</strong> name pairs</p>
+<p>Plugin registrations the server made: which name replaced which (`plugins.loaded: a -&gt; b`).</p>
+<p class="note">What it does not tell you: the arrow direction is `registered name -&gt; implementation`, and a missing arrow is a plugin that never loaded</p>
+<h2 id="quant"><code>quant</code></h2>
+<p><strong>Measured in:</strong> format and kernel names</p>
+<p>Quantization as the build reports it: checkpoint format, the kernel selected, and the per-layer choice when the log lists it.</p>
+<p class="note">What it does not tell you: a quantized checkpoint that loads is not proof the fast kernel was used; quant.kernel.selected is</p>
+<h2 id="ray"><code>ray</code></h2>
+<p><strong>Measured in:</strong> prefixes</p>
+<p>Ray&#x27;s environment handling: which variable prefixes the workers inherit.</p>
+<p class="note">What it does not tell you: a variable missing from this list is missing in the workers, even if the engine process has it</p>
+<h2 id="sampling"><code>sampling</code></h2>
+<p><strong>Measured in:</strong> backend names, settings</p>
+<p>Sampling kernel and overrides: which top-k/top-p implementation ran, whether it fell back, and which request settings were overridden by spec decoding.</p>
+<p class="note">What it does not tell you: a silent fallback to the torch kernel is slower, not wrong -- it shows here and nowhere in the flags</p>
+<h2 id="sched"><code>sched</code></h2>
+<p><strong>Measured in:</strong> counts</p>
+<p>Scheduler limits that were changed from what was configured: max scheduled tokens from spec settings, max running requests capped by a state cache.</p>
+<p class="note">What it does not tell you: sched.max_running_requests carries the cache that caused the cap in its value, because the number alone reads like a configured limit</p>
+<h2 id="scheduler"><code>scheduler</code></h2>
+<p><strong>Measured in:</strong> labels</p>
+<p>The scheduler&#x27;s decisions: async scheduling on or off (and the reason), chunked prefill, and how it exited.</p>
+<p class="note">What it does not tell you: async scheduling can be accepted from the flag and then disabled by the executor; scheduler.async_reason is why</p>
+<h2 id="server"><code>server</code></h2>
+<p><strong>Measured in:</strong> URL, command, labels</p>
+<p>The HTTP surface: the URL it binds, the command line it was started with, the tasks it advertises, and whether scale-out is enabled.</p>
+<p class="note">What it does not tell you: the number after `API server` in vLLM&#x27;s line is a local rank in the DP group, not a port; the port is only in the URL</p>
+<h2 id="serving"><code>serving</code></h2>
+<p><strong>Measured in:</strong> a label</p>
+<p>How the served endpoint formats content (chat template content format).</p>
+<p class="note">What it does not tell you: it changes what the model receives for multimodal inputs, and no sampling flag records it</p>
+<h2 id="spec"><code>spec</code></h2>
+<p><strong>Measured in:</strong> tokens, a label</p>
+<p>Speculative decoding specifics: draft length, MTP layer reuse and whether the draft shares embedding/lm_head weights with the target.</p>
+<p class="note">What it does not tell you: sharing weights changes memory and numerics; a spec diff that only compares acceptance rates is missing it</p>
+<h2 id="startup"><code>startup</code></h2>
+<p><strong>Measured in:</strong> a label, exception text</p>
+<p>How startup ended: ready, or failed and at which stage. startup.error is the exception text the server printed; startup.cause is a timeout raised around it.</p>
+<p class="note">What it does not tell you: `stable` and `ready` are different claims: a failed run can still have printed every fact above it, so read this key first when the diff looks surprising</p>
+<h3><code>startup.error</code></h3>
+<p><strong>Measured in:</strong> exception text</p>
+<p>The exception as the server printed it, first line only.</p>
+<p class="note">What it does not tell you: a wrapper exception (worker init failed, ray task error) names the stage, not the cause; the cause is further down the same log</p>
+<h2 id="torch"><code>torch</code></h2>
+<p><strong>Measured in:</strong> MiB, GiB</p>
+<p>The CUDA allocator&#x27;s own OOM report: which device, how much was requested, how much was free at that instant, the card&#x27;s total, and torch.oom_holder_gib -- the GiB another process was holding.</p>
+<p class="note">What it does not tell you: oom_holder_gib is the answer to &#x27;VRAM is enough, why did it die&#x27;: on the A100 in vllm#54559 another process held 94.41 of 95.00 GiB</p>
+<h2 id="transfer"><code>transfer</code></h2>
+<p><strong>Measured in:</strong> count, MiB, backend name</p>
+<p>KV transfer between prefill and decode workers: staging buffers, their size and method, the custom memory pool, and the NIXL backend.</p>
+<p class="note">What it does not tell you: staging memory is reserved per worker; a transfer diff that ignores it compares throughput of two runs with different memory available for the cache</p>
+<h2 id="triton"><code>triton</code></h2>
+<p><strong>Measured in:</strong> versions</p>
+<p>Triton driver/library versions as the log prints them.</p>
+<p class="note">What it does not tell you: a mismatch here often shows up first as a compile failure, not as a wrong number</p>
+<h2 id="uva_buffers"><code>uva_buffers</code></h2>
+<p><strong>Measured in:</strong> a label</p>
+<p>Whether Unified Virtual Addressing buffers could use pinned memory, and what the server fell back to.</p>
+<p class="note">What it does not tell you: pinned memory affects host-to-device speed and can change startup timing while changing no flag</p>
+<h2 id="weights"><code>weights</code></h2>
+<p><strong>Measured in:</strong> GiB, seconds, MiB/s</p>
+<p>Where the weights came from and how they were read: format, filesystem, cache, download and load seconds, checkpoint size, dtype, available RAM, and whether prefetch was possible (weights.prefetch says why not).</p>
+<p class="note">What it does not tell you: download_s is the network leg only; a slow startup on a local disk shows in load_s and in `weights.prefetch: disabled (...)`, not in download_s</p>
+</body>
+</html>
