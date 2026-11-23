@@ -184,7 +184,7 @@ ul.index li { margin:.5rem 0; }
 <h3><code>kv_cache.padding_waste</code></h3>
 <p><strong>Measured in:</strong> percent of KV memory, as an upper bound</p>
 <p>The upper bound the cache planner prints for KV memory that padding layers could waste, added so caches with different block sizes share one page layout (kv_cache.padding_layers says how many layers).</p>
-<p class="note">What it does not tell you: the log says &#x27;may waste at most&#x27;, so this is not the measured waste of an allocated cache: multiplying it into a memory estimate overstates the loss. vllm#69280 read the 350% as actual waste and compared it with a measured 1.7-2.7x, which are two different quantities</p>
+<p class="note">What it does not tell you: the log says &#x27;may waste at most&#x27;, so this is not the measured waste of an allocated cache: multiplying it into a memory estimate overstates the loss. A ratio measured from allocated pools and this printed ceiling are different quantities; comparing them reads as a contradiction that is not there</p>
 <h3><code>kv_cache.requested_gib</code></h3>
 <p><strong>Measured in:</strong> GiB</p>
 <p>The cache size you asked for, when the version supports sizing it directly (--kv-cache-memory) instead of through a utilization fraction.</p>
