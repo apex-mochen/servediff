@@ -81,6 +81,9 @@ class Fact:
 
 
 # Patterns over one log line. Each yields (fact key, value) pairs.
+_STAGING_ALLOC = re.compile(r"StagingBuffer allocated: ([\d.]+) MB on cuda:(\d+), method=(\w+)")
+
+
 LINE_RULES: list[tuple[re.Pattern, callable]] = [
     # vLLM banner and engine init.
     (re.compile(r"^(?!CMake)\W?[^\n]*\bversion (\d+\.\d+\.\d+\S*)"), lambda m: [("engine.version", m[1])]),
@@ -696,6 +699,24 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
     (re.compile(r"\[jit_monitor\.py:\d+\] Triton kernel JIT compilation during inference: "
                 r"(\w+)"),
      lambda m: [("kernel.jit_during_inference", m[1])]),
+    # SGLang's PD-disaggregation transport allocates KV staging buffers and prints each one.
+    # Four 896 MiB allocations are 3.5 GiB of the card that the args never mention.
+    (re.compile(r"StagingBuffer allocated: ([\d.]+) MB on cuda:(\d+), method=(\w+)"),
+     lambda m: [("transfer.staging_buffer_mib", float(m[1])),
+                ("transfer.staging_method", m[3])]),
+    # The same block says when it fell back to plain cudaMalloc, which costs NVLink/MNNVL
+    # transport — a setting change with no flag and no other trace in the log.
+    (re.compile(r"Staging buffer using cudaMalloc"),
+     lambda m: [("transfer.custom_mem_pool", "disabled (cudaMalloc)")]),
+    # SGLang only: the library block it prints before the model loads. `Module Not Found` on
+    # torchao or outlines is a silent code-path downgrade, not an error.
+    # Only the libraries whose version changes a code path. The same block also prints
+    # packaging, psutil, aiohttp — true, and never the explanation for anything.
+    (re.compile(r"^(flashinfer_cubin|flashinfer_jit_cache|sglang_kernel|sglang_router|torchao|"
+                r"outlines|interegular|modelscope): ([^\s].*)$"),
+     lambda m: [(f"env.lib.{m[1].lower()}", m[2].strip())]),
+    (re.compile(r"GPU (\d+) Compute Capability: ([\d.]+)"),
+     lambda m: [("gpu.compute_capability", m[2])]),
     # Exception classes arrive fully qualified in some versions
     # (`vllm.v1.engine.exceptions.EngineDeadError: …`), so the type may be mid-line.
     (re.compile(r"((?:RuntimeError|ValueError|IndexError|torch\.OutOfMemoryError|AssertionError|AttributeError|KeyError|TypeError|EngineDeadError): .+)$"),
@@ -919,6 +940,21 @@ def parse(text: str) -> dict:
                         else:
                             put("startup", "failed", lineno, line)
                     put(key, value, lineno, line)
+
+    staging = []
+    for raw in text.splitlines():
+        line = BRACKET_TS.sub("", ANSI.sub("", raw)).translate(CURLY)
+        match = _STAGING_ALLOC.search(line)
+        if match:
+            staging.append((float(match[1]), int(match[2])))
+    if staging:
+        # One line says one buffer; the question is how many, and how much of the card they
+        # take together. Counted here because `Fact.add` collapses identical values on purpose.
+        facts.setdefault("transfer.staging_buffers", Fact()).add(
+            len(staging), 0, f"{len(staging)} StagingBuffer allocations")
+        facts.setdefault("transfer.staging_total_mib", Fact()).add(
+            round(sum(size for size, _ in staging), 1), 0,
+            "sum of every StagingBuffer allocation")
 
     for key in PER_WORKER_MEASUREMENTS:
         fact = facts.get(key)

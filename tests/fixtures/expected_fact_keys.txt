@@ -78,6 +78,12 @@ engine.platform
 engine.version
 env.cuda_driver
 env.hip
+env.lib.flashinfer_cubin
+env.lib.flashinfer_jit_cache
+env.lib.interegular
+env.lib.modelscope
+env.lib.outlines
+env.lib.torchao
 env.nvcc
 env.os
 env.pip.flashinfer-python
@@ -152,6 +158,7 @@ gdn.decode_kernel
 gdn.prefill_kernel
 gpu.bf16_support
 gpu.budget_gib
+gpu.compute_capability
 gpu.consumed_gib
 gpu.cudagraph_gib
 gpu.free_gib
@@ -249,7 +256,12 @@ torch.oom_free_mib
 torch.oom_holder_gib
 torch.oom_requested_mib
 torch.oom_total_gib
+transfer.custom_mem_pool
 transfer.nixl_backend
+transfer.staging_buffer_mib
+transfer.staging_buffers
+transfer.staging_method
+transfer.staging_total_mib
 triton.drivers
 uva_buffers
 weights.available_ram_gib

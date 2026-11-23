@@ -2520,3 +2520,19 @@ def test_show_points_at_repeats_when_the_cadence_is_the_problem():
                             str(FIX / "vllm-47047-v0.23-marlin.log")],
                            capture_output=True, text=True)
     assert "servediff repeats <log>" not in quiet.stderr
+
+
+def test_sglang_staging_buffers_and_its_library_block_are_facts():
+    # SGLang's PD-disaggregation path allocates KV staging buffers line by line; four 896 MiB
+    # allocations are 3.5 GiB of the card that no argument mentions. The same block says it
+    # fell back to plain cudaMalloc, and its library list marks torchao as missing — a code
+    # path downgrade that is not an error and leaves no other trace.
+    f = facts("sglang-2026-10/sglang-42684.log")
+    assert f["transfer.staging_buffer_mib"].value == 896.0
+    assert f["transfer.staging_buffers"].value == 4
+    assert f["transfer.staging_total_mib"].value == 3584.0
+    assert f["transfer.staging_method"].value == "cudaMalloc"
+    assert f["transfer.custom_mem_pool"].value == "disabled (cudaMalloc)"
+    assert f["env.lib.torchao"].value == "Module Not Found"
+    assert f["env.lib.flashinfer_jit_cache"].value == "0.6.18+cu130"
+    assert f["gpu.compute_capability"].value == "9.0"

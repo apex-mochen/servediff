@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.4.73 — 2026-11-23
+
+SGLang's half of the promise gets the numbers it was hiding.
+
+The richest SGLang log in the corpus read 19 facts; it reads 31 now, and the additions are the
+ones a run-to-run difference actually turns on:
+
+- `transfer.staging_buffer_mib`, `transfer.staging_buffers`, `transfer.staging_total_mib`,
+  `transfer.staging_method` — PD disaggregation allocates KV staging buffers one line each.
+  In this log that is **four allocations of 896 MiB: 3.5 GiB of the card** that no argument
+  mentions, and the count had to be derived, because `Fact.add` collapses identical values on
+  purpose.
+- `transfer.custom_mem_pool` — "Staging buffer using cudaMalloc (no custom mem pool)": the
+  fallback that costs NVLink / MNNVL transport, printed once, in no flag.
+- `env.lib.flashinfer_cubin`, `env.lib.flashinfer_jit_cache`, `env.lib.sglang_kernel`,
+  `env.lib.sglang_router`, `env.lib.torchao`, `env.lib.outlines`, `env.lib.interegular`,
+  `env.lib.modelscope` — the library block SGLang prints before the model loads, including
+  `torchao: Module Not Found`, which is a silent code-path downgrade rather than an error.
+  The same block also prints packaging, psutil and aiohttp; those are left out — true, and never
+  the explanation for anything.
+- `gpu.compute_capability` — `GPU 0 Compute Capability: 9.0`, the number a kernel-selection
+  diff has to agree on before anything else can be compared.
+
+Fact keys 262 → 274; tests 170 → 171; `audit` over the corpus still 87 log(s), 0 shapes worth a
+look.
+
 ## 0.4.72 — 2026-11-23
 
 `show` now says when the problem is cadence rather than configuration.
