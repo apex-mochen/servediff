@@ -91,6 +91,9 @@ def commands(log: Path, other: Path | None) -> list[tuple[str, list[str]]]:
     cases = [
         ("show", ["show", str(log)]),
         ("show --json", ["show", str(log), "--json"]),
+        ("show --markdown", ["show", str(log), "--markdown"]),
+        ("show --markdown --evidence", ["show", str(log), "--markdown", "--evidence"]),
+        ("show --evidence", ["show", str(log), "--evidence"]),
         ("audit", ["audit", str(log)]),
         ("audit --everything", ["audit", str(log), "--everything"]),
         ("audit --json", ["audit", str(log), "--json"]),

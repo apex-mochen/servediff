@@ -2163,6 +2163,26 @@ def test_show_evidence_prints_the_line_a_fact_came_from(capsys):
     assert "line 6: " in out
 
 
+def test_show_markdown_is_a_pasteable_one_log_report(capsys):
+    # A `diff` report needs two logs, so a reader with one log and a question had nothing
+    # to paste but fixed-width terminal output, which reads in an issue as a screenshot of
+    # somebody's terminal. The one-log report keeps the two columns that survive a reflow.
+    log = FIX / "sglang-2026-10/sglang-42684.log"
+    assert servediff.main(["show", str(log), "--markdown"]) == 0
+    out = capsys.readouterr().out
+    assert out.startswith("# servediff report: one log")
+    assert "| Fact | Value | Line |" in out
+    assert "| `engine.version` | 0.5.20 |" in out
+    # `_fmt` trims at 60 characters for a terminal column; a value cut mid-word in a
+    # report pasted into an issue is a fact the reader cannot use.
+    row = [line for line in out.splitlines() if line.startswith("| `cache.radix`")][0]
+    assert "..." not in row
+    assert "<details>" not in out  # evidence stays opt-in
+    assert servediff.main(["show", str(log), "--markdown", "--evidence"]) == 0
+    assert "<summary>Evidence</summary>" in capsys.readouterr().out
+    assert servediff.main(["show", str(log), "--markdown", "--json"]) == 2
+
+
 def test_bare_servediff_shows_where_to_start(capsys):
     # The first command a person runs after `pip install` is `servediff`. It used to answer
     # an argparse error, because `command` is required and they had no log yet.

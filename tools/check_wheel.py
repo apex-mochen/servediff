@@ -97,9 +97,15 @@ def main() -> int:
     if "line 1:" not in text and "line " not in text:
         print("wheel: --evidence printed nothing", file=sys.stderr)
         return 1
+    # The one-log report is what a stranger pastes into an issue; it has to survive
+    # packaging too, and its table header is the cheapest proof that it rendered.
+    _, text = run([str(bin_dir / "servediff"), "show", "server.log", "--markdown"], cwd=work)
+    if "| Fact | Value | Line |" not in text:
+        print("wheel: show --markdown did not render a table", file=sys.stderr)
+        return 1
 
     print("wheel: version, first-run block, packaged demo, show/audit/repeats, --json, "
-          "explain, --evidence all pass")
+          "explain, --evidence, --markdown all pass")
     return 0
 
 

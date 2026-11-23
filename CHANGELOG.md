@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.4.87 — 2026-11-23
+
+`diff` had a pasteable report and `show` did not. That left the most common situation — one
+log, one question, no second log to compare — with nothing to hand to anybody: the output was
+fixed-width terminal text, and a code block in an issue reads as a screenshot of somebody's
+terminal, not as a table a maintainer can scan.
+
+`servediff show serve.log --markdown` renders the same facts as a GitHub-flavored report:
+one heading, the log path and its engine, a `| Fact | Value | Line |` table, the open notes,
+and the two rows every such report needs — the line each value came from, and the sentence
+"Absent means the log did not print it, not that it was off."
+
+Two details that decided the shape:
+
+- Values are **not** trimmed to the 60-character terminal column. `_fmt` shortens with "..." so
+  rows line up; in a pasted report a value cut mid-word (`cache.radix` in the test fixture
+  ends in `hybrid_swa=False hy...`) is a fact the reader cannot use, so the cell carries the
+  whole value and the table reflows instead.
+- `--evidence` stays opt-in and, when asked for, goes into a `<details>` block — a 31-fact
+  log would otherwise open with 31 quoted log lines before the answer.
+
+`show --json --markdown` exits 2 instead of silently choosing one, matching `audit`.
 ## 0.4.86 — 2026-11-23
 
 `facts.html` existed and nothing pointed at it. The page is the only place that lists all
@@ -1804,4 +1826,6 @@ First version.
 - `servediff env [--python PATH]`: snapshot package versions, GPU and engine env vars of a
   server environment, with secret-looking values redacted. `servediff diff` on two
   snapshots lists inference-relevant changes first.
+
+
 
