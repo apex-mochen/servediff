@@ -403,6 +403,30 @@ GLOSSARY: dict[str, Gloss] = {
         "sched.max_running_requests carries the cache that caused the cap in its value, "
         "because the number alone reads like a configured limit",
     ),
+    "shm": Gloss(
+        "How long startup spent waiting for a free shared-memory broadcast block. Each line "
+        "is one interval in which the engine found no block, so a count above zero is a "
+        "worker not keeping up rather than a setting that is wrong.",
+        "stalls (a count) and shm.broadcast_wait_s (the intervals added up, in seconds)",
+        "the seconds are the sum of the intervals those lines printed, not the time from "
+        "launch to ready: a run that prints them can still finish, and a run that never "
+        "prints them can still be slow for a reason it does not name",
+    ),
+    "shm.broadcast_stalls": Gloss(
+        "How many times the engine logged that it found no free shared-memory broadcast "
+        "block. One line per interval it waited, so this is minutes of startup spent "
+        "waiting rather than a count of failures.",
+        "count of the lines the engine printed",
+        "one line is one interval, not one worker: six lines can be one worker stalled for "
+        "six minutes, and the count says nothing about which rank stalled",
+    ),
+    "shm.broadcast_wait_s": Gloss(
+        "The intervals from those lines, added up: the startup time spent waiting for a "
+        "broadcast block that never became free.",
+        "seconds",
+        "it is a floor, not the whole delay: the first block of waiting happens before the "
+        "first line, and a run that hangs after the last line adds nothing",
+    ),
     "startup": Gloss(
         "How startup ended: ready, or failed and at which stage. startup.error is the "
         "exception text the server printed; startup.cause is a timeout raised around it.",
@@ -674,6 +698,8 @@ KNOWN_KEYS = frozenset((
     "server.tasks",
     "server.url",
     "serving.chat_template_content_format",
+    "shm.broadcast_stalls",
+    "shm.broadcast_wait_s",
     "spec.mtp_forward_repeat",
     "spec.mtp_weights_shared",
     "startup",

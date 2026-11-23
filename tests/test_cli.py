@@ -1511,8 +1511,27 @@ def test_a_single_gpu_report_reads_the_model_once_even_when_the_line_repeats_it(
     assert not look, sorted(look)
 
 
-def test_the_tp8_report_log_leaves_nothing_unread_because_these_facts_are_read():
-    # Every line below is a shape the audit named as "no rule reads them" on a real
+def test_a_stalled_startup_reports_how_long_it_waited():
+    # The most repeated line in a stalled startup was classified as noise: 49 copies of
+    # "No available shared memory broadcast block found in 60 seconds" in a log that then
+    # started fine. The count and the total are the only numbers a reader has for 49
+    # minutes of boot, so they are facts, not a note -- and `startup` must still read
+    # `ready`, because waiting is not failing.
+    log = FIX / "full-cpu-2026-11/vllm-0.34.0rc1-cpu-avx2-qwen3.5.log"
+    facts = servediff.parse(log.read_text(encoding="utf-8", errors="replace"))["facts"]
+    assert facts["shm.broadcast_stalls"].value == 49
+    assert facts["shm.broadcast_wait_s"].value == 2940
+    assert facts["startup"].value == "ready"
+    # One interval per line, and the first of them is where the evidence points.
+    assert facts["shm.broadcast_stalls"].evidence[0][0] == 64
+    assert "broadcast block found in 60 seconds" in facts["shm.broadcast_stalls"].evidence[0][1]
+    # A line that produces a fact must not come back from audit as unread.
+    counts, _ = servediff_audit.unread_samples(log.read_text(encoding="utf-8", errors="replace"))
+    shapes = [shape for shape in counts if "shared memory broadcast" in shape]
+    assert not shapes, shapes
+
+
+def test_the_tp8_report_log_leaves_nothing_unread_because_these_facts_are_read():    # Every line below is a shape the audit named as "no rule reads them" on a real
     # vLLM 0.23.1 TP=8 startup log. They are the configuration that made that run
     # different, so each one has to become a fact rather than stay in a list of
     # sixty shapes nobody acts on.

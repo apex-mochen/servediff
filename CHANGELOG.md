@@ -1,6 +1,27 @@
 # Changelog
 
-## 0.4.89 — 2026-11-23
+## 0.4.90 — 2026-11-23
+
+`No available shared memory broadcast block found in 60 seconds` was classified as noise.
+That was defensible: it is a symptom, and the facts were the allocator lines underneath it.
+But a real v0.34 log has 49 of them and then starts fine, so `servediff show` on a startup
+that spent 49 minutes waiting printed the same table as a startup that took 90 seconds, and
+`audit` offered the most repeated line in the file back as an unread shape.
+
+Two facts now come out of those lines, counted rather than emitted per line (`Fact.add`
+collapses identical values, so 49 lines each saying "60 seconds" would arrive as one):
+
+```
+shm.broadcast_stalls             49      line 64
+shm.broadcast_wait_s             2940    line 64
+```
+
+`startup` still reads `ready` — waiting is not failing — and the evidence points at the first
+interval, so `--evidence` quotes the line that started the count. `shm.broadcast_wait_s` is a
+floor, not the whole delay: the first block of waiting happens before the first line, and the
+glossary says so.
+
+The corpus gained two keys (276) and a family (44); `facts.html` was regenerated.## 0.4.89 — 2026-11-23
 
 Two entries in the glossary named an issue. One is a citation (`vllm#54559 another process
 held 94.41 of 95.00 GiB`, the log line that explains the OOM); the other was not:
@@ -1865,6 +1886,7 @@ First version.
 - `servediff env [--python PATH]`: snapshot package versions, GPU and engine env vars of a
   server environment, with secret-looking values redacted. `servediff diff` on two
   snapshots lists inference-relevant changes first.
+
 
 
 

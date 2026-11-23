@@ -246,6 +246,8 @@ server.scale_out
 server.tasks
 server.url
 serving.chat_template_content_format
+shm.broadcast_stalls
+shm.broadcast_wait_s
 spec.mtp_forward_repeat
 spec.mtp_weights_shared
 startup

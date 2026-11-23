@@ -88,6 +88,9 @@ class Fact:
 
 # Patterns over one log line. Each yields (fact key, value) pairs.
 _STAGING_ALLOC = re.compile(r"StagingBuffer allocated: ([\d.]+) MB on cuda:(\d+), method=(\w+)")
+# One line says the engine waited another interval for a free shared-memory broadcast
+# block; the useful number is how many intervals and how long that added up to.
+_SHM_STALL = re.compile(r"No available shared memory broadcast block found in (\d+) seconds")
 
 
 LINE_RULES: list[tuple[re.Pattern, callable]] = [
@@ -673,6 +676,12 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
      lambda m: [("startup", "failed")]),
     (re.compile(r"AsyncLLM output_handler failed"),
      lambda m: [("startup", "failed (output handler)")]),
+    # Counted after the line loop, not emitted here: `Fact.add` collapses identical values on
+    # purpose, so forty-nine lines that each say "60 seconds" would arrive as one value. The
+    # rule still has to exist, because `audit` decides a line was read by asking whether any
+    # rule matches it -- without this, the most repeated line in a stalled startup is offered
+    # back as an unread shape.
+    (_SHM_STALL, lambda m: []),
     # torch's allocator says why its last allocation failed, in its own words: how much it
     # asked for, what was free at that instant, and how big the device is. A run that dies
     # with a higher-level message ("No available shared memory broadcast block found") still
@@ -1069,11 +1078,24 @@ def parse(text: str) -> dict:
                     put(key, value, lineno, line)
 
     staging = []
-    for raw in text.splitlines():
+    stalls: list[tuple[int, int, str]] = []
+    for lineno, raw in enumerate(text.splitlines(), 1):
         line = _normalize(raw)
         match = _STAGING_ALLOC.search(line)
         if match:
             staging.append((float(match[1]), int(match[2])))
+        match = _SHM_STALL.search(line)
+        if match:
+            stalls.append((int(match[1]), lineno, line))
+    if stalls:
+        # A startup that prints this is not failed, it is waiting: one line per interval the
+        # engine found no free block, and the seconds in each line are that interval. Forty-
+        # nine of them is forty-nine minutes of a log that otherwise looks like a normal boot,
+        # which is why the count and the total belong in the table rather than in a note.
+        facts.setdefault("shm.broadcast_stalls", Fact()).add(
+            len(stalls), stalls[0][1], stalls[0][2])
+        facts.setdefault("shm.broadcast_wait_s", Fact()).add(
+            sum(seconds for seconds, _, _ in stalls), stalls[0][1], stalls[0][2])
     if staging:
         # One line says one buffer; the question is how many, and how much of the card they
         # take together. Counted here because `Fact.add` collapses identical values on purpose.
