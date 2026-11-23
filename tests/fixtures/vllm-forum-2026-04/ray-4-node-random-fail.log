@@ -1,0 +1,126 @@
+(APIServer pid=2483545) INFO 04-05 16:37:28 [utils.py:299]
+(APIServer pid=2483545) INFO 04-05 16:37:28 [utils.py:299]        █     █     █▄   ▄█
+(APIServer pid=2483545) INFO 04-05 16:37:28 [utils.py:299]  ▄▄ ▄█ █     █     █ ▀▄▀ █  version 0.19.0
+(APIServer pid=2483545) INFO 04-05 16:37:28 [utils.py:299]   █▄█▀ █     █     █     █  model   ../llama-2-7b
+(APIServer pid=2483545) INFO 04-05 16:37:28 [utils.py:299]    ▀▀  ▀▀▀▀▀ ▀▀▀▀▀ ▀     ▀
+(APIServer pid=2483545) INFO 04-05 16:37:28 [utils.py:299]
+(APIServer pid=2483545) INFO 04-05 16:37:28 [utils.py:233] non-default args: {'model_tag': '../llama-2-7b', 'model': '../llama-2-7b', 'trust_remote_code': True, 'enforce_eager': True, 'attention_backend': 'FLASH_ATTN', 'distributed_executor_backend': 'ray', 'pipeline_parallel_size': 4, 'tensor_parallel_size': 4}
+(APIServer pid=2483545) INFO 04-05 16:37:36 [model.py:549] Resolved architecture: LlamaForCausalLM
+(APIServer pid=2483545) INFO 04-05 16:37:36 [model.py:1678] Using max model len 4096
+(APIServer pid=2483545) WARNING 04-05 16:37:36 [vllm.py:780] Async scheduling will be disabled because it is not supported with the `ray` distributed executor backend.
+(APIServer pid=2483545) INFO 04-05 16:37:36 [vllm.py:790] Asynchronous scheduling is disabled.
+(APIServer pid=2483545) WARNING 04-05 16:37:36 [vllm.py:848] Enforce eager set, disabling torch.compile and CUDAGraphs. This is equivalent to setting -cc.mode=none -cc.cudagraph_mode=none
+(APIServer pid=2483545) WARNING 04-05 16:37:36 [vllm.py:859] Inductor compilation was disabled by user settings, optimizations settings that are only active during inductor compilation will be ignored.
+(APIServer pid=2483545) INFO 04-05 16:37:36 [vllm.py:1025] Cudagraph is disabled under eager mode
+(APIServer pid=2483545) INFO 04-05 16:37:36 [compilation.py:290] Enabled custom fusions: norm_quant, act_quant
+(EngineCore pid=2483945) INFO 04-05 16:37:44 [core.py:105] Initializing a V1 LLM engine (v0.19.0) with config: model='../llama-2-7b', speculative_config=None, tokenizer='../llama-2-7b', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, tokenizer_revision=None, trust_remote_code=True, dtype=torch.float16, max_seq_len=4096, download_dir=None, load_format=auto, tensor_parallel_size=4, pipeline_parallel_size=4, data_parallel_size=1, decode_context_parallel_size=1, dcp_comm_backend=ag_rs, disable_custom_all_reduce=False, quantization=None, enforce_eager=True, enable_return_routed_experts=False, kv_cache_dtype=auto, device_config=cuda, structured_outputs_config=StructuredOutputsConfig(backend='auto', disable_any_whitespace=False, disable_additional_properties=False, reasoning_parser='', reasoning_parser_plugin='', enable_in_reasoning=False), observability_config=ObservabilityConfig(show_hidden_metrics_for_version=None, otlp_traces_endpoint=None, collect_detailed_traces=None, kv_cache_metrics=False, kv_cache_metrics_sample=0.01, cudagraph_metrics=False, enable_layerwise_nvtx_tracing=False, enable_mfu_metrics=False, enable_mm_processor_stats=False, enable_logging_iteration_details=False), seed=0, served_model_name=../llama-2-7b, enable_prefix_caching=True, enable_chunked_prefill=True, pooler_config=None, compilation_config={'mode': <CompilationMode.NONE: 0>, 'debug_dump_path': None, 'cache_dir': '', 'compile_cache_save_format': 'binary', 'backend': 'inductor', 'custom_ops': ['all'], 'splitting_ops': [], 'compile_mm_encoder': False, 'cudagraph_mm_encoder': False, 'encoder_cudagraph_token_budgets': [], 'encoder_cudagraph_max_images_per_batch': 0, 'compile_sizes': [], 'compile_ranges_endpoints': [2048], 'inductor_compile_config': {'enable_auto_functionalized_v2': False, 'size_asserts': False, 'alignment_asserts': False, 'scalar_asserts': False, 'combo_kernels': True, 'benchmark_combo_kernel': True}, 'inductor_passes': {}, 'cudagraph_mode': <CUDAGraphMode.NONE: 0>, 'cudagraph_num_of_warmups': 0, 'cudagraph_capture_sizes': [], 'cudagraph_copy_inputs': False, 'cudagraph_specialize_lora': True, 'use_inductor_graph_partition': False, 'pass_config': {'fuse_norm_quant': True, 'fuse_act_quant': True, 'fuse_attn_quant': False, 'enable_sp': False, 'fuse_gemm_comms': False, 'fuse_allreduce_rms': False}, 'max_cudagraph_capture_size': 0, 'dynamic_shapes_config': {'type': <DynamicShapesType.BACKED: 'backed'>, 'evaluate_guards': False, 'assume_32_bit_indexing': False}, 'local_cache_dir': None, 'fast_moe_cold_start': True, 'static_all_moe_layers': []}
+(EngineCore pid=2483945) WARNING 04-05 16:37:44 [ray_utils.py:376] Tensor parallel size (16) exceeds available GPUs (4). This may result in Ray placement group allocation failures. Consider reducing tensor_parallel_size to 4 or less, or ensure your Ray cluster has 16 GPUs available.
+(EngineCore pid=2483945) 2026-04-05 16:37:44,899	INFO worker.py:1810 -- Connecting to existing Ray cluster at address: 192.168.200.120:6379...
+(EngineCore pid=2483945) 2026-04-05 16:37:44,949	INFO worker.py:2013 -- Connected to Ray cluster.
+(EngineCore pid=2483945) INFO 04-05 16:37:51 [ray_utils.py:441] No current placement group found. Creating a new placement group.
+(EngineCore pid=2483945) INFO 04-05 16:37:59 [ray_env.py:100] Env var prefixes to copy: ['HF_', 'HUGGING_FACE_', 'LMCACHE_', 'NCCL_', 'UCX_', 'VLLM_']
+(EngineCore pid=2483945) INFO 04-05 16:37:59 [ray_env.py:101] Copying the following environment variables to workers: ['CUDA_HOME', 'LD_LIBRARY_PATH', 'VLLM_WORKER_MULTIPROC_METHOD']
+(EngineCore pid=2483945) INFO 04-05 16:37:59 [ray_env.py:111] To exclude env vars from copying, add them to /project/22hs3/.config/vllm/ray_non_carry_over_env_vars.json
+(EngineCore pid=2483945) e[36m(RayWorkerWrapper pid=2491245)e[0m WARNING 04-05 16:37:59 [system_utils.py:38] Overwriting environment variable LD_LIBRARY_PATH from '/project/22hs3/AI-Characterization/AI2/install/vllm-env/lib/python3.11/site-packages/cv2/../../lib64:/opt/apps/modules/openmpi/orchid-v4.1.4+ucx-v1.14.1/lib:/opt/apps/modules/ucx/orchid-v1.14.1/lib:/usr/lib:/opt/apps/modules/cuda/12.8/lib64:/project/22hs3/.local/sqlite/lib::' to '/project/22hs3/AI-Characterization/AI2/install/vllm-env/lib/python3.11/site-packages/cv2/../../lib64:/project/22hs3/AI-Characterization/AI2/install/vllm-env/lib/python3.11/site-packages/cv2/../../lib64:/opt/apps/modules/openmpi/orchid-v4.1.4+ucx-v1.14.1/lib:/opt/apps/modules/ucx/orchid-v1.14.1/lib:/usr/lib:/opt/apps/modules/cuda/12.8/lib64:/project/22hs3/.local/sqlite/lib::'
+(EngineCore pid=2483945) e[36m(RayWorkerWrapper pid=2491245)e[0m WARNING 04-05 16:38:01 [worker_base.py:287] Missing `shared_worker_lock` argument from executor. This argument is needed for mm_processor_cache_type='shm'.
+(EngineCore pid=2483945) e[36m(RayWorkerWrapper pid=1098479, ip=192.168.200.121)e[0m WARNING 04-05 16:37:59 [system_utils.py:38] Overwriting environment variable LD_LIBRARY_PATH from '/project/22hs3/AI-Characterization/AI2/install/vllm-env/lib/python3.11/site-packages/cv2/../../lib64:/opt/apps/modules/openmpi/orchid-v4.1.4+ucx-v1.14.1/lib:/opt/apps/modules/ucx/orchid-v1.14.1/lib:/usr/lib:/opt/apps/modules/cuda/12.8/lib64:/project/22hs3/.local/sqlite/lib::' to '/project/22hs3/AI-Characterization/AI2/install/vllm-env/lib/python3.11/site-packages/cv2/../../lib64:/project/22hs3/AI-Characterization/AI2/install/vllm-env/lib/python3.11/site-packages/cv2/../../lib64:/opt/apps/modules/openmpi/orchid-v4.1.4+ucx-v1.14.1/lib:/opt/apps/modules/ucx/orchid-v1.14.1/lib:/usr/lib:/opt/apps/modules/cuda/12.8/lib64:/project/22hs3/.local/sqlite/lib::'e[32m [repeated 15x across cluster] (Ray deduplicates logs by default. Set RAY_DEDUP_LOGS=0 to disable log deduplication, or see https://docs.ray.io/en/master/ray-observability/user-guides/configure-logging.html#log-deduplication for more options.)e[0m
+(EngineCore pid=2483945) e[36m(RayWorkerWrapper pid=2491244)e[0m WARNING 04-05 16:38:07 [worker_base.py:287] Missing `shared_worker_lock` argument from executor. This argument is needed for mm_processor_cache_type='shm'.e[32m [repeated 15x across cluster]e[0m
+(EngineCore pid=2483945) e[36m(RayWorkerWrapper pid=1045632, ip=192.168.200.123)e[0m INFO 04-05 16:38:08 [parallel_state.py:1400] world_size=16 rank=12 local_rank=0 distributed_init_method=tcp://192.168.200.120:55237 backend=nccl
+(EngineCore pid=2483945) e[36m(RayWorkerWrapper pid=1098479, ip=192.168.200.121)e[0m INFO 04-05 16:38:09 [pynccl.py:111] vLLM is using nccl==2.27.5
+(EngineCore pid=2483945) e[36m(RayWorkerWrapper pid=1221679, ip=192.168.200.122)e[0m WARNING 04-05 16:38:09 [symm_mem.py:66] SymmMemCommunicator: Device capability 8.0 not supported, communicator is not available.
+(EngineCore pid=2483945) e[36m(RayWorkerWrapper pid=1221679, ip=192.168.200.122)e[0m WARNING 04-05 16:38:10 [custom_all_reduce.py:154] Custom allreduce is disabled because it's not supported on more than two PCIe-only GPUs. To silence this warning, specify disable_custom_all_reduce=True explicitly.
+(EngineCore pid=2483945) e[36m(RayWorkerWrapper pid=2491243)e[0m INFO 04-05 16:38:10 [parallel_state.py:1716] rank 0 in world size 16 is assigned as DP rank 0, PP rank 0, PCP rank 0, TP rank 0, EP rank N/A, EPLB rank N/A
+(EngineCore pid=2483945) e[36m(RayWorkerWrapper pid=2491243)e[0m INFO 04-05 16:38:10 [gpu_model_runner.py:4735] Starting to load model ../llama-2-7b...
+(EngineCore pid=2483945) e[36m(RayWorkerWrapper pid=1098480, ip=192.168.200.121)e[0m INFO 04-05 16:38:10 [cuda.py:274] Using AttentionBackendEnum.FLASH_ATTN backend.
+(EngineCore pid=2483945) e[36m(RayWorkerWrapper pid=1098477, ip=192.168.200.121)e[0m INFO 04-05 16:38:10 [weight_utils.py:848] Prefetching checkpoint files into page cache started (in background)
+(EngineCore pid=2483945) e[36m(RayWorkerWrapper pid=1098477, ip=192.168.200.121)e[0m INFO 04-05 16:38:10 [weight_utils.py:843] Prefetching checkpoint files into page cache finished in 0.00s
+(EngineCore pid=2483945) e[36m(RayWorkerWrapper pid=1098479, ip=192.168.200.121)e[0m INFO 04-05 16:38:10 [flash_attn.py:596] Using FlashAttention version 2
+(EngineCore pid=2483945) e[36m(RayWorkerWrapper pid=1221678, ip=192.168.200.122)e[0m INFO 04-05 16:38:11 [default_loader.py:384] Loading weights took 0.25 seconds
+(EngineCore pid=2483945) e[36m(RayWorkerWrapper pid=1221678, ip=192.168.200.122)e[0m INFO 04-05 16:38:11 [gpu_model_runner.py:4820] Model loading took 0.77 GiB memory and 0.343955 seconds
+(EngineCore pid=2483945) e[36m(RayWorkerWrapper pid=2491244)e[0m INFO 04-05 16:38:12 [weight_utils.py:825] Prefetching checkpoint files: 10% (1/1)
+(EngineCore pid=2483945) e[36m(RayWorkerWrapper pid=1221678, ip=192.168.200.122)e[0m INFO 04-05 16:38:12 [gpu_worker.py:436] Available KV cache memory: 20.34 GiB
+(EngineCore pid=2483945) e[36m(RayWorkerWrapper pid=1045630, ip=192.168.200.123)e[0m INFO 04-05 16:38:08 [parallel_state.py:1400] world_size=16 rank=15 local_rank=3 distributed_init_method=tcp://192.168.200.120:55237 backend=nccle[32m [repeated 15x across cluster]e[0m
+(EngineCore pid=2483945) e[36m(RayWorkerWrapper pid=2491243)e[0m INFO 04-05 16:38:09 [pynccl.py:111] vLLM is using nccl==2.27.5e[32m [repeated 3x across cluster]e[0m
+(EngineCore pid=2483945) INFO 04-05 16:38:14 [kv_cache_utils.py:1319] GPU KV cache size: 660,800 tokens
+(EngineCore pid=2483945) INFO 04-05 16:38:14 [kv_cache_utils.py:1324] Maximum concurrency for 4,096 tokens per request: 161.33x
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108] EngineCore failed to start.
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108] Traceback (most recent call last):
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]   File "/project/22hs3/AI-Characterization/AI2/install/vllm-env/lib/python3.11/site-packages/vllm/v1/engine/core.py", line 1082, in run_engine_core
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]     engine_core = EngineCoreProc(*args, engine_index=dp_rank, **kwargs)
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]   File "/project/22hs3/AI-Characterization/AI2/install/vllm-env/lib/python3.11/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]     return func(*args, **kwargs)
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]   File "/project/22hs3/AI-Characterization/AI2/install/vllm-env/lib/python3.11/site-packages/vllm/v1/engine/core.py", line 848, in __init__
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]     super().__init__(
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]   File "/project/22hs3/AI-Characterization/AI2/install/vllm-env/lib/python3.11/site-packages/vllm/v1/engine/core.py", line 124, in __init__
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]     kv_cache_config = self._initialize_kv_caches(vllm_config)
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]   File "/project/22hs3/AI-Characterization/AI2/install/vllm-env/lib/python3.11/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]     return func(*args, **kwargs)
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]   File "/project/22hs3/AI-Characterization/AI2/install/vllm-env/lib/python3.11/site-packages/vllm/v1/engine/core.py", line 280, in _initialize_kv_caches
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]     self.model_executor.initialize_from_config(kv_cache_configs)
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]   File "/project/22hs3/AI-Characterization/AI2/install/vllm-env/lib/python3.11/site-packages/vllm/v1/executor/abstract.py", line 117, in initialize_from_config
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]     self.collective_rpc("initialize_from_config", args=(kv_cache_configs,))
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]   File "/project/22hs3/AI-Characterization/AI2/install/vllm-env/lib/python3.11/site-packages/vllm/v1/executor/ray_executor.py", line 516, in collective_rpc
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]     return ray.get(ray_worker_outputs, timeout=timeout)
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]   File "/project/22hs3/AI-Characterization/AI2/install/vllm-env/lib/python3.11/site-packages/ray/_private/auto_init_hook.py", line 22, in auto_init_wrapper
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]     return fn(*args, **kwargs)
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]            ^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]   File "/project/22hs3/AI-Characterization/AI2/install/vllm-env/lib/python3.11/site-packages/ray/_private/client_mode_hook.py", line 104, in wrapper
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]     return func(*args, **kwargs)
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]   File "/project/22hs3/AI-Characterization/AI2/install/vllm-env/lib/python3.11/site-packages/ray/_private/worker.py", line 2981, in get
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]     values, debugger_breakpoint = worker.get_objects(
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]                                   ^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]   File "/project/22hs3/AI-Characterization/AI2/install/vllm-env/lib/python3.11/site-packages/ray/_private/worker.py", line 1012, in get_objects
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]     raise value.as_instanceof_cause()
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108] ray.exceptions.RayTaskError(KeyError): e[36mray::RayWorkerWrapper.execute_method()e[39m (pid=1221678, ip=192.168.200.122, actor_id=9cc88305b1df3945b269049301000000, repr=<vllm.v1.executor.ray_utils.RayWorkerWrapper object at 0x7ef4d1eaad90>)
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]   File "/project/22hs3/AI-Characterization/AI2/install/vllm-env/lib/python3.11/site-packages/vllm/v1/executor/ray_utils.py", line 75, in execute_method
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]     raise e
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]   File "/project/22hs3/AI-Characterization/AI2/install/vllm-env/lib/python3.11/site-packages/vllm/v1/executor/ray_utils.py", line 65, in execute_method
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]     return run_method(self, method, args, kwargs)
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]   File "/project/22hs3/AI-Characterization/AI2/install/vllm-env/lib/python3.11/site-packages/vllm/v1/serial_utils.py", line 510, in run_method
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]     return func(*args, **kwargs)
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]   File "/project/22hs3/AI-Characterization/AI2/install/vllm-env/lib/python3.11/site-packages/vllm/v1/worker/worker_base.py", line 306, in initialize_from_config
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]     self.worker.initialize_from_config(kv_cache_config)  # type: ignore
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]   File "/project/22hs3/AI-Characterization/AI2/install/vllm-env/lib/python3.11/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]     return func(*args, **kwargs)
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]   File "/project/22hs3/AI-Characterization/AI2/install/vllm-env/lib/python3.11/site-packages/vllm/v1/worker/gpu_worker.py", line 536, in initialize_from_config
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]     self.model_runner.initialize_kv_cache(kv_cache_config)
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]   File "/project/22hs3/AI-Characterization/AI2/install/vllm-env/lib/python3.11/site-packages/vllm/v1/worker/gpu_model_runner.py", line 6781, in initialize_kv_cache
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]     self.initialize_attn_backend(kv_cache_config)
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]   File "/project/22hs3/AI-Characterization/AI2/install/vllm-env/lib/python3.11/site-packages/vllm/v1/worker/gpu_model_runner.py", line 6204, in initialize_attn_backend
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]     attn_backends = get_attn_backends_for_group(kv_cache_group_spec)
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]   File "/project/22hs3/AI-Characterization/AI2/install/vllm-env/lib/python3.11/site-packages/vllm/v1/worker/gpu_model_runner.py", line 6163, in get_attn_backends_for_group
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]     attn_backend = layers[layer_name].get_attn_backend()
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108]                    ~~~~~~^^^^^^^^^^^^
+(EngineCore pid=2483945) ERROR 04-05 16:38:14 [core.py:1108] KeyError: 'model.layers.24.self_attn.attn'
+(EngineCore pid=2483945) Traceback (most recent call last):
+(EngineCore pid=2483945)   File "/project/22hs3/.local/python-3.11.4/lib/python3.11/multiprocessing/process.py", line 314, in _bootstrap
+(EngineCore pid=2483945)   File "/project/22hs3/.local/python-3.11.4/lib/python3.11/multiprocessing/process.py", line 108, in run
+(EngineCore pid=2483945)   File "/project/22hs3/AI-Characterization/AI2/install/vllm-env/lib/python3.11/site-packages/vllm/v1/engine/core.py", line 1112, in run_engine_core
+(EngineCore pid=2483945)   File "/project/22hs3/AI-Characterization/AI2/install/vllm-env/lib/python3.11/site-packages/vllm/v1/engine/core.py", line 1082, in run_engine_core
+(EngineCore pid=2483945)   File "/project/22hs3/AI-Characterization/AI2/install/vllm-env/lib/python3.11/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore pid=2483945)   File "/project/22hs3/AI-Characterization/AI2/install/vllm-env/lib/python3.11/site-packages/vllm/v1/engine/core.py", line 848, in __init__
+(EngineCore pid=2483945)   File "/project/22hs3/AI-Characterization/AI2/install/vllm-env/lib/python3.11/site-packages/vllm/v1/engine/core.py", line 124, in __init__
+(EngineCore pid=2483945)   File "/project/22hs3/AI-Characterization/AI2/install/vllm-env/lib/python3.11/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore pid=2483945)   File "/project/22hs3/AI-Characterization/AI2/install/vllm-env/lib/python3.11/site-packages/vllm/v1/engine/core.py", line 280, in _initialize_kv_caches
+(EngineCore pid=2483945)   File "/project/22hs3/AI-Characterization/AI2/install/vllm-env/lib/python3.11/site-packages/vllm/v1/executor/abstract.py", line 117, in initialize_from_config
+(EngineCore pid=2483945)   File "/project/22hs3/AI-Characterization/AI2/install/vllm-env/lib/python3.11/site-packages/vllm/v1/executor/ray_executor.py", line 516, in collective_rpc
+(EngineCore pid=2483945)   File "/project/22hs3/AI-Characterization/AI2/install/vllm-env/lib/python3.11/site-packages/ray/_private/auto_init_hook.py", line 22, in auto_init_wrapper
+(EngineCore pid=2483945)   File "/project/22hs3/AI-Characterization/AI2/install/vllm-env/lib/python3.11/site-packages/ray/_private/client_mode_hook.py", line 104, in wrapper
+(EngineCore pid=2483945)   File "/project/22hs3/AI-Characterization/AI2/install/vllm-env/lib/python3.11/site-packages/ray/_private/worker.py", line 2981, in get
+(EngineCore pid=2483945)   File "/project/22hs3/AI-Characterization/AI2/install/vllm-env/lib/python3.11/site-packages/ray/_private/worker.py", line 1012, in get_objects
+(EngineCore pid=2483945)   File "/project/22hs3/AI-Characterization/AI2/install/vllm-env/lib/python3.11/site-packages/vllm/v1/executor/ray_utils.py", line 75, in execute_method
+(EngineCore pid=2483945)   File "/project/22hs3/AI-Characterization/AI2/install/vllm-env/lib/python3.11/site-packages/vllm/v1/executor/ray_utils.py", line 65, in execute_method

@@ -249,7 +249,8 @@ NOISE = (
     re.compile(r"\[symm_mem\.py:\d+\] SymmMemCommunicator: Device capability [\d.]+\s+not supported"),
     # Advice about where to put the model argument, and the warmup's own start line: the
     # settings behind them are `args.source` and `chat.template_warmup`.
-    re.compile(r"\[argparse_utils\.py:\d+\] With `vllm serve`, you should provide the model as a positional argument"),
+    # The forum strips the backticks around `vllm serve`, so both spellings arrive.
+    re.compile(r"\[argparse_utils\.py:\d+\] With (?:`vllm serve`|vllm serve), you should provide the model"),
     re.compile(r"\[serving_chat\.py:\d+\] Warming up chat template processing"),
     # The chat-template failure is already `chat.template_warmup: failed`; this line is the
     # exception class plus transformers' version note, which belongs in the fix, not the diff.
@@ -257,6 +258,21 @@ NOISE = (
     # `cuda_graph` already says disabled and the args say why (enforce_eager); this line is
     # the engine repeating the consequence, and on a non-eager box it never appears.
     re.compile(r"\[vllm\.py:\d+\] Cudagraph is disabled under eager mode"),
+    # The engine core announces where it waits for the front-end, and the platform line is
+    # `engine.platform`
+    re.compile(r"\[core\.py:\d+\] Waiting for init message from front-end"),
+    # Ray's own client chatter: cluster address, the connection, and the placement group it
+    # creates. These differ per host and say nothing about the engine's configuration;
+    # `parallel.world_size` and `parallel.roles` are the settings.
+    re.compile(r"INFO worker\.py:\d+ -- (?:Connecting to existing Ray cluster|Connected to Ray cluster)"),
+    re.compile(r"\[ray_utils\.py:\d+\] No current placement group found\. Creating a new placement group"),
+    # The env-var copy prints the full per-worker list and a path to exclude entries; the
+    # prefix list is `ray.env_prefixes`, and the overwrite warnings repeat once per worker.
+    re.compile(r"\[ray_env\.py:\d+\] (?:Copying the following environment variables|To exclude env vars from copying)"),
+    re.compile(r"\[system_utils\.py:\d+\] Overwriting environment variable (?:LD_LIBRARY_PATH|PYTHONPATH)"),
+    re.compile(r"\[worker_base\.py:\d+\] Missing `shared_worker_lock` argument from executor"),
+    # Prefetch progress is a byte counter printed per file per worker.
+    re.compile(r"\[weight_utils\.py:\d+\] Prefetching checkpoint files"),
     re.compile(r"^CUDA available: (True|False)"),
     re.compile(r"^GPU \d+ Compute Capability: "),
     re.compile(r"^NVIDIA Topology:|^\t"),

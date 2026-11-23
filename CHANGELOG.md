@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.4.67 — 2026-11-23
+
+A multi-node run says, once, in a warning, that the async scheduler it was asked for is not
+running. That and ten other facts from three builds (0.10.1.dev1, 0.21.0, a Ray cluster).
+
+**`--async-scheduling` under Ray.** `Async scheduling will be disabled because it is not
+supported with the `ray` distributed executor backend` is a WARNING; the flag stays in the
+printed args. `scheduler.async` still records the state, and the reason is now its own key,
+`scheduler.async_reason=ray executor`, so a diff can tell "the flag was off" from "the backend
+refused". Same run: `parallel.tp_exceeds_gpus=tp 16 > gpus 4`, `ray.env_prefixes` (which
+variables Ray carries to the workers), and `startup.error=ray.exceptions.RayTaskError(KeyError)`.
+
+Ten new fact keys:
+
+- **Ray / multi-node:** `scheduler.async_reason`, `parallel.tp_exceeds_gpus`, `ray.env_prefixes`
+- **Heterogeneous attention heads (vLLM 0.21.0, Gemma-4-31B-IT-NVFP4, TP2 over 2×16 GB):**
+  `backend.attention_forced` (`TRITON_ATTN (head_dim 256 vs 512)`), `attn.backend`,
+  `quant.checkpoint_format` (ModelOpt NVFP4, experimental)
+- **Multimodal model run text-only:** `mm.text_only`, `mm.chunked_input`
+- **Older builds:** `engine.platform`, `weights.format`, `weights.download_s`
+
+`parallel.roles` no longer requires a PCP rank: the oldest log in the corpus (vLLM
+0.10.1.dev1) prints `DP, PP, TP, EP` and nothing else, and the rule now takes whatever rank
+list follows. A pasted copy whose ANSI escape lost its ESC byte (`e[36m` left behind) is
+stripped too, so those lines classify as what they are instead of as unread shapes.
+
+Three new fixtures — `vllm-forum-2026-04/ray-4-node-random-fail.log`,
+`vllm-forum-2026-05/gemma4-nvfp4-hetero-heads.log`,
+`vllm-forum-2025-09/mistral-7b-huge-batched-tokens.log` — each with a `PROVENANCE.md`.
+New writeup `writeups/ray-async-scheduling.md`. Fact keys 242 → 253; tests 160 → 163; every
+fixture still audits to zero shapes worth a look.
+
 ## 0.4.66 — 2026-11-23
 
 Two pasted logs, two silent losses: quotes last time, **dashes** this time. Plus eleven facts

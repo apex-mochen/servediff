@@ -37,7 +37,9 @@ from pathlib import Path
 
 from servediff import env as envsnap
 
-ANSI = re.compile(r"\x1b\[[0-9;]*m")
+# Two spellings of the same escape: the real one, and a copy whose ESC byte was eaten by a
+# forum or a terminal-to-HTML conversion, which leaves the literal `e[36m` behind.
+ANSI = re.compile(r"\x1b\[[0-9;]*m|\be\[[0-9;]*m")
 # SGLang wraps its timestamp in brackets: `[2026-10-06 00:15:19] Tree cache …`.
 BRACKET_TS = re.compile(r"^\[(?:\d{4}-)?\d\d-\d\d \d\d:\d\d:\d\d\]\s*")
 # A log pasted through a forum, a chat client or a word processor comes back with typographic
@@ -140,7 +142,7 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
      lambda m: [("parallel.world_size", int(m[1]))]),
     # Newer logs stopped printing EPLB rank, and older ones never had PCP: take whatever
     # rank list follows instead of pinning the exact set.
-    (re.compile(r"rank \d+ in world size \d+ is assigned as (DP rank \d+, PP rank \d+, PCP rank \d+, TP rank \d+(?:, (?:ETP|EP|EPLB) rank [^,\s]+)*)"),
+    (re.compile(r"rank \d+ in world size \d+ is assigned as (DP rank \d+(?:, \w+ rank [^,]+?)*)\s*$"),
      lambda m: [("parallel.roles", m[1])]),
     (re.compile(r"Using (\S+) KV cache layout"), lambda m: [("kv_cache.layout", m[1])]),
     # The same decision in the other phrasing, and the one a newer log prints: the
@@ -231,6 +233,49 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
     # the port lives in the URL. Reading it as a port produced `server.port: 0` on a TP4 box.
     (re.compile(r"Starting vLLM API server \d+ on (http://\S+)"),
      lambda m: [("server.url", m[1])]),
+    # A model whose attention heads differ in width cannot run one backend for both groups, so
+    # the engine overrides the chosen backend to keep the two numerics on one kernel set.
+    # Ray re-raises a worker exception wrapped in a task error; the class pair is the cause.
+    (re.compile(r"\[core\.py:\d+\] ray\.exceptions\.(\w+)\((\w+)\)"),
+     lambda m: [("startup.error", f"ray.exceptions.{m[1]}({m[2]})")]),
+    # A model whose attention heads differ in width cannot run one backend for both groups, so
+    (re.compile(r"\S+ model has heterogeneous head dimensions \(head_dim=(\d+), "
+                r"global_head_dim=(\d+)\)\. Forcing (\w+)"),
+     lambda m: [("backend.attention_forced", f"{m[3]} (head_dim {m[1]} vs {m[2]})")]),
+    # An NVFP4 checkpoint in ModelOpt's on-disk layout is read by a different loader than a
+    # compressed-tensors one, and the log calls the format experimental.
+    (re.compile(r"Detected ModelOpt (\w+) checkpoint \(quant_algo=(\w+)\)"),
+     lambda m: [("quant.checkpoint_format", f"ModelOpt {m[1]} ({m[2]}), experimental")]),
+    # A multimodal model served without any modality limits is running text-only; the flags
+    # never say that, and it is why the vision tower never appears in the startup.
+    (re.compile(r"All limits of multimodal modalities supported by the model are set to 0, "
+                r"running in text-only mode"),
+     lambda m: [("mm.text_only", "all modality limits 0")]),
+    (re.compile(r"Forcing --disable_chunked_mm_input for models with multimodal-bidirectional attention"),
+     lambda m: [("mm.chunked_input", "disabled (multimodal-bidirectional attention)")]),
+    # `--async-scheduling` is accepted and then turned off by the executor. The next line
+    # already says `scheduler.async=disabled`; this one carries the reason, which is a
+    # property of the backend and not of the flag.
+    (re.compile(r"Async scheduling will be disabled because it is not supported with the "
+                r"`(\w+)` distributed executor backend"),
+     lambda m: [("scheduler.async_reason", f"{m[1]} executor")]),
+    (re.compile(r"Tensor parallel size \((\d+)\) exceeds available GPUs \((\d+)\)"),
+     lambda m: [("parallel.tp_exceeds_gpus", f"tp {m[1]} > gpus {m[2]}")]),
+    # The platform is detected, not chosen; a CPU or ROCm log says something else here.
+    (re.compile(r"\[init\.py:\d+\] Automatically detected platform (\w+)"),
+     lambda m: [("engine.platform", m[1])]),
+    (re.compile(r"Using model weights format \[(.+?)\]"),
+     lambda m: [("weights.format", m[1])]),
+    (re.compile(r"Time spent downloading weights for \S+: ([\d.]+) seconds"),
+     lambda m: [("weights.download_s", float(m[1]))]),
+    # The attention backend chosen for the runner. The V1 engine names it once, without a
+    # version number; on a heterogeneous-head model the same decision arrives as a forcing line.
+    (re.compile(r"Using (.+?) backend on (\w+) engine"),
+     lambda m: [("backend.attention", f"{m[1]} ({m[2]} engine)")]),
+    # Which env vars Ray carries to the workers is a setting: a prefix list that differs
+    # between two runs explains a worker that sees a different NCCL or cache config.
+    (re.compile(r"Env var prefixes to copy: \[(.+?)\]"),
+     lambda m: [("ray.env_prefixes", m[1])]),
     # The extensible KV cache (v0.33.x) sizes itself at warmup and prints the split it
     # settled on: what stayed free, what went to the cache, what it held back for transient
     # activations, and what torch may still reserve. This line is where vllm#66193's

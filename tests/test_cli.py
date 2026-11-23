@@ -2375,3 +2375,39 @@ def test_an_eager_run_and_a_kernel_config_fallback_are_facts():
     assert f["quant.kernel.config"].value == "default W8A8 (no config file)"
     assert f["arg.model"].value.startswith(
         "/root/.cache/huggingface/hub/models--Qwen--Qwen3.6-35B-A3B-FP8/snapshots/")
+
+
+def test_a_ray_executor_turns_async_scheduling_off_and_keeps_the_reason():
+    # thread 2526: four nodes under Ray. `--async-scheduling` is accepted and then turned off,
+    # the TP size is larger than the GPUs it can place, and the run dies in a worker KeyError.
+    # The reason is its own key so a diff can tell "flag off" from "backend refused".
+    f = facts("vllm-forum-2026-04/ray-4-node-random-fail.log")
+    assert f["scheduler.async"].value == "disabled"
+    assert f["scheduler.async_reason"].value == "ray executor"
+    assert f["parallel.tp_exceeds_gpus"].value == "tp 16 > gpus 4"
+    assert f["parallel.world_size"].value == 16
+    assert "'NCCL_'" in f["ray.env_prefixes"].value
+    assert "ray.exceptions.RayTaskError(KeyError)" in f["startup.error"].values
+
+
+def test_a_model_with_two_head_widths_forces_one_attention_backend():
+    # thread 2674: Gemma-4-31B-IT-NVFP4 on 2x16GB. Local heads are 256 wide, global heads 512,
+    # so the engine overrides the backend to keep both on the same kernel set. The checkpoint
+    # is ModelOpt's layout, and the model runs text-only because every modality limit is 0.
+    f = facts("vllm-forum-2026-05/gemma4-nvfp4-hetero-heads.log")
+    assert f["engine.version"].value == "0.21.0"
+    assert f["backend.attention_forced"].value == "TRITON_ATTN (head_dim 256 vs 512)"
+    assert f["quant.checkpoint_format"].value == "ModelOpt NVFP4 (NVFP4), experimental"
+    assert f["mm.text_only"].value == "all modality limits 0"
+    assert f["mm.chunked_input"].value == "disabled (multimodal-bidirectional attention)"
+
+
+def test_the_oldest_log_in_the_corpus_still_yields_its_rank_line():
+    # thread 1602: vLLM 0.10.1.dev1, before PCP rank existed. The rule takes whatever rank
+    # list the build prints instead of pinning the set, so this line is read rather than lost.
+    f = facts("vllm-forum-2025-09/mistral-7b-huge-batched-tokens.log")
+    assert f["parallel.roles"].value == "DP rank 0, PP rank 0, TP rank 0, EP rank 0"
+    assert f["engine.platform"].value == "cuda"
+    assert f["backend.attention"].value == "Flash Attention (V1 engine)"
+    assert f["weights.format"].value == "'*.safetensors'"
+    assert f["weights.download_s"].value == 17.724022

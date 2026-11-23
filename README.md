@@ -823,6 +823,11 @@ prove, are in [writeups/audit-noise-real-logs.md](https://github.com/apex-mochen
   — a forum turns `models--Qwen--Qwen3.6` into `models–Qwen–Qwen3.6` and `'align'` into
   `‘align’`, so a pasted path can never equal the server's own path and a pasted flag stops
   matching; one fold of the characters that have an ASCII twin is the whole fix.
+- When the log says `Async scheduling will be disabled because it is not supported with the
+  ray distributed executor backend`,
+  [writeups/ray-async-scheduling.md](https://github.com/apex-mochen/servediff/blob/main/writeups/ray-async-scheduling.md)
+  shows the two-line warning pair, the `tp 16 > gpus 4` printed right beside it, and why
+  `scheduler.async` and `scheduler.async_reason` have to be separate rows.
 
 ## License
 
