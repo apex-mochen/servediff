@@ -15,6 +15,16 @@ benchmark 结果文件只记录客户端。升级之后，server 可能会悄悄
 本页是简介，逐条事实与完整命令表以英文 [README.md](https://github.com/apex-mochen/servediff/blob/main/README.md) 为准；每篇写up 的渲染版在 <https://apex-mochen.github.io/servediff/>。
 CPU-only 机器上「htop 只有两个核在跑」的这个场景，见 [writeups/vllm-cpu-384-threads.md](https://github.com/apex-mochen/servediff/blob/main/writeups/vllm-cpu-384-threads.md)（22 行日志读出 21 条事实，95 核已绑定）。
 
+## 它替别人读过的日志
+
+下面每一份都是公开 bug 报告里贴出的启动日志，答案本来就在那份粘贴里。每篇写up 都带行号。
+
+- **`CUDA out of memory`，而显卡看着是空的**：失败行里有三个数字、两种「free」，抢占显存的进程在其中一种里。[写up](https://apex-mochen.github.io/servediff/cuda-oom-holder.html)
+- **同样参数，0.28 在 WSL 上起不来、0.30 能起**：差别是 `UVA is not available` 在新版本里只是警告。[写up](https://apex-mochen.github.io/servediff/wsl-uva-028-vs-030.html)
+- **384 线程机器上「只有两个核在忙」**：22 行日志读出 21 条事实，95 个核绑给了这个 rank。[写up](https://apex-mochen.github.io/servediff/vllm-cpu-384-threads.html)
+- **投机解码悄悄忽略 `min_p` 与 `logit_bias`**：警告每个进程一行，触发它的参数印在别处。[写up](https://apex-mochen.github.io/servediff/spec-decode-overrides.html)
+- **一份「启动花了 50 分钟」的日志**（[vllm#67598](https://github.com/vllm-project/vllm/issues/67598)）：49 条 `No available shared memory broadcast block found in 60 seconds` 合起来是 2 940 秒等待，权重只花了 3.99 秒 —— 时间全在等。
+
 ## 一分钟试用（不需要 GPU）
 
 ```bash

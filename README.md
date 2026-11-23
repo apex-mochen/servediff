@@ -76,6 +76,28 @@ git clone https://github.com/apex-mochen/servediff && cd servediff
 servediff diff examples/issue-excerpts/vllm-47047-v0.23-default.log examples/issue-excerpts/vllm-47047-v0.23-marlin.log
 ```
 
+## Logs it has read for people
+
+Each of these is a public startup log pasted into a bug report, where the answer was already
+in the paste. The write-up shows the reading, with line numbers.
+
+- **A card that "looked free" while `CUDA out of memory` fired.** The failure line carries
+  three numbers and two wordings; the process holding the memory is inside one of them.
+  [write-up](https://apex-mochen.github.io/servediff/cuda-oom-holder.html)
+- **Same flags, 0.28 dies on WSL and 0.30 starts.** One difference: the newer build prints
+  `UVA is not available` as a warning and carries on; the older one dies on it.
+  [write-up](https://apex-mochen.github.io/servediff/wsl-uva-028-vs-030.html)
+- **"Only two cores are busy" on a 384-thread box.** 22 pasted lines carry 21 facts: 95 cores
+  of one NUMA node were bound to this rank, and the interesting number was never the version.
+  [write-up](https://apex-mochen.github.io/servediff/vllm-cpu-384-threads.html)
+- **Speculative decoding silently ignoring `min_p` and `logit_bias`.** The warning is one line
+  per process and the flag that caused it prints elsewhere, so the two are easy to read as
+  unrelated.
+  [write-up](https://apex-mochen.github.io/servediff/spec-decode-overrides.html)
+- **A startup reported as taking 50 minutes** ([vllm#67598](https://github.com/vllm-project/vllm/issues/67598)).
+  49 `No available shared memory broadcast block found in 60 seconds` lines are 2 940 s of
+  waiting, and the weights loaded in 3.99 s: the wait was the startup.
+
 Install from PyPI. A different, unrelated tool also uses the name `servediff` in a
 third-party Homebrew tap; the `pip install servediff` package is this one.
 

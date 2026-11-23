@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.95
+
+README only; no code change.
+
+The PyPI page is the README, and it argued the case without showing it: five sections of
+`## Logs it has read for people` now name public startup logs, each with the write-up that
+shows the reading and its line numbers — the card that looked free while `CUDA out of
+memory` fired, the same flags where 0.28 dies on WSL and 0.30 does not, "only two cores
+are busy" on a 384-thread box, speculative decoding quietly ignoring `min_p` and
+`logit_bias`, and a startup reported as 50 minutes whose 49 broadcast waits sum to 2 940 s
+while the weights took 3.99 s ([vllm#67598](https://github.com/vllm-project/vllm/issues/67598)).
+
+`README.zh-CN.md` carries the same list. All five links were fetched and answered `200`
+before the entry was written.
+
 ## 0.4.94 — 2026-11-24
 
 0.4.93's own fix, caught by walking the corpus it changed. The new attention-candidate rule
