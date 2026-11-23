@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>198 regexes per line, 1 456 284 times</title>
+<meta name="description" content="A stranger&#x27;s vLLM startup log is not 2 000 lines. With VLLMLOGGINGLEVEL=DEBUG, tensor-parallel workers, and CUDA graph capture, a 70 B model&#x27;s dry run lands around 100 MB. I generated one — 1 456 284 lines, 96 MB — and p">
+<link rel="canonical" href="https://apex-mochen.github.io/servediff/stop-matching-every-rule.html">
+<style>
+:root { --fg:#1c1c1e; --muted:#6b6b70; --line:#e4e4e7; --code:#f6f6f7; }
+body { margin:0 auto; max-width:44rem; padding:2.5rem 1.25rem 6rem;
+  font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  color:var(--fg); }
+h1 { font-size:1.9rem; line-height:1.25; margin:0 0 1rem; letter-spacing:-0.01em; }
+h2 { font-size:1.25rem; margin:2.2rem 0 .6rem; }
+h3 { font-size:1.05rem; margin:1.6rem 0 .4rem; }
+p, li { color:var(--fg); }
+pre { background:var(--code); border:1px solid var(--line); border-radius:6px;
+  padding:.85rem 1rem; overflow-x:auto; font-size:.86rem; line-height:1.5; }
+code { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:.9em; }
+p code, li code { background:var(--code); padding:.1em .3em; border-radius:3px; }
+a { color:#0b62d0; }
+.note { color:var(--muted); font-size:.9rem; }
+nav { border-bottom:1px solid var(--line); padding-bottom:.75rem; margin-bottom:2rem;
+  font-size:.9rem; }
+nav a { margin-right:1rem; }
+ul.index li { margin:.5rem 0; }
+</style>
+</head>
+<body>
+<nav><a href="./index.html">servediff notes</a><a href="https://github.com/apex-mochen/servediff">source</a><a href="https://pypi.org/project/servediff/">pip install servediff</a></nav>
+<h1>198 regexes per line, 1 456 284 times</h1>
+<p>A stranger's vLLM startup log is not 2 000 lines. With <code>VLLM_LOGGING_LEVEL=DEBUG</code>,
+tensor-parallel workers, and CUDA graph capture, a 70 B model's dry run lands
+around 100 MB. I generated one — 1 456 284 lines, 96 MB — and pointed the tool at it.</p>
+<pre><code>$ servediff show big.log
+... 59.01s
+$ servediff audit big.log
+... 90.21s
+</code></pre>
+<p>A minute to read a file. That is the difference between "I'll try this" and closing
+the tab. So I profiled it instead of guessing.</p>
+<h2>Where the time was</h2>
+<p><code>show</code> walks every line through <code>LINE_RULES</code>: 198 compiled patterns, each one
+<code>re.search</code>-ed against the raw line. cProfile on a 10 MB slice: <strong>4.95 million
+<code>re.search</code> calls, 6.0 s</strong>.</p>
+<p>The important part is not the count, it is the distribution. A log is five shapes
+repeated a million times:</p>
+<pre><code>[model_runner.py:1043] INFO 11-23 22:02:40 Capturing CUDA graphs (FULL):  0%| ...
+[worker.py:291] INFO 11-23 22:02:41 It took 0.252 s to load weights
+[core.py:71] INFO 11-23 22:02:41 Engine 0 started with 1163 blocks
+</code></pre>
+<p>Every one of those lines tests all 198 rules, and 196 of those tests are
+guaranteed to fail — the same 196, on every repetition. That's the shape of a
+problem that wants memoisation, not a faster regex.</p>
+<h2>What I tried first, and why it failed</h2>
+<p>Each rule in the table is annotated with the log site it came from, like
+<code>[model_runner.py:1043]</code>. Natural idea: bucket rules by that marker, so a
+<code>worker.py</code> line only tests <code>worker.py</code> rules.</p>
+<p>It doesn't work. Of the 198 rules, <strong>16</strong> are anchored on a literal <code>\[</code>, the rest
+start with <code>\b</code> or match anywhere in the line. Grouping by a marker that 92% of
+the
+rules don't carry gives you no grouping at all.</p>
+<p>Second attempt: lift the longest literal out of each pattern, join all 190 of them
+into one alternation, and use that as a gate — one <code>re.search</code> to decide whether a
+line is worth the full walk. This made it <strong>slower</strong>: 77 s against 59 s. The
+alternation is a small automaton over 190 branches; on a line that matches nothing,
+you pay to traverse all of it, every line, every time. A gate that always says
+"no" is not cheaper than the thing it gates.</p>
+<h2>What worked</h2>
+<p>Two changes, both boring.</p>
+<p><strong>Ask the question per shape, not per line.</strong> Strip the digits out of a line and
+what's left is its shape — <code>It took N s to load weights</code>. Two lines with the same
+shape accept exactly the same rules. So cache <code>shape -&gt; tuple of rules that
+matched</code>, and on a repeat only those few rules run. In practice that is <strong>0 to 2
+regexes per repeated line</strong> instead of 198, and the first occurrence of a shape
+still pays the full walk to fill the cache.</p>
+<p>The literal extraction from the failed attempt survives, used differently: per
+rule, take the longest run of literal text at paren depth zero (bail out at a
+top-level <code>|</code>, don't descend into <code>(?</code> groups or character classes). That gives
+each line a cheap pre-filter — 190 rules keep a literal, 8 don't and stay in the
+always-test set.</p>
+<p><strong>Stop running whole-line regexes that are going to be no-ops.</strong> <code>_normalize()</code>
+used to do three <code>sub</code> passes on every line (ANSI escapes, <code>[11-23 22:02:40]</code>,
+fancy punctuation). All three are now a character pre-check — <code>"\x1b" in line</code>,
+<code>line.startswith("[")</code>, six membership tests for the typographic characters —
+and the <code>sub</code> only runs when the pre-check says there's something to remove.</p>
+<p>Then the same trick in the other two commands: <code>audit</code>'s unread-line sampler was
+walking the full flat rule list per line (that was the whole 90 s), and it now asks
+the same shape cache whether the line is already known. <code>repeats</code> caches
+<code>message()</code>+<code>shape()</code> per shape, and only runs the embedded-record lookahead split
+when the line actually contains <code>pid=</code>.</p>
+<h2>The numbers</h2>
+<p>Same machine, warmed page cache, 96 MB / 1 456 284 lines:</p>
+<table>
+<thead>
+<tr>
+<th>command</th>
+<th>before</th>
+<th>after</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>show</code></td>
+<td>59.01s</td>
+<td>11.05s</td>
+</tr>
+<tr>
+<td><code>audit</code></td>
+<td>90.21s</td>
+<td>14.76s</td>
+</tr>
+<tr>
+<td><code>repeats</code></td>
+<td>37.90s</td>
+<td>22.80s</td>
+</tr>
+</tbody>
+</table>
+<p><code>repeats</code> is the laggard because it still calls the clock parser on each line to
+compute gaps; it's the next thing to look at, not something I fixed this round.</p>
+<h2>The part that actually matters</h2>
+<p>A cache is a promise that two inputs are equivalent. If the promise is wrong,
+<code>show</code> silently reports different facts on the same log, which is worse than
+being slow. So every change was checked the same way: run the previous build and
+the new one over all 87 corpus logs and compare output <strong>byte for byte</strong>.</p>
+<ul>
+<li><code>parse</code> on 87 logs: <code>0 differing</code></li>
+<li><code>repeats.groups</code> on 87 logs: <code>0 differing</code></li>
+<li><code>pytest</code>: 178 passed</li>
+</ul>
+<p>That check caught one real regression. The empty-body fast path cached "no
+message" as an ordinary shape key, so progress-bar lines that strip to an empty
+message started getting counted as a group of their own — 8 of 87 logs changed
+output, all of them real vLLM logs. The fix is small (cache the absence explicitly
+and skip before bucketing), but without the byte comparison it would have shipped
+as "performance work, no behaviour change".</p>
+<p><code>tools/bench_parse.py</code> regenerates the synthetic log and prints the three timings,
+so this number is checkable rather than remembered.</p>
+</body>
+</html>
