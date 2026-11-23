@@ -113,3 +113,12 @@ as "performance work, no behaviour change".
 
 `tools/bench_parse.py` regenerates the synthetic log and prints the three timings,
 so this number is checkable rather than remembered.
+
+## Where this stands now
+
+The 87-log and 178-test numbers above are from that round. Since then, 16 files that held no
+startup facts were moved out of the corpus (0.4.96), so the corpus is 71 logs and the suite is
+209 tests. `repeats` is no longer the laggard either: `tools/bench_parse.py` on the same 96.7 MB
+synthetic log, measured 2026-11-24, gives `show` 11.74s, `audit` 18.51s, `repeats` 6.74s — the
+comparison that matters (`parse` and `repeats.groups` over every corpus log, byte for byte) is
+still part of the release routine, now over those 71 logs.
