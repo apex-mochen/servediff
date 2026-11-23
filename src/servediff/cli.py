@@ -41,10 +41,14 @@ ANSI = re.compile(r"\x1b\[[0-9;]*m")
 # SGLang wraps its timestamp in brackets: `[2026-10-06 00:15:19] Tree cache …`.
 BRACKET_TS = re.compile(r"^\[(?:\d{4}-)?\d\d-\d\d \d\d:\d\d:\d\d\]\s*")
 # A log pasted through a forum, a chat client or a word processor comes back with typographic
-# quotes: `Mamba cache mode is set to 'align'` becomes `‘align’`, and `won't` becomes `won’t`.
-# The log on the server is ASCII, so the rules are written in ASCII; curling the input back
-# is what lets the same rules read a pasted copy. Seen on forum t2946 (vLLM 0.28).
-CURLY = str.maketrans({"\u2018": "'", "\u2019": "'", "\u201c": '"', "\u201d": '"'})
+# punctuation: `Mamba cache mode is set to 'align'` becomes `‘align’`, `won't` becomes `won’t`,
+# and the two hyphens Hugging Face puts in a cache directory name (`models--Qwen--Qwen3.6`)…
+# become an en dash, so a real model path reads `models–Qwen–Qwen3.6` and no longer matches
+# the server's own path. The log on the server is ASCII, so the rules are written in ASCII;
+# folding the pasted copy back is what lets the same rules read it. Seen on forum t2946
+# (vLLM 0.28, curly quotes) and t2570 (vLLM 0.19, en dashes in the model path).
+CURLY = str.maketrans({"\u2018": "'", "\u2019": "'", "\u201c": '"', "\u201d": '"',
+                       "\u2013": "--", "\u2014": "---"})
 
 
 # `Could not collect`, `N/A` and `Not Set` are absences, not values: read literally they
@@ -134,7 +138,9 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
     # the only place TP>1 (and expert parallel) shows up in the startup log.
     (re.compile(r"world_size=(\d+) rank=(\d+) local_rank=(\d+)"),
      lambda m: [("parallel.world_size", int(m[1]))]),
-    (re.compile(r"rank \d+ in world size \d+ is assigned as (DP rank \d+, PP rank \d+, PCP rank \d+, TP rank \d+(?:, ETP rank \S+)?, EP rank \S+, EPLB rank \S+)"),
+    # Newer logs stopped printing EPLB rank, and older ones never had PCP: take whatever
+    # rank list follows instead of pinning the exact set.
+    (re.compile(r"rank \d+ in world size \d+ is assigned as (DP rank \d+, PP rank \d+, PCP rank \d+, TP rank \d+(?:, (?:ETP|EP|EPLB) rank [^,\s]+)*)"),
      lambda m: [("parallel.roles", m[1])]),
     (re.compile(r"Using (\S+) KV cache layout"), lambda m: [("kv_cache.layout", m[1])]),
     # The same decision in the other phrasing, and the one a newer log prints: the
@@ -172,8 +178,9 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
     (re.compile(r"Using (\w+) for (NVFP4|FP8|INT4|MXFP4) GEMM"),
      lambda m: [(f"quant.kernel.{m[2].lower()}", m[1])]),
     (re.compile(r"Selected (\w+LinearKernel) for (\w+)"), lambda m: [("quant.kernel.selected", f"{m[2]}: {m[1]}")]),
-    (re.compile(r"Using (\S+) GDN prefill kernel \(requested=(\w+), head_k_dim=(\d+)\)"),
-     lambda m: [("gdn.prefill_kernel", f"{m[1]} (requested {m[2]}, head_k_dim {m[3]})")]),
+    (re.compile(r"Using (\S+) GDN prefill kernel(?: \(requested=(\w+), head_k_dim=(\d+)\))?"),
+     lambda m: [("gdn.prefill_kernel",
+                 m[1] if m[2] is None else f"{m[1]} (requested {m[2]}, head_k_dim {m[3]})")]),
     (re.compile(r"GDN decode kernel: (\w+)"), lambda m: [("gdn.decode_kernel", m[1])]),
     # DeepGEMM either comes from site-packages or is vendored, and the two feature
     # switches (PDL, E8M0 scaling) change which kernels run. None of it is a flag.
@@ -185,6 +192,45 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
     # says which backends that opens up — a quiet reason a backend differs from last run.
     (re.compile(r"Disabled mm_prefix attention mode because multimodal inputs are configuration-disabled"),
      lambda m: [("mm.prefix_attention", "disabled (multimodal config off)")]),
+    # Hybrid models rewrite cache settings after the args are read: NemotronH moves the
+    # mamba ssm dtype to float32 on its own, and no flag in the command line says so.
+    (re.compile(r"Updating mamba_ssm_cache_dtype to '(\w+)' for (\w+) model"),
+     lambda m: [("kv_cache.mamba_ssm_dtype", f"{m[1]} (set for {m[2]})")]),
+    # Padding layers keep every cache group the same length; the price is printed as a
+    # fraction of the whole cache, which is the only number that says what it cost.
+    (re.compile(r"Add (\d+) padding layers?, may waste at most ([\d.]+)% KV cache memory"),
+     lambda m: [("kv_cache.padding_layers", int(m[1])),
+                ("kv_cache.padding_waste", f"{m[2]}%")]),
+    # A missing fused-MoE config silently falls back to the default one, which is slow and
+    # says nothing else about the run.
+    (re.compile(r"Using default MoE config\. Performance might be sub-optimal! Config file not found"),
+     lambda m: [("moe.config", "default (config file not found)")]),
+    (re.compile(r"Using default (\S+) Block FP8 kernel config\. Performance might be sub-optimal"),
+     lambda m: [("quant.kernel.config", f"default {m[1]} (no config file)")]),
+    # Data-parallel sync normally runs over NCCL; async scheduling turns that off, which
+    # changes both the sync path and the memory NCCL would have held.
+    (re.compile(r"Disabling NCCL for DP synchronization when using async scheduling"),
+     lambda m: [("parallel.dp_sync_nccl", "disabled (async scheduling)")]),
+    # Custom allreduce quietly turns itself off on PCIe-only multi-GPU boxes; the reason
+    # matters because the collective then goes through NCCL instead.
+    (re.compile(r"Custom allreduce is disabled because (.+?)(?:\. To silence|$)"),
+     lambda m: [("backend.allreduce_reason", m[1].strip())]),
+    # On pre-Ampere cards bfloat16 is not available and the weights are cast down; the
+    # cast itself is a fact, and so is the card that forced it.
+    (re.compile(r"Your device '([^']+)' \(with compute capability [\d.]+\) doesn't support "
+                r"torch\.bfloat16\. Falling back to torch\.(\w+)"),
+     lambda m: [("model.cast", f"torch.bfloat16 -> torch.{m[2]}"),
+                ("gpu.bf16_support", f"no ({m[1]})")]),
+    # FA refuses to run when the card is too old and says which capability it wanted.
+    (re.compile(r"Cannot use FA version (\d+) .*only supported on devices with compute capability >= (\d+)"),
+     lambda m: [("backend.flash_attn_blocked", f"FA{m[1]} needs sm{m[2]}0+")]),
+    (re.compile(r"Chat template warmup (failed|completed in ([\d.]+)ms)"),
+     lambda m: [("chat.template_warmup",
+                 "failed" if m[2] is None else f"completed in {m[2]}ms")]),
+    # The number after "API server" is the local rank in a data-parallel group, not a port;
+    # the port lives in the URL. Reading it as a port produced `server.port: 0` on a TP4 box.
+    (re.compile(r"Starting vLLM API server \d+ on (http://\S+)"),
+     lambda m: [("server.url", m[1])]),
     # The extensible KV cache (v0.33.x) sizes itself at warmup and prints the split it
     # settled on: what stayed free, what went to the cache, what it held back for transient
     # activations, and what torch may still reserve. This line is where vllm#66193's

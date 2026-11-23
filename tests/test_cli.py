@@ -2313,3 +2313,65 @@ def test_a_pure_traceback_says_what_it_is_instead_of_exiting_silently():
     assert "no vLLM or SGLang configuration lines recognised" in out.stderr
     assert "this looks like a traceback, not a startup log" in out.stderr
     assert "31 line(s) of stack" in out.stderr
+
+
+def test_a_hybrid_model_rewrites_its_cache_dtype_and_pays_for_a_padding_layer():
+    # thread 2254: vLLM 0.14 on Nemotron-3-Nano-30B-A3B, TP4 over four V100s. Two things the
+    # command line never says: the engine moves the mamba ssm dtype itself, and it inserts a
+    # padding layer whose cost is printed as a percentage of the whole KV cache.
+    f = facts("vllm-forum-2026-01/nemotron3-nano-v100-tp4.log")
+    assert f["engine.version"].value == "0.14.0"
+    assert f["model.architecture"].value == "NemotronHForCausalLM"
+    assert f["kv_cache.mamba_ssm_dtype"].value == "float16 (set for NemotronH)"
+    assert f["kv_cache.padding_layers"].value == 1
+    assert f["kv_cache.padding_waste"].value == "4.35%"
+    assert f["moe.config"].value == "default (config file not found)"
+    assert f["parallel.dp_sync_nccl"].value == "disabled (async scheduling)"
+    assert f["scheduler.async"].value == "enabled"
+
+
+def test_a_pre_ampere_card_says_what_it_cast_and_which_kernel_it_refused():
+    # Same log: bfloat16 is unavailable on V100, so the weights are cast down and FA2 refuses
+    # to run; custom allreduce also switches off, and it names the reason (PCIe-only box).
+    f = facts("vllm-forum-2026-01/nemotron3-nano-v100-tp4.log")
+    assert f["gpu.bf16_support"].value == "no (Tesla V100-SXM2-32GB)"
+    assert f["model.cast"].value == "torch.bfloat16 -> torch.float16"
+    assert f["backend.flash_attn_blocked"].value == "FA2 needs sm80+"
+    assert f["backend.allreduce_reason"].value == (
+        "it's not supported on more than two PCIe-only GPUs")
+
+
+def test_the_local_rank_printed_after_api_server_is_not_a_port():
+    # `Starting vLLM API server 0 on http://0.0.0.0:8000`: the 0 is the local rank inside a
+    # data-parallel group, not a port. Reading it as a port produced `server.port: 0` on a TP4
+    # box, which then differed from every other log for no reason. The URL carries the port.
+    f = facts("vllm-forum-2026-01/nemotron3-nano-v100-tp4.log")
+    assert f["server.url"].value == "http://0.0.0.0:8000"
+    assert "server.port" not in f
+
+
+def test_a_log_pasted_through_a_forum_keeps_the_two_hyphens_of_a_cache_path():
+    # The forum's typography turns Hugging Face's `models--Qwen--Qwen3.6` into an en dash, so a
+    # pasted path reads `models\u2013Qwen\u2013Qwen3.6` and can never equal the server's path.
+    # Folding en/em dashes back to `--`/`---` is the same class of fix as the curly quotes.
+    text = (
+        "(APIServer pid=1) INFO 04-20 06:08:21 [utils.py:233] non-default args: "
+        "{'model': '/root/.cache/huggingface/hub/models\u2013Qwen\u2013Qwen3.6-35B-A3B-FP8'}\n"
+    )
+    f = servediff.parse(text)["facts"]
+    assert f["arg.model"].value == (
+        "/root/.cache/huggingface/hub/models--Qwen--Qwen3.6-35B-A3B-FP8")
+    assert "\u2013" not in f["arg.model"].value
+
+
+def test_an_eager_run_and_a_kernel_config_fallback_are_facts():
+    # thread 2570: vLLM 0.19, Qwen3.6-35B-A3B-FP8 on one GPU with enforce_eager. The GDN
+    # prefill line has no `(requested=…, head_k_dim=…)` suffix in this build, and the FP8
+    # kernel config falls back to its default because no config file exists.
+    f = facts("vllm-forum-2026-04/qwen36-35b-fp8-eager.log")
+    assert f["cuda_graph"].value == "disabled (enforce_eager)"
+    assert f["compile"].value == "disabled (enforce_eager)"
+    assert f["gdn.prefill_kernel"].value == "Triton/FLA"
+    assert f["quant.kernel.config"].value == "default W8A8 (no config file)"
+    assert f["arg.model"].value.startswith(
+        "/root/.cache/huggingface/hub/models--Qwen--Qwen3.6-35B-A3B-FP8/snapshots/")

@@ -244,6 +244,19 @@ NOISE = (
     # a shared-memory slot another rank has not released. Its text is identical every time,
     # which is why it is noise here and a whole writeup elsewhere.
     re.compile(r"^No available shared memory broadcast block found in \d+ seconds"),
+    # A card without symmetric-memory support says so once per rank; it is a property of the
+    # box and the same run prints it again, so nothing about the run changes with it.
+    re.compile(r"\[symm_mem\.py:\d+\] SymmMemCommunicator: Device capability [\d.]+\s+not supported"),
+    # Advice about where to put the model argument, and the warmup's own start line: the
+    # settings behind them are `args.source` and `chat.template_warmup`.
+    re.compile(r"\[argparse_utils\.py:\d+\] With `vllm serve`, you should provide the model as a positional argument"),
+    re.compile(r"\[serving_chat\.py:\d+\] Warming up chat template processing"),
+    # The chat-template failure is already `chat.template_warmup: failed`; this line is the
+    # exception class plus transformers' version note, which belongs in the fix, not the diff.
+    re.compile(r"\[serving_chat\.py:\d+\] vllm\.entrypoints\.chat_utils\.ChatTemplateResolutionError"),
+    # `cuda_graph` already says disabled and the args say why (enforce_eager); this line is
+    # the engine repeating the consequence, and on a non-eager box it never appears.
+    re.compile(r"\[vllm\.py:\d+\] Cudagraph is disabled under eager mode"),
     re.compile(r"^CUDA available: (True|False)"),
     re.compile(r"^GPU \d+ Compute Capability: "),
     re.compile(r"^NVIDIA Topology:|^\t"),
