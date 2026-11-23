@@ -14,6 +14,7 @@ burst is a retry loop. The two need different fixes, and the line count cannot t
 
 from __future__ import annotations
 
+import bisect
 import statistics
 import re
 from collections import defaultdict
@@ -53,7 +54,13 @@ _EMBEDDED = re.compile(r"(?=\([^)]*pid=\d+\)\s+(?:DEBUG|INFO|WARNING|ERROR|CRITI
 
 def _clock(line: str) -> float | None:
     """Seconds of day carried by this line, or None when it has no clock."""
-    match = _CLOCK.search(_normalize(line))
+    # Search the raw line first: the clock digits survive normalisation untouched, so
+    # running the preamble stripper over a 96 MB log only to read the same digits again is
+    # wasted work on every line. Normalising stays as the fallback for a clock that an
+    # escape sequence has split apart.
+    match = _CLOCK.search(line)
+    if match is None:
+        match = _CLOCK.search(_normalize(line))
     if match is None:
         return None
     text = match.group(0).replace(",", ".")
@@ -105,32 +112,20 @@ def _clock_text(seconds: float | None) -> str:
     return f"{text}.{int(round(frac * 1000)):03d}" if frac else text
 
 
-def _timed(text: str) -> list[tuple[float, str, str]]:
-    """(clock, shape, sample) for every message line that carries a clock.
-
-    Used to answer the one question the cadence cannot: was anything else printed *during*
-    the wait. A run compiling Triton kernels keeps writing inside the window; a run whose
-    reader has stopped writes nothing at all.
-    """
-    out = []
-    for raw in text.splitlines():
-        for part in (_EMBEDDED.split(raw) if "pid=" in raw else (raw,)):
-            if not part.strip():
-                continue
-            key, body = _shape_of(part)
-            if key is None:
-                continue
-            if body is None:
-                body = message(part)
-            clock = _clock(part)
-            if clock is None:
-                continue
-            out.append((clock, key, body))
-    return out
-
-
 def groups(text: str, min_count: int = 2) -> tuple[int, list[dict]]:
     """(lines read, repeated shapes with count >= min_count), ordered by count then shape."""
+    lines, _, found = _scan(text, min_count)
+    return lines, found
+
+
+def _scan(text: str, min_count: int = 2) -> tuple[int, dict, list[dict]]:
+    """One pass over the log: (lines read, every shape's bucket, the repeated shapes).
+
+    `report` needs the buckets as well as the repeats — the "was anything else printed during
+    the wait" answer is a count of other shapes' timestamps inside a window, which is a bisect
+    over timestamps already collected here. It used to be a second full pass over the whole
+    log, which is why `repeats` was twice as expensive as `show` on the same file.
+    """
     buckets: dict[str, dict] = defaultdict(lambda: {"count": 0, "times": [], "samples": []})
     lines = 0
     for raw in text.splitlines():
@@ -182,12 +177,30 @@ def groups(text: str, min_count: int = 2) -> tuple[int, list[dict]]:
             "regular": regular,
         })
     found.sort(key=lambda group: (-group["count"], group["message"]))
-    return lines, found
+    return lines, buckets, found
+
+
+def _inside(buckets: dict, group: dict) -> tuple[int, int]:
+    """(timed lines from other shapes strictly inside this group's window, how many shapes)."""
+    first, last = group["first"], group["last"]
+    count = 0
+    kinds = 0
+    for key, bucket in buckets.items():
+        if key == group["message"]:
+            continue
+        times = bucket["times"]
+        if not times:
+            continue
+        here = bisect.bisect_left(times, last) - bisect.bisect_right(times, first)
+        if here:
+            count += here
+            kinds += 1
+    return count, kinds
 
 
 def report(path: Path, text: str, min_count: int = 2, top: int = 0) -> tuple[int, list[dict], str]:
     """(lines read, every repeated shape, the block of text to print) for one log."""
-    lines, found = groups(text, min_count)
+    lines, buckets, found = _scan(text, min_count)
     shown = found[:top] if top else found
     counted = sum(group["count"] for group in found)
     out = [f"{path}: {lines} line(s), {len(found)} shape(s) repeated"
@@ -196,14 +209,18 @@ def report(path: Path, text: str, min_count: int = 2, top: int = 0) -> tuple[int
         out.append(f"  nothing repeats {min_count} or more times.")
     if top and len(found) > top:
         out.append(f"  showing the {top} most frequent; {len(found) - top} more below the cut.")
-    timed = _timed(text) if any(group["regular"] for group in shown) else []
     for group in shown:
         if group["first"] is not None:
             where = (f"{_clock_text(group['first'])} -> {_clock_text(group['last'])}"
                      f"  span {_span(group['span_s'])}")
             cadence = "regular" if group["regular"] else "burst"
-            gap = (f"{'gap' if group['regular'] else 'gaps'} "
-                   f"{group['median_gap_s']:.3f} s median, {group['max_gap_s']:.3f} s max")
+            if group["median_gap_s"] is None:
+                # Count says 2+ but only one of the lines carried a clock, or the two
+                # carried the same one. There is no gap to read; saying so is the answer.
+                gap = f"{group['count']} line(s) but one clock: no gap to read"
+            else:
+                gap = (f"{'gap' if group['regular'] else 'gaps'} "
+                       f"{group['median_gap_s']:.3f} s median, {group['max_gap_s']:.3f} s max")
         else:
             where, cadence, gap = "no timestamps", "untimed", "gap unknown"
         out.append(f"  {group['count']:4d}x {cadence:8s} {where}")
@@ -217,11 +234,9 @@ def report(path: Path, text: str, min_count: int = 2, top: int = 0) -> tuple[int
                 out.append(f"        this line is the end of a {seconds} s wait: the first one"
                            f" began at {_clock_text(began)}")
         if group["regular"] and group["last"] is not None:
-            inside = [item for item in timed
-                      if group["first"] < item[0] < group["last"] and item[1] != group["message"]]
+            inside, kinds = _inside(buckets, group)
             if inside:
-                kinds = len({item[1] for item in inside})
-                out.append(f"        {len(inside):4d} other line(s) inside that span,"
+                out.append(f"        {inside:4d} other line(s) inside that span,"
                            f" {kinds} shape(s): something was moving")
             else:
                 out.append("          0 other line(s) inside that span:"

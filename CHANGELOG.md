@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.4.78 — 2026-11-23
+
+`repeats` read the file twice. Two fixes came out of removing that, plus one crash.
+
+**The second pass.** `report` walked the whole log a second time to answer the only
+question the cadence can't: was anything else printed *during* the wait. That answer
+only needs the timestamps, which the first pass had already collected and thrown
+away. Counting them now costs a bisect per repeated shape instead of a full re-read.
+96 MB log: `repeats` 22.80s -> 5.96s (it was 37.90s at 0.4.76).
+
+**SGLang logs had no times at all.** SGLang stamps lines `[2026-10-06 00:15:19]`,
+and the preamble stripper removed the bracketed timestamp *before* the clock search,
+so the only clock on the line went with it: every SGLang wait printed "untimed,
+gap unknown". Reading the clock off the raw line first fixes it —
+`2x burst 00:15:19 -> 00:15:50 span 31.00 s` where there used to be nothing.
+
+**A crash on real forum logs.** Five copies of the same traceback frame, all
+stamped `16:38:14`: count 2+ with a single distinct clock reached a `None` median
+and the formatter raised `TypeError`. `repeats` died on
+`ray-4-node-random-fail.log` and `qwen-vram-enough-but-oom.log`; both now say
+"N line(s) but one clock: no gap to read". All 87 corpus logs run through the CLI
+with exit 0.
+
+Output is unchanged on 83 of 87 logs (byte-identical report text); the two SGLang
+logs change because they now carry times, and the two crash logs change because
+they now print. `pytest` 180 passed.
+
 ## 0.4.77 — 2026-11-23
 
 A 96 MB startup log used to take a minute just to read. It now takes eleven seconds.

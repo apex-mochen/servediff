@@ -2061,6 +2061,20 @@ def _write_log(tmp_path, lines, name="repeats.log"):
     return log
 
 
+def test_repeats_reads_the_clock_out_of_a_bracketed_sglang_timestamp(tmp_path, capsys):
+    # SGLang prints `[2026-10-06 00:15:19] ...`. Stripping the bracketed preamble used to
+    # take the only clock on the line with it, so every SGLang log reported "no timestamps"
+    # and the whole of `repeats` was blind on that side of the coverage.
+    log = _write_log(tmp_path, [
+        f"[2026-10-06 00:15:{minute:02d}] NIXL KVManager initialized with backend: UCX"
+        for minute in (19, 20, 21)])
+    assert servediff.main(["repeats", str(log)]) == 0
+    out = capsys.readouterr().out
+    assert "untimed" not in out
+    assert "3x" in out
+    assert "00:15:19 -> 00:15:21" in out
+
+
 def test_repeats_reads_a_fixed_gap_as_one_wait(tmp_path, capsys):
     # Sixteen copies of vLLM's ring-buffer warning are one wait re-logged every
     # VLLM_RINGBUFFER_WARNING_INTERVAL, not sixteen stalls. The gap is the only signal that
@@ -2134,6 +2148,16 @@ def test_repeats_json_carries_the_span_and_the_median(tmp_path, capsys):
     assert group["span_s"] == 120.0
     assert group["median_gap_s"] == 60.0
     assert group["first"] == 11 * 3600 + 10 * 60  # the log quotes 11:10:00
+
+
+def test_repeats_survives_a_repeat_whose_lines_share_one_clock():
+    # vllm-project/vllm forum, `ray-4-node-random-fail`: five copies of the same traceback
+    # frame, all stamped 16:38:14. `count >= 2` with a single distinct clock reached a
+    # `None` median and the formatter raised TypeError — `repeats` died on the log instead
+    # of saying the gap is unreadable.
+    for name in ("vllm-forum-2026-04/ray-4-node-random-fail.log",
+                 "vllm-forum-2025-07/qwen-vram-enough-but-oom.log"):
+        assert servediff.main(["repeats", str(FIX / name)]) == 0
 
 
 def test_repeats_min_hides_a_shape_below_the_bar(tmp_path, capsys):
