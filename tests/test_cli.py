@@ -1168,6 +1168,12 @@ def test_demo_diffs_the_logs_it_ships():
     assert "backend.moe" in out.stdout
     assert "MARLIN" in out.stdout
     assert "demo: exit 1" in out.stderr  # says why 1 is a result, not a failure
+    # The demo also has to show the command a hang needs, on two shipped logs, and the
+    # subtraction that separates them: one wait began before capture ended, the other began
+    # the second a kernel compiled.
+    assert "two different readings" in out.stdout
+    assert "began at 09:02:37" in out.stdout
+    assert "began at 22:01:40" in out.stdout
 
 
 def test_a_reader_that_stops_early_is_not_a_traceback():

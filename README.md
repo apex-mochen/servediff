@@ -52,6 +52,13 @@ servediff demo
 produces real output without you finding logs first. It exits `1`, because the two
 logs do differ — that is the result, not a failure.
 
+It then runs `repeats` on two more shipped logs that carry the same
+`No available shared memory broadcast block found in 60 seconds` warning, because the
+warning is the same and the readings are not: in one the wait begins before graph capture has
+finished and outlives it by five minutes, in the other it begins the same second a Triton
+kernel compiled. The line that separates them is the subtraction — the warning's timestamp is
+the *end* of the wait, so `09:03:37` means the wait began at `09:02:37`.
+
 **Already have a log?** That is the shorter path, and it needs no second log to start:
 
 ```bash

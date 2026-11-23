@@ -1671,6 +1671,25 @@ def _run(argv=None) -> int:
                 dest.write_text(base.joinpath(name).read_text(encoding="utf-8"), encoding="utf-8")
                 paths.append(dest)
             code = main(["diff", *map(str, paths)])
+            # Then the other command a hang needs, on two logs shipped for it: the same warning
+            # line, two readings. Both blocks end with the subtraction that separates them —
+            # the wait line marks the end of the wait, so its start is the timestamp minus the
+            # period named in the message.
+            from servediff import repeats as repeatsmod
+
+            print("\n--- the same 60-second warning, two different readings ---")
+            for name, reading in (
+                ("vllm-2828-a2-two-waits.log",
+                 "A2, TP2: the wait begins 3 s before graph capture ends and outlives it"
+                 " by five minutes, with nothing printed inside the window"),
+                ("vllm-45198-jit-then-wait.log",
+                 "vllm#45198: the wait begins the same second a Triton kernel compiled"),
+            ):
+                print()
+                print(reading)
+                _, _, block = repeatsmod.report(Path(name), base.joinpath(name).read_text(
+                    encoding="utf-8"), min_count=2, top=2)
+                print(block)
         print(f"\ndemo: exit {code}. The two bundled logs do differ (the MoE backend, plus a KV"
               " cache line only one of them prints), so `diff` reports 1 here — 1 means"
               " \"the inputs differ\", not \"the tool failed\"; 2 would mean it could not"

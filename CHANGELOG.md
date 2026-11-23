@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.4.71 — 2026-11-23
+
+`servediff demo` now shows both claims, not just the first one.
+
+A new install has no logs, so the first command has to carry the argument by itself. It already
+diffed two excerpt logs from vllm#47047 (same flags, `VLLM_CUTLASS` → `MARLIN`). It now also runs
+`repeats` on two more logs that ship inside the package, because the `No available shared memory
+broadcast block found in 60 seconds` warning reads identically in both and means opposite things:
+
+- `vllm-2828-a2-two-waits.log` — A2, TP2: the wait began at `09:02:37`, graph capture was still
+  running, and the wait outlived it by five minutes with nothing printed inside it
+- `vllm-45198-jit-then-wait.log` — the wait began at `22:01:40`, the same second
+  `Triton kernel JIT compilation during inference: _zero_kv_blocks_kernel` was printed
+
+Both blocks end with the arithmetic that separates them: the warning's timestamp is the *end* of
+the wait, so the start is that timestamp minus the period named in the message.
+
+No rule or fact changes; two example logs added (~3 KB), README's demo paragraph explains the
+second half.
+
 ## 0.4.70 — 2026-11-23
 
 A second entry point, for the other error people paste: `CUDA out of memory`.
