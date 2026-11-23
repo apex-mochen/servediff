@@ -1372,9 +1372,39 @@ def _md_cell(value) -> str:
     return text.replace("|", "\\|").replace("\n", " ")
 
 
+def _why_markdown(why: dict, omitted: int) -> list[str]:
+    """The same grouping `--why` prints, as a section of a report.
+
+    The markdown report is what gets pasted into an issue; it is the place where the
+    reader of the pasted text -- often not the person who ran it -- needs the meaning
+    most. Printing the explanation only on the terminal put it on the wrong side of
+    that copy.
+    """
+    if not why:
+        return []
+    out = ["## What the changed keys mean", ""]
+    for matched, group in why.items():
+        keys = group["keys"]
+        if matched == keys[0]:
+            out.append(f"- **`{keys[0]}`**: {group['what']}")
+        elif len(keys) == 1:
+            out.append(f"- **`{keys[0]}`** (family `{matched}`): {group['what']}")
+        else:
+            out.append(f"- **`{matched}`** ({len(keys)} keys: "
+                       + ", ".join(f"`{k}`" for k in keys) + f"): {group['what']}")
+        if group["trap"]:
+            out.append(f"  *Does not tell you:* {group['trap']}")
+    if omitted:
+        out.append(f"- {omitted} more changed key(s) are not explained here; "
+                   "`servediff explain <key>` reads any of them.")
+    out.append("")
+    return out
+
+
 def _render_markdown(*, path_a: str, path_b: str, engine_a, engine_b,
                      rows: list[dict], warnings: list[str], notes: list[str] = [],
-                     differing: int, identical: int, all_rows: bool) -> str:
+                     differing: int, identical: int, all_rows: bool, why: dict = None,
+                     why_omitted: int = 0) -> str:
     """Render a GitHub-flavored diff report, suitable for pasting into an issue."""
     lines: list[str] = ["# servediff report", ""]
     eng = f" (`{engine_a}` vs `{engine_b}`)" if engine_a and engine_b and engine_a != engine_b else ""
@@ -1394,6 +1424,7 @@ def _render_markdown(*, path_a: str, path_b: str, engine_a, engine_b,
                      f"{_md_cell(r['candidate'])} | {r['status']}"
                      f"{' ' + r['delta'] if r.get('delta') else ''} |")
     lines.append("")
+    lines += _why_markdown(why or {}, why_omitted)
     lines.append(f"**{differing} difference(s); {identical} fact(s) identical.** "
                  "Absent means the log did not print it, not that it was off."
                  + (" Shown: all facts." if all_rows else ""))
@@ -1437,7 +1468,8 @@ def _render_text_series(labels: list[str], rows: list[dict], width: int = 30) ->
     return "\n".join(lines)
 
 
-def _render_markdown_series(*, labels: list[str], rows: list[dict], differing: int, identical: int) -> str:
+def _render_markdown_series(*, labels: list[str], rows: list[dict], differing: int, identical: int,
+                            why: dict = None, why_omitted: int = 0) -> str:
     head = "| fact | " + " | ".join(_md_cell(label) for label in labels) + " |"
     rule = "|---|" + "---|" * len(labels)
     body = ["| `" + row["key"] + "` | "
@@ -1794,6 +1826,8 @@ def _run(argv=None) -> int:
     s.add_argument("--json", action="store_true")
     s.add_argument("--markdown", action="store_true", help="render a GitHub-flavored report (paste into issues)")
     s.add_argument("--all", action="store_true", help="also print facts identical across every log")
+    s.add_argument("--why", action="store_true",
+                   help="after the table, say what each differing key measures and what it does not")
     e = sub.add_parser("env", help="snapshot package versions, GPU and engine env vars of a server environment")
     e.add_argument("--python", help="interpreter of the server's environment (default: this one)")
     e.add_argument("-o", "--output", type=Path, help="write JSON here instead of stdout")
@@ -2136,17 +2170,24 @@ def _run(argv=None) -> int:
         rows = series(parsed_list, raw_args=args.raw_args)
         differing = [row for row in rows if row["status"] == "changed"]
         shown = rows if args.all else differing
+        why = _why_rows(shown) if getattr(args, "why", False) else ({}, 0)
         if args.json:
-            print(json.dumps({"logs": labels, "differences": len(differing), "rows": shown},
-                             indent=2, ensure_ascii=False))
+            payload = {"logs": labels, "differences": len(differing), "rows": shown}
+            if why[0]:
+                payload["why"] = why[0]
+                payload["why_omitted"] = why[1]
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
         elif args.markdown:
             print(_render_markdown_series(labels=labels, rows=shown, differing=len(differing),
-                                          identical=len(rows) - len(differing)))
+                                          identical=len(rows) - len(differing),
+                                          why=why[0], why_omitted=why[1]))
         else:
             print(_render_text_series(labels, shown))
             print(f"\n{len(differing)} fact(s) differ across {len(labels)} logs;"
                   f" {len(rows) - len(differing)} identical. <absent> means the log did not print it,"
                   " not that it was off.")
+            if why[0]:
+                _print_why(*why)
         return 1 if differing else 0
 
     if args.command == "repeats":
@@ -2434,7 +2475,7 @@ def _run(argv=None) -> int:
             engine_a=a["engine"], engine_b=b["engine"],
             rows=shown_rows, warnings=warnings, notes=notes,
             differing=len(differing), identical=identical,
-            all_rows=bool(args.all)))
+            all_rows=bool(args.all), why=why[0], why_omitted=why[1]))
     else:
         if a["engine"] != b["engine"]:
             print(f"note: comparing {a['engine']} with {b['engine']}; only shared facts line up\n")

@@ -130,6 +130,8 @@ def extra_cases(fixtures: Path, logs: list[Path]) -> list[tuple[str, list[str]]]
         ("explain --json", ["explain", "--json"]),
         ("diff --why", ["diff", str(logs[0]), str(logs[-1]), "--why"]),
         ("diff --why --json", ["diff", str(logs[0]), str(logs[-1]), "--why", "--json"]),
+        ("diff --why --markdown", ["diff", str(logs[0]), str(logs[-1]), "--why", "--markdown"]),
+        ("series --why", ["series", str(logs[0]), str(logs[1]), str(logs[-1]), "--why"]),
     ]
     return cases
 

@@ -93,8 +93,8 @@ Ctrl-C 会停掉 server、保留日志、退出码 `130`；server 自己结束�
 | 子命令 | 读什么 | 退出码 |
 |---|---|---|
 | `servediff show <log>` | 一份启动日志（`-` 表示读 stdin），输出它打印出来的每条 fact 及其行号；`--json` | `0` 读到了；`2` 路径读不了，或一行都认不出来 |
-| `servediff diff <a> <b>` | 两份启动日志，或两份 `servediff env` 快照；`--json` / `--markdown` / `--all` / `--raw-args` / `--skip-absent` / `--only MATCH`（可重复；按事实名做前缀或子串匹配，忽略 `_` / `-`）/ `--why`（把每条变了的键按 `explain` 的同一张表解释一遍）；`servediff diff <log> --against facts.json` 用 `show --json` 记下的事实当作基线；把日志换成目录则一次门禁目录里所有 `*.log`（每份一行） | `0` 一致；`1` 至少有一处不同；`2` 用法错误、路径读不了、那个文件不是 facts 基线、某个 `--only` 匹配一条事实都没匹配到、只给一份日志而没有可比的东西，或一份日志配一份快照 |
-| `servediff series <a> <b> <c> ...` | 三份及以上日志，按你给的顺序排列成列，每条 fact 一行；`--json` / `--markdown` / `--all` / `--raw-args` | `0` 各份全同；`1` 有 fact 不同；`2` 少于三份 |
+| `servediff diff <a> <b>` | 两份启动日志，或两份 `servediff env` 快照；`--json` / `--markdown` / `--all` / `--raw-args` / `--skip-absent` / `--only MATCH`（可重复；按事实名做前缀或子串匹配，忽略 `_` / `-`）/ `--why`（把每条变了的键按 `explain` 的同一张表解释一遍；配 `--markdown` 时成为报告里的一节）；`servediff diff <log> --against facts.json` 用 `show --json` 记下的事实当作基线；把日志换成目录则一次门禁目录里所有 `*.log`（每份一行） | `0` 一致；`1` 至少有一处不同；`2` 用法错误、路径读不了、那个文件不是 facts 基线、某个 `--only` 匹配一条事实都没匹配到、只给一份日志而没有可比的东西，或一份日志配一份快照 |
+| `servediff series <a> <b> <c> ...` | 三份及以上日志，按你给的顺序排列成列，每条 fact 一行；`--json` / `--markdown` / `--all` / `--raw-args` / `--why` | `0` 各份全同；`1` 有 fact 不同；`2` 少于三份 |
 | `servediff env [--python P] [-o snap.json]` | 该解释器的包、GPU 信息，以及名字以 `VLLM_` / `SGLANG_` / `SGL_` / `CUDA_` / `NCCL_` / `TORCH_` / `PYTORCH_` / `FLASHINFER_` / `TRITON_` 开头的环境变量和 `HF_HUB_OFFLINE` / `TRANSFORMERS_OFFLINE`；看起来像密钥的名字一律写成 `<redacted>` | `0` 已写出；`2` 快照失败，或那个路径写不进去 |
 | `servediff capture [-o run.log] -- <启动命令>` | 跑起 server、把日志同时输出到终端和文件，并在启动**之前**写出 `<out>.env.json`。命令里自带 python 启动器时（`capture -- python -m vllm...`），快照的就是那个解释器；否则用 `--python` 指到 server 所在的环境 | server 自己的退出码；路径写不进去或命令起不来时是 `2` |
 | `servediff explain <key>` | 解释一条 fact 名字的含意、单位，以及它**没**告诉你的事（例如 `kv_cache.max_concurrency` 除的是那句话里的 token 数，不是你的请求长度）；只给族名（`kv_cache`）则连族一起讲；`--json` | `0` 有出处；`2` 这个键任何日志都不会产生 |

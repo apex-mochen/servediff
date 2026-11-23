@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.4.84 — 2026-11-23
+
+0.4.83 put the explanation in the terminal output. Two gaps were left, both on the wrong
+side of where the text travels:
+
+`--markdown` is the report people paste into an issue, and the reader of that pasted text
+is usually not the person who ran it. `--why --markdown` now emits the same grouping as a
+section of the report:
+
+```
+## What the changed keys mean
+
+- **`compile`** (6 keys: `compile.cached_range`, `compile.dynamo_s`, ...): torch.compile /
+  inductor on the backbone: backend, ranges compiled, fusions enabled, seconds spent, ...
+  *Does not tell you:* compile.total_s hides which phase grew; compile.dynamo_s, graph_s
+  and warmup_s split it
+```
+
+The omitted count is stated in the report too ("N more changed key(s) are not explained
+here"), so a paste never implies the six shown are the whole story.
+
+`series` compares three or more logs and raises exactly the same question; the flag
+existed on `diff` and not there. `series --why` now works in text, markdown and JSON
+(`why` + `why_omitted`), with rows untouched.
+
+Both were found by exercising the flag on the paths it claimed to support rather than on
+the one path it was written for. `pytest` 196 passed (three new tests: markdown section
+present with `--why`, absent without it, series answers the same question); `cli_sweep`
+also runs `diff --why --markdown` and `series --why`, no tracebacks.
+
 ## 0.4.83 — 2026-11-23
 
 `diff` states a change and stops. 0.4.82 gave you one command to ask what a key means;

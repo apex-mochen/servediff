@@ -2206,6 +2206,41 @@ def test_diff_why_json_groups_without_changing_the_rows(capsys):
     assert set(data["rows"][0]) >= {"key", "baseline", "candidate", "status"}
 
 
+def test_diff_why_markdown_carries_the_section(capsys):
+    # The markdown report is the thing pasted into an issue, so the explanation has to be
+    # inside the pasted text -- on the terminal it lands on the wrong side of the copy.
+    a = FIX / "vllm-forum-2026-07/a2-stuck-on-shm-broadcast.log"
+    b = FIX / "sglang-2026-10/sglang-42684.log"
+    assert servediff.main(["diff", str(a), str(b), "--why", "--markdown"]) == 1
+    out = capsys.readouterr().out
+    assert "## What the changed keys mean" in out
+    assert "*Does not tell you:*" in out
+    assert "not explained here" in out  # the omitted count is stated, not dropped
+
+
+def test_markdown_without_why_has_no_explanation_section(capsys):
+    a = FIX / "vllm-forum-2026-07/a2-stuck-on-shm-broadcast.log"
+    b = FIX / "sglang-2026-10/sglang-42684.log"
+    assert servediff.main(["diff", str(a), str(b), "--markdown"]) == 1
+    assert "## What the changed keys mean" not in capsys.readouterr().out
+
+
+def test_series_why_answers_the_same_question(capsys):
+    # Three-way comparisons raise the same "what does this count" question as diff; the
+    # flag existing on one command and not the other is the kind of gap a reader hits.
+    logs = [str(FIX / "vllm-forum-2026-07/a2-stuck-on-shm-broadcast.log"),
+            str(FIX / "sglang-2026-10/sglang-42684.log"),
+            str(FIX / "vllm-forum-2026-06/vllm-cpu-2x-epyc-9655.log")]
+    assert servediff.main(["series", *logs]) == 1
+    assert "does not tell you" not in capsys.readouterr().out
+    assert servediff.main(["series", *logs, "--why"]) == 1
+    out = capsys.readouterr().out
+    assert "what these changed keys measure" in out and "does not tell you" in out
+    assert servediff.main(["series", *logs, "--why", "--json"]) == 1
+    data = json.loads(capsys.readouterr().out)
+    assert data["why_omitted"] > 0 and len(data["why"]) <= 6
+
+
 def test_diff_without_why_says_nothing_extra(capsys):
     a = FIX / "vllm-forum-2026-07/a2-stuck-on-shm-broadcast.log"
     b = FIX / "sglang-2026-10/sglang-42684.log"
