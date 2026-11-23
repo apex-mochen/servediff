@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import errno
 import json
 import re
 import shlex
@@ -1234,11 +1235,28 @@ def _keep_console_printable() -> None:
                 pass
 
 
+def _reader_went_away(exc: OSError) -> bool:
+    """True when a write failed because the reader closed the pipe, not because we broke.
+
+    Linux raises BrokenPipeError (EPIPE, errno 32). Windows does not: the CRT reports
+    `OSError: [Errno 22] Invalid argument`, and Winsock reports winerror 109 (ERROR_BROKEN_PIPE)
+    or 232 (ERROR_NO_DATA). Catching only BrokenPipeError left `servediff show log | head`
+    printing a traceback on Windows while the same command was already silent on Linux.
+    """
+    if isinstance(exc, BrokenPipeError):
+        return True
+    if exc.errno in (errno.EPIPE, errno.EINVAL):
+        return True
+    return getattr(exc, "winerror", None) in (109, 232)
+
+
 def main(argv=None) -> int:
     """Console entry point. Wraps the real body so that a closed pipe is not a traceback."""
     try:
         return _run(argv)
-    except BrokenPipeError:
+    except OSError as exc:
+        if not _reader_went_away(exc):
+            raise
         # `servediff show server.log | head` is ordinary use. The reader stops after a few
         # lines and the write fails; that is the reader's decision, not our error. Point
         # stdout at devnull so the interpreter's own flush at exit stays silent too.

@@ -1170,16 +1170,52 @@ def test_demo_diffs_the_logs_it_ships():
 
 
 def test_a_reader_that_stops_early_is_not_a_traceback():
-    # `servediff show server.log | head` is how a long fact list gets read. head closes
-    # the pipe, our write fails with EPIPE, and the interpreter used to print a
-    # traceback over the facts the user was reading.
+    # `servediff show server.log | head` is how a long fact list gets read. The reader
+    # closes the pipe, our write fails, and the interpreter used to print a traceback
+    # over the facts the user was reading. `head` itself is not used here: Windows
+    # does not ship one, and the failure mode differs there anyway (see the unit test
+    # below — Linux raises BrokenPipeError, Windows reports OSError 22 / winerror 232).
     log = Path(__file__).parent / "fixtures" / "vllm-forum-2026-06" / "vllm-cpu-2x-epyc-9655.log"
-    out = subprocess.run(f'{sys.executable} -m servediff show "{log}" | head -2',
-                         shell=True, capture_output=True, text=True)
+    reader = 'import sys; sys.stdout.write(sys.stdin.readline()[:400])'
+    cmd = f'{sys.executable} -m servediff show "{log}" | {sys.executable} -c "{reader}"'
+    out = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=60)
     assert out.returncode == 0, out
     assert "cpu.core_ids" in out.stdout
     assert "BrokenPipeError" not in out.stderr
     assert "Traceback" not in out.stderr
+    assert "OSError" not in out.stderr
+
+
+def test_a_windows_style_closed_pipe_is_not_a_traceback(monkeypatch, capsys):
+    # Windows never raises BrokenPipeError for this: the CRT reports `OSError: [Errno 22]
+    # Invalid argument`. The guard has to recognise that form too, or the same command
+    # that is silent on Linux prints a traceback on Windows.
+    from servediff import cli
+
+    class ClosedPipe:
+        def write(self, _text):
+            raise OSError(22, "Invalid argument")
+
+        def flush(self):
+            raise OSError(22, "Invalid argument")
+
+        def fileno(self):
+            return 1
+
+        def reconfigure(self, **_kwargs):
+            pass
+
+        def isatty(self):
+            return False
+
+        @property
+        def encoding(self):
+            return "utf-8"
+
+    log = Path(__file__).parent / "fixtures" / "vllm-forum-2026-06" / "vllm-cpu-2x-epyc-9655.log"
+    monkeypatch.setattr(cli.sys, "stdout", ClosedPipe())
+    assert cli.main(["show", str(log)]) == 0
+    assert "Traceback" not in capsys.readouterr().err
 
 
 def test_audit_names_the_lines_nothing_reads():

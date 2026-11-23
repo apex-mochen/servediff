@@ -30,6 +30,14 @@ broadcast wait, kept as noise with its own reasoned rule).
 Also: the README now points at the rendered notes site
 (<https://apex-mochen.github.io/servediff/>) and lists `writeups/same-box-twice.md`.
 
+On Windows, `servediff show server.log | head` still printed a traceback, because the closed
+pipe does not arrive as `BrokenPipeError` there — the CRT reports `OSError: [Errno 22]
+Invalid argument` (Winsock uses winerror 109/232). The guard now recognises that form as well,
+so the same command is silent on both platforms: before, 12 lines of traceback and
+`OSError: [Errno 22] Invalid argument`; after, zero lines on stderr. The regression test
+that used `head` now uses a second Python as the reader (Windows ships no `head`) and a unit
+test pins the Windows form directly.
+
 ## 0.4.63 — 2026-11-22
 
 The hybrid cache on 0.34 was invisible, and a lost compile-cache hit had no line.
