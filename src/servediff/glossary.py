@@ -158,8 +158,8 @@ GLOSSARY: dict[str, Gloss] = {
         "percent of KV memory, as an upper bound",
         "the log says 'may waste at most', so this is not the measured waste of an "
         "allocated cache: multiplying it into a memory estimate overstates the loss. "
-        "vllm#69280 read the 350% as actual waste and compared it with a measured "
-        "1.7-2.7x, which are two different quantities",
+        "A ratio measured from allocated pools and this printed ceiling are different "
+        "quantities; comparing them reads as a contradiction that is not there",
     ),
     "kv_cache.suggested_gib": Gloss(
         "The --kv-cache-memory the engine suggests when the utilization fraction cannot "

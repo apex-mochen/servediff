@@ -1,6 +1,29 @@
 # Changelog
 
-## 0.4.88 — 2026-11-23
+## 0.4.89 — 2026-11-23
+
+Two entries in the glossary named an issue. One is a citation (`vllm#54559 another process
+held 94.41 of 95.00 GiB`, the log line that explains the OOM); the other was not:
+
+```
+  what it does not tell you: ... vllm#69280 read the 350% as actual waste and compared it
+  with a measured 1.7-2.7x, which are two different quantities
+```
+
+That sentence shipped to PyPI and to `facts.html`, and it is the one a reader sees when they
+run `explain kv_cache.padding_waste` — a public page telling a named issue that its author
+misread a number. The gloss was right and the form was wrong: documentation should describe
+the pattern that misleads, not prosecute the report that taught us the pattern, and the
+moment we answer in that thread the text would read as a jab at the person we are answering.
+
+It now says the same thing without the name:
+
+```
+  A ratio measured from allocated pools and this printed ceiling are different
+  quantities; comparing them reads as a contradiction that is not there
+```
+
+`facts.html` was regenerated and redeployed. No parser change; no fact value changed.## 0.4.88 — 2026-11-23
 
 Found while looking at the first `show --markdown` report of 0.4.87, an hour after it shipped.
 
@@ -1842,6 +1865,7 @@ First version.
 - `servediff env [--python PATH]`: snapshot package versions, GPU and engine env vars of a
   server environment, with secret-looking values redacted. `servediff diff` on two
   snapshots lists inference-relevant changes first.
+
 
 
 
