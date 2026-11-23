@@ -18,7 +18,7 @@ import re
 from collections import Counter
 from pathlib import Path
 
-from servediff.cli import ANSI, BRACKET_TS, LINE_RULES, parse
+from servediff.cli import ANSI, BRACKET_TS, CURLY, LINE_RULES, parse
 
 DIGITS = re.compile(r"\d+")
 
@@ -40,7 +40,7 @@ _PREFIX = (
 
 def message(line: str) -> str:
     """The line with its process/time/module preamble removed."""
-    text = BRACKET_TS.sub("", ANSI.sub("", line)).strip()
+    text = BRACKET_TS.sub("", ANSI.sub("", line)).translate(CURLY).strip()
     for _ in range(12):
         before = text
         for pattern in _PREFIX:
@@ -363,7 +363,7 @@ def unread_samples(text: str) -> tuple[Counter, dict[str, str]]:
     samples: dict[str, str] = {}
     in_doc = False
     for raw in text.splitlines():
-        line = BRACKET_TS.sub("", ANSI.sub("", raw))
+        line = BRACKET_TS.sub("", ANSI.sub("", raw)).translate(CURLY)
         stripped = line.strip()
         # A docstring echoed by a pasted script: prose between two `"""`, which no log line
         # ever carries, so it is noise rather than a setting this tool failed to read.

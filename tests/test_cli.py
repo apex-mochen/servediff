@@ -2268,6 +2268,41 @@ def test_a_request_field_the_server_ignored_is_a_fact():
     assert f["engine.version"].value == "0.14.0"
 
 
+def test_speculative_decoding_settings_that_look_active_are_facts():
+    # thread 2946: vLLM 0.28, Qwen3.5-27B-NVFP4, run once plain and once with MTP spec decode.
+    # Three settings a user believes are in force are overridden and only mentioned in warnings:
+    # the token budget is reset, min_p/logit_bias stop working, and the MTP layer is re-forwarded
+    # per draft token. The kernels are the other half: a flag names the format, never the kernel.
+    f = facts("vllm-forum-2026-09/qwen35-nvfp4-mtp.log")
+    assert f["sched.max_num_scheduled_tokens"].value == 2048
+    assert f["sampling.ignored_with_spec"].value == "min_p, logit_bias"
+    assert f["spec.mtp_forward_repeat"].value == "num_spec_tokens > 1"
+    assert f["spec.mtp_weights_shared"].values == ["embedding", "lm_head"]
+    assert f["quant.kernel.nvfp4"].value == "FlashInferCutlassNvFp4LinearKernel"
+    assert f["quant.kernel.selected"].value == (
+        "CompressedTensorsW8A8Fp8: CutlassFP8ScaledMMLinearKernel")
+    assert f["compile.deep_gemm"].value == "vendored (vllm.third_party)"
+    assert f["compile.deep_gemm_feature"].values == ["PDL enabled", "E8M0 enabled"]
+    assert f["gdn.decode_kernel"].value == "cuda"
+    assert "Triton/FLA" in f["gdn.prefill_kernel"].value
+    assert f["mm.prefix_attention"].value == "disabled (multimodal config off)"
+
+
+def test_a_log_pasted_through_a_forum_still_parses():
+    # The forum returns the post with typographic quotes: `is set to ‘align’` and `won’t`.
+    # The server's log is ASCII, so every rule is written in ASCII; without curling the input
+    # back, a pasted copy loses the mamba cache mode and the spec warning silently.
+    text = (
+        "(EngineCore pid=1) INFO 09-08 08:23:42 [config.py:605] Mamba cache mode is set to "
+        "\u2018align\u2019 for Qwen3_5ForConditionalGeneration by default when prefix caching is enabled\n"
+        "(EngineCore pid=1502) WARNING 09-08 09:41:56 [init.py:205] min_p and logit_bias "
+        "parameters won\u2019t work with speculative decoding.\n"
+    )
+    f = servediff.parse(text)["facts"]
+    assert f["kv_cache.mamba_mode"].value == "align (default for Qwen3_5ForConditionalGeneration)"
+    assert f["sampling.ignored_with_spec"].value == "min_p, logit_bias"
+
+
 def test_a_pure_traceback_says_what_it_is_instead_of_exiting_silently():
     # sglang#52318 is a stack with no startup lines at all. "not recognised" alone reads as
     # a bug in the reader; the hint names the difference and says there is nothing to compare.

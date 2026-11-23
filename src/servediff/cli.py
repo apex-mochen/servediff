@@ -40,6 +40,12 @@ from servediff import env as envsnap
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
 # SGLang wraps its timestamp in brackets: `[2026-10-06 00:15:19] Tree cache …`.
 BRACKET_TS = re.compile(r"^\[(?:\d{4}-)?\d\d-\d\d \d\d:\d\d:\d\d\]\s*")
+# A log pasted through a forum, a chat client or a word processor comes back with typographic
+# quotes: `Mamba cache mode is set to 'align'` becomes `‘align’`, and `won't` becomes `won’t`.
+# The log on the server is ASCII, so the rules are written in ASCII; curling the input back
+# is what lets the same rules read a pasted copy. Seen on forum t2946 (vLLM 0.28).
+CURLY = str.maketrans({"\u2018": "'", "\u2019": "'", "\u201c": '"', "\u201d": '"'})
+
 
 # `Could not collect`, `N/A` and `Not Set` are absences, not values: read literally they
 # produced a fact like env.rocm = "Could" on a CUDA box, which then matched itself.
@@ -159,6 +165,26 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
      lambda m: [("kv_cache.mamba_mode", f"{m[1]} (default for {m[2]})")]),
     (re.compile(r"kv cache group sizes \((\d+(?:, ?\d+)*)\)"),
      lambda m: [("kv_cache.group_sizes", f"[{m[1]}]")]),
+    # The same hybrid model also names the kernels its quantised GEMMs and its GDN layers
+    # selected. A flag names the format (`--quantization compressed-tensors`), never the
+    # kernel, and the kernel is where a throughput difference between two runs on one
+    # checkpoint comes from. Seen on vLLM 0.28 / Qwen3.5-27B-NVFP4 (forum t2946).
+    (re.compile(r"Using (\w+) for (NVFP4|FP8|INT4|MXFP4) GEMM"),
+     lambda m: [(f"quant.kernel.{m[2].lower()}", m[1])]),
+    (re.compile(r"Selected (\w+LinearKernel) for (\w+)"), lambda m: [("quant.kernel.selected", f"{m[2]}: {m[1]}")]),
+    (re.compile(r"Using (\S+) GDN prefill kernel \(requested=(\w+), head_k_dim=(\d+)\)"),
+     lambda m: [("gdn.prefill_kernel", f"{m[1]} (requested {m[2]}, head_k_dim {m[3]})")]),
+    (re.compile(r"GDN decode kernel: (\w+)"), lambda m: [("gdn.decode_kernel", m[1])]),
+    # DeepGEMM either comes from site-packages or is vendored, and the two feature
+    # switches (PDL, E8M0 scaling) change which kernels run. None of it is a flag.
+    (re.compile(r"deep_gemm not found in site-packages, trying vendored (vllm\.third_party\.deep_gemm)"),
+     lambda m: [("compile.deep_gemm", "vendored (vllm.third_party)")]),
+    (re.compile(r"DeepGEMM (PDL|E8M0) enabled on"),
+     lambda m: [("compile.deep_gemm_feature", f"{m[1]} enabled")]),
+    # With multimodal input disabled the engine drops mm_prefix attention, and the warning
+    # says which backends that opens up — a quiet reason a backend differs from last run.
+    (re.compile(r"Disabled mm_prefix attention mode because multimodal inputs are configuration-disabled"),
+     lambda m: [("mm.prefix_attention", "disabled (multimodal config off)")]),
     # The extensible KV cache (v0.33.x) sizes itself at warmup and prints the split it
     # settled on: what stayed free, what went to the cache, what it held back for transient
     # activations, and what torch may still reserve. This line is where vllm#66193's
@@ -491,6 +517,18 @@ LINE_RULES: list[tuple[re.Pattern, callable]] = [
     (re.compile(r"vLLM is using nccl==([\d.]+)"), lambda m: [("nccl.version", m[1])]),
     (re.compile(r"Using FlashInfer for top-p & top-k sampling"),
      lambda m: [("sampling.topk_topp_backend", "flashinfer")]),
+    # Speculative decoding overrides three settings that look active and are not: the token
+    # budget is reset, two sampling parameters stop working, and more than one draft token
+    # re-forwards the same MTP layer. All three print as warnings, so a run that silently
+    # got slower or lost min_p says so exactly once, on a line nobody reads.
+    (re.compile(r"max_num_scheduled_tokens is set to (\d+) based on the speculative decoding settings"),
+     lambda m: [("sched.max_num_scheduled_tokens", int(m[1]))]),
+    (re.compile(r"min_p and logit_bias parameters won't work with speculative decoding"),
+     lambda m: [("sampling.ignored_with_spec", "min_p, logit_bias")]),
+    (re.compile(r"Enabling num_speculative_tokens > 1 will run multiple times of forward on same MTP layer"),
+     lambda m: [("spec.mtp_forward_repeat", "num_spec_tokens > 1")]),
+    (re.compile(r"Detected MTP model\. Sharing target model (embedding|lm_head) weights with the draft model"),
+     lambda m: [("spec.mtp_weights_shared", m[1])]),
     (re.compile(r"FlashInfer resolved query dtypes: (.+)$"),
      lambda m: [("kernel.flashinfer_dtypes", m[1].strip().rstrip(","))]),
     # Data-parallel topology, as the engine laid it out rather than as requested.
@@ -726,7 +764,7 @@ def parse(text: str) -> dict:
         facts.setdefault(key, Fact()).add(value, lineno, line)
 
     for lineno, raw in enumerate(text.splitlines(), 1):
-        line = BRACKET_TS.sub("", ANSI.sub("", raw))
+        line = BRACKET_TS.sub("", ANSI.sub("", raw)).translate(CURLY)
         if "non-default args:" in line:
             engine = engine or "vllm"
             parsed = _literal_dict(line.split("non-default args:", 1)[1].strip())

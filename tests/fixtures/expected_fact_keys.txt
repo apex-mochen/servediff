@@ -37,6 +37,8 @@ cache.radix
 compile.artifacts
 compile.autotune_gemm
 compile.backend
+compile.deep_gemm
+compile.deep_gemm_feature
 compile.dynamo_s
 compile.graph_s
 compile.inductor_disabled
@@ -134,6 +136,8 @@ env.var.VLLM_USE_DEEP_GEMM
 env.var.VLLM_USE_FLASHINFER_SAMPLER
 env.var.VLLM_WORKER_MULTIPROC_METHOD
 env.var.ZE_AFFINITY_MASK
+gdn.decode_kernel
+gdn.prefill_kernel
 gpu.budget_gib
 gpu.consumed_gib
 gpu.cudagraph_gib
@@ -172,6 +176,7 @@ mamba.effective_size
 mamba.state_gib
 mm.encoder_cache
 mm.pixel_cap
+mm.prefix_attention
 mm.warmup_s
 model.architecture
 model.max_len
@@ -187,7 +192,12 @@ parallel.roles
 parallel.tp
 parallel.world_size
 pd.warmup
+quant.kernel.nvfp4
+quant.kernel.selected
+sampling.ignored_with_spec
 sampling.overridden
+sampling.topk_topp_backend
+sched.max_num_scheduled_tokens
 sched.max_running_requests
 scheduler.async
 scheduler.exit
@@ -196,6 +206,8 @@ server.command
 server.scale_out
 server.tasks
 serving.chat_template_content_format
+spec.mtp_forward_repeat
+spec.mtp_weights_shared
 startup
 startup.cause
 startup.error
