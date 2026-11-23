@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>vLLM CPU backend on a 384-thread box: &quot;only two cores are busy&quot; — what the startup log already answers</title>
+<meta name="description" content="A June 2026 report on a 2× EPYC 9655 (384 threads, 1.5 TB RAM, CPU-only, Qwen3-8B) says the server comes up but htop shows about two threads pegged, and the thread settled it with &quot;downgrading to 0.19.1 solved it&quot;. Nothi">
+<link rel="canonical" href="https://apex-mochen.github.io/servediff/vllm-cpu-384-threads.html">
+<style>
+:root { --fg:#1c1c1e; --muted:#6b6b70; --line:#e4e4e7; --code:#f6f6f7; }
+body { margin:0 auto; max-width:44rem; padding:2.5rem 1.25rem 6rem;
+  font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  color:var(--fg); }
+h1 { font-size:1.9rem; line-height:1.25; margin:0 0 1rem; letter-spacing:-0.01em; }
+h2 { font-size:1.25rem; margin:2.2rem 0 .6rem; }
+h3 { font-size:1.05rem; margin:1.6rem 0 .4rem; }
+p, li { color:var(--fg); }
+pre { background:var(--code); border:1px solid var(--line); border-radius:6px;
+  padding:.85rem 1rem; overflow-x:auto; font-size:.86rem; line-height:1.5; }
+code { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:.9em; }
+p code, li code { background:var(--code); padding:.1em .3em; border-radius:3px; }
+a { color:#0b62d0; }
+.note { color:var(--muted); font-size:.9rem; }
+nav { border-bottom:1px solid var(--line); padding-bottom:.75rem; margin-bottom:2rem;
+  font-size:.9rem; }
+nav a { margin-right:1rem; }
+ul.index li { margin:.5rem 0; }
+</style>
+</head>
+<body>
+<nav><a href="./index.html">servediff notes</a><a href="https://github.com/apex-mochen/servediff">source</a><a href="https://pypi.org/project/servediff/">pip install servediff</a></nav>
+<h1>vLLM CPU backend on a 384-thread box: "only two cores are busy" — what the startup log already answers</h1>
+<p>A June 2026 report on a 2× EPYC 9655 (384 threads, 1.5 TB RAM, CPU-only, Qwen3-8B) says the
+server comes up but <code>htop</code> shows about two threads pegged, and the thread settled it with
+"downgrading to 0.19.1 solved it". Nothing in the paste was ever checked against the flags
+that were actually applied, so the thread ends with a version rollback and no cause.</p>
+<p>The paste is 22 lines and it is enough to rule several explanations in or out. Everything below
+was read from that paste with <code>servediff 0.4.64</code> — no synthetic input, no inferred flags. The
+fixture is in the repo at <code>tests/fixtures/vllm-forum-2026-06/</code>, with <code>PROVENANCE.md</code> saying
+which lines came from where.</p>
+<pre><code>$ servediff show vllm-cpu-2x-epyc-9655.log
+cpu.core_ids                     [192, 193, …, 286]                                 line 8
+cpu.numa_membind                 MEMBIND nodes [0]                                  line 12
+cpu.reserved_cpus                [287]                                              line 9
+cpu.threads_bind_mode            auto (auto_setup=True, skip_setup=False)           line 6
+engine                           vllm                                               line -
+kernel.ir_op.fused_add_rms_norm  native                                             line 3
+kernel.ir_op.rms_norm            native                                             line 3
+kv_cache.cpu_node                675.87/755.19 GiB (node 0, auto)                   line 19
+kv_cache.max_concurrency         150.19                                             line 21
+kv_cache.non_kv_gib              18.9                                               line 19
+kv_cache.requested_gib           694.77                                             line 19
+kv_cache.tokens                  4921472                                            line 20
+model_runner                     v1 (v2 requires Triton)                            line 13
+parallel.dp_leader               node 0 / dp 0                                       line 4
+parallel.roles                   DP rank 0, PP rank 0, PCP rank 0, TP rank 0, …     line 15
+parallel.world_size              1                                                  line 14
+scheduler.async                  enabled                                            line 2
+triton.drivers                   0 active (Triton disabled)                         line 10
+weights.available_ram_gib        1508.73                                            line 16
+weights.checkpoint_gib           15.26                                              line 16
+</code></pre>
+<p>21 facts out of 22 lines, and <code>audit</code> on the same file returns <code>0 shape(s) worth a look</code>.</p>
+<h2>The binding did not fail</h2>
+<p>The claim "vLLM only used two cores" is contradicted by four lines of the paste itself:</p>
+<pre><code>INFO [ompmultiprocessing.py] VLLM_CPU_OMP_THREADS_BIND='auto', auto_setup=True, skip_setup=False
+INFO [ompmultiprocessing.py] reserved_cpus=[287]
+INFO [cpu_worker.py] local_rank=0, core ids=[192, 193, …, 286]
+INFO [cpu_worker.py] NUMA binding: Using MEMBIND policy, NUMA nodes (0)
+</code></pre>
+<p>95 cores of one NUMA node were handed to this rank, one core was kept for the control plane, and
+memory was bound to node 0. <code>servediff</code> counts the ids rather than trusting the sentence: 95
+integers from 192 to 286, plus <code>[287]</code> reserved. That is a wide bind. If <code>htop</code> shows two busy
+cores, the question is not "did vLLM bind" but "where did those 95 threads actually run".</p>
+<h2>Three checks that separate the causes, all outside the flags</h2>
+<p><code>htop</code> colours per core; a bound thread is only <em>allowed</em> on a core, it does not have to be there.
+The cheap way to see the real placement:</p>
+<pre><code>grep Cpus_allowed_list /proc/&lt;pid&gt;/status           # what the kernel permits, per process
+ps -L -o tid,psr,pcpu -p &lt;pid&gt; | sort -k3 -nr | head
+</code></pre>
+<ul>
+<li>If <code>Cpus_allowed_list</code> is <code>192-286</code> and <code>ps -L</code> shows the busy threads on those cores, binding
+  worked and the bottleneck is elsewhere (one request in flight, a serialized Python path, the
+  sampling loop) — no flag will fix it.</li>
+<li>If <code>Cpus_allowed_list</code> is a small range such as <code>0-7</code>, the container's cpuset does not include
+  192–286. Linux clamps <code>sched_setaffinity</code> to the cpuset, so the 95 threads all land in the few
+  allowed cores: a couple of cores look pegged, the rest idle, and every binding variable in the
+  log is technically correct. <code>cat /sys/fs/cgroup/cpuset.cpus.effective</code> says what the box may
+  use at all, and the bound range has to sit inside it.</li>
+</ul>
+<p>The second case is the one that a version rollback can "solve" by accident: an older build may
+have picked a different core range that happened to fall inside the cpuset.</p>
+<h2>The <code>nobind</code> result is the same arithmetic</h2>
+<p>The thread also reports that <code>VLLM_CPU_OMP_THREADS_BIND=nobind</code> gave "about half of the threads".
+That is the OpenMP default, not a bug: with no binding, OpenMP spawns one thread per <em>physical</em>
+core, and 384 threads on this box means 192 physical cores. "Half" is exactly the expected count.
+It also means the <code>nobind</code> run removes the pinning that would have kept work on the node that
+holds the KV cache.</p>
+<h2>Two things the paste records that no flag states</h2>
+<pre><code>INFO [importing.py] Triton not installed or not compatible; certain GPU-related functions will not be available.
+INFO [cpu_worker.py] Model runner v2 requires Triton; using the v1 model runner instead
+INFO [cpu_worker.py] Auto set (675.87/755.19) GiB for KV cache on node 0, with 694.77 GiB requested memory for the worker. 18.9 GiB memory was consumed by non-kv usages.
+</code></pre>
+<p>Triton is installed but reports zero active drivers, so the run silently drops to the v1 model
+runner — a fact about what executed, not about what was configured. And the KV cache was sized by
+the auto path to 675.87 of 755.19 GiB with 18.9 GiB lost to non-KV allocations, giving 4 921 472
+tokens and a concurrency ceiling of 150.19 at 32 768 tokens per request. On a 384-thread box
+serving one 8B model, that ceiling is far above what one request stream needs, which makes
+"threads are idle because there is nothing to do" a live hypothesis, not a contradiction.</p>
+<h2>What this does not claim</h2>
+<p>Not that 0.20.0 regressed CPU binding. The paste is a single run at unknown flags; the two logs
+(0.19.1 and 0.20.0, identical command line) would settle it, and <code>servediff diff old.log new.log</code>
+prints exactly the facts that changed between them. Until that diff exists, the honest statement
+is: binding was applied to 95 cores, and the observed utilisation is consistent with a cpuset
+clamp or with too little work, but not with a failed bind.</p>
+<p>Source log: <code>https://discuss.vllm.ai/t/the-current-vllm-cpu-backend-is-not-working-properly/2708</code>.</p>
+</body>
+</html>

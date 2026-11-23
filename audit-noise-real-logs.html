@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>What servediff audit is for, measured on four full logs</title>
+<title>What servediff audit is for, measured on five full logs</title>
 <meta name="description" content="servediff diff answers &quot;what changed between these two startups&quot;. servediff audit answers the question that makes diff trustworthy: which lines did the parser fail to read? Without it, a fact missing after an upgrade is ">
 <link rel="canonical" href="https://apex-mochen.github.io/servediff/audit-noise-real-logs.html">
 <style>
@@ -29,7 +29,7 @@ ul.index li { margin:.5rem 0; }
 </head>
 <body>
 <nav><a href="./index.html">servediff notes</a><a href="https://github.com/apex-mochen/servediff">source</a><a href="https://pypi.org/project/servediff/">pip install servediff</a></nav>
-<h1>What <code>servediff audit</code> is for, measured on four full logs</h1>
+<h1>What <code>servediff audit</code> is for, measured on five full logs</h1>
 <p><code>servediff diff</code> answers "what changed between these two startups". <code>servediff audit</code>
 answers the question that makes <code>diff</code> trustworthy: <strong>which lines did the parser fail to
 read?</strong> Without it, a fact missing after an upgrade is indistinguishable from a setting the
@@ -44,7 +44,8 @@ failure this tool exists to remove.</p>
 <p>If that split is wrong, the report is useless in exactly the situation people need it: a
 startup that broke.</p>
 <h2>Before and after, on real logs</h2>
-<p>Four full startup logs, all of them live-server output rather than excerpts. Counts are
+<p>Four full startup logs, all of them live-server output rather than excerpts; a fifth
+arrived with vLLM 0.34 on a GPU-less box (see below). Counts are
 "shapes worth a look", the only group the report lists.</p>
 <table>
 <thead>
@@ -108,6 +109,14 @@ became facts in 0.4.25 instead of being classified away:</p>
 </table>
 <p>A bare <code>AssertionError</code> under a failed import check stays noise: the detail is the line
 above, which is now read, so counting it again would double-report one condition.</p>
+<p>The fifth full log is a CPU-only vLLM 0.34 startup (vllm#67598, 173 lines, no CUDA at all).
+At 0.4.63 it had four shapes left; 0.4.64 read them (<code>cpu.numa_auto</code>,
+<code>cpu.numa_membind</code>, <code>cpu.numa_migrate</code>, <code>cpu.set_num_threads</code>) and it reports zero. It also
+caught the audit lying: the "prose" classifier was eating engine messages that happen to be
+English sentences — <code>Padding mamba page size by 20.75% …</code>, <code>Encoder cache will be
+initialized …</code>, <code>Explicitly set (4.0/30.69) GiB …</code>, <code>kv lcm block sizes 640</code> — so a log could
+report <code>nothing worth a look</code> while four settings sat unread underneath. Those are facts now
+and the rule only applies to lines with no log preamble.</p>
 <p>The TP=8 log reaching zero is the stricter result: every one of those 190 lines was either a
 traceback frame or a configuration line, and the configuration lines are now facts
 (<code>attn.backend</code>, <code>scheduler.chunked_prefill</code>, <code>scheduler.async</code>, <code>worker.mp_method</code>,
@@ -216,6 +225,18 @@ ran: six vLLM and six SGLang.</p>
 </tr>
 </tbody>
 </table>
+<p>The SGLang rows were measured on excerpts, and those excerpts were not in the repo — a number
+nobody can re-run is a claim, not a measurement. They are fixtures now
+(<code>tests/fixtures/sglang-2026-10/</code>, with <code>PROVENANCE.md</code> listing the code blocks each file was
+assembled from). Reassembled from the full report bodies rather than only the environment
+dumps, those six logs carried eight more shapes worth a look, and six of them were settings: the
+mamba state cache (<code>mamba.cache_size</code> <code>63</code>, <code>mamba.state_gib</code> <code>0.18/9.00</code>), the concurrency it
+caps (<code>sched.max_running_requests</code> <code>12 (capped by mamba cache: 63 slots, 5 per request)</code>), the
+per-rank raise to what decode needs (<code>mamba.effective_size</code> <code>72 (raised from 24, needed 72 on
+DP3/TP3/EP3)</code>, and a different number on DP7/TP7/EP7 in the same launch), prefill/decode warmup
+reaching ready (<code>pd.warmup</code>), the scheduler's own exit code and reason (<code>scheduler.exit</code>
+<code>code -3 (reason 11)</code>), and an implicit FP8 KV scale (<code>kv_cache.fp8_scaling</code> <code>defaulted to 1.0</code>).
+All six now audit to <code>0 with shapes worth a look</code> under CI.</p>
 <p>Three classes of miss, none of which is a single bad regex:</p>
 <ul>
 <li><strong>An inventory read as a setting.</strong> A CUDA container prints ~35 <code>[pip3] nvidia-*==</code> lines;

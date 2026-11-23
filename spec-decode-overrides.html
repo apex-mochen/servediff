@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>“min_p and logit_bias parameters won’t work with speculative decoding” — three settings spec decode changes without saying so in the flags</title>
+<meta name="description" content="vLLM prints this warning once, at startup, per process:">
+<link rel="canonical" href="https://apex-mochen.github.io/servediff/spec-decode-overrides.html">
+<style>
+:root { --fg:#1c1c1e; --muted:#6b6b70; --line:#e4e4e7; --code:#f6f6f7; }
+body { margin:0 auto; max-width:44rem; padding:2.5rem 1.25rem 6rem;
+  font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  color:var(--fg); }
+h1 { font-size:1.9rem; line-height:1.25; margin:0 0 1rem; letter-spacing:-0.01em; }
+h2 { font-size:1.25rem; margin:2.2rem 0 .6rem; }
+h3 { font-size:1.05rem; margin:1.6rem 0 .4rem; }
+p, li { color:var(--fg); }
+pre { background:var(--code); border:1px solid var(--line); border-radius:6px;
+  padding:.85rem 1rem; overflow-x:auto; font-size:.86rem; line-height:1.5; }
+code { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:.9em; }
+p code, li code { background:var(--code); padding:.1em .3em; border-radius:3px; }
+a { color:#0b62d0; }
+.note { color:var(--muted); font-size:.9rem; }
+nav { border-bottom:1px solid var(--line); padding-bottom:.75rem; margin-bottom:2rem;
+  font-size:.9rem; }
+nav a { margin-right:1rem; }
+ul.index li { margin:.5rem 0; }
+</style>
+</head>
+<body>
+<nav><a href="./index.html">servediff notes</a><a href="https://github.com/apex-mochen/servediff">source</a><a href="https://pypi.org/project/servediff/">pip install servediff</a></nav>
+<h1>“min_p and logit_bias parameters won’t work with speculative decoding” — three settings spec decode changes without saying so in the flags</h1>
+<p>vLLM prints this warning once, at startup, per process:</p>
+<pre><code>WARNING [init.py:205] min_p and logit_bias parameters won't work with speculative decoding.
+</code></pre>
+<p>Two more warnings come with it, and all three describe the same thing: flags you passed are
+still in the command line, still in <code>non-default args</code>, and no longer describe the run.</p>
+<table>
+<thead>
+<tr>
+<th>what you set</th>
+<th>what the run does</th>
+<th>the line that says so</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>min_p</code>, <code>logit_bias</code></td>
+<td>ignored for every request</td>
+<td><code>[init.py:205] min_p and logit_bias parameters won't work with speculative decoding</code></td>
+</tr>
+<tr>
+<td><code>--max-num-batched-tokens 4096</code></td>
+<td>the scheduled-token budget is reset to 2048</td>
+<td><code>[vllm.py:1862] max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings</code></td>
+</tr>
+<tr>
+<td><code>--num-speculative-tokens 3</code></td>
+<td>the same MTP layer is forwarded three times per step</td>
+<td><code>[speculative.py:971] Enabling num_speculative_tokens &gt; 1 will run multiple times of forward on same MTP layer</code></td>
+</tr>
+</tbody>
+</table>
+<p>The middle one is the expensive one: the reset budget explains a drop in throughput after
+turning speculation on, and the flag that looks responsible (<code>--max-num-batched-tokens</code>) is
+exactly the one that lost. The third is a draft-acceptance/throughput trade nobody measures
+because nothing in the serving log after startup mentions it again.</p>
+<p>All of the above was read from one forum post, not from the source: <code>discuss.vllm.ai/t/2946</code>,
+vLLM 0.28.0, Qwen3.5-27B-NVFP4 served twice — once plain, once with
+<code>--speculative-config method=mtp num_speculative_tokens=2</code>. The paste is a 86-line startup
+log, and <code>servediff 0.4.65</code> reads it to:</p>
+<pre><code>$ servediff show qwen35-nvfp4-mtp.log
+compile.deep_gemm                vendored (vllm.third_party)                                  line 20
+compile.deep_gemm_feature        [&quot;PDL enabled&quot;, &quot;E8M0 enabled&quot;]                              line 21
+gdn.decode_kernel                cuda                                                         line 24
+gdn.prefill_kernel               Triton/FLA (requested auto, head_k_dim 128)                  line 23
+kv_cache.mamba_mode              align (default for Qwen3_5ForConditionalGeneration)          line 10
+mm.prefix_attention              disabled (multimodal config off)                             line 45
+model.architecture               [&quot;Qwen3_5ForConditionalGeneration&quot;, &quot;Qwen3_5MTP&quot;]            line 8
+quant.kernel.nvfp4               FlashInferCutlassNvFp4LinearKernel                           line 25
+quant.kernel.selected            CompressedTensorsW8A8Fp8: CutlassFP8ScaledMMLinearKernel     line 19
+sampling.ignored_with_spec       min_p, logit_bias                                            line 54
+sched.max_num_scheduled_tokens   2048                                                         line 49
+spec.mtp_forward_repeat          num_spec_tokens &gt; 1                                          line 46
+spec.mtp_weights_shared          [&quot;embedding&quot;, &quot;lm_head&quot;]                                     line 74
+</code></pre>
+<p>Diff that against the same server without speculation and the three rows above are the
+difference between "the flags are the same" and "the run is the same".</p>
+<p>Two other things in the same paste, for the record:</p>
+<ul>
+<li>The quantised GEMM kernels are named per format and per model: <code>FlashInferCutlassNvFp4LinearKernel</code>
+  for the NVFP4 layers, <code>CutlassFP8ScaledMMLinearKernel</code> for the FP8 ones
+  (<code>CompressedTensorsW8A8Fp8</code>). <code>--quantization compressed-tensors</code> names the format, never the
+  kernel, and the kernel is where a throughput delta between two runs on one checkpoint comes
+  from.</li>
+<li>DeepGEMM fell back to the vendored copy (<code>deep_gemm not found in site-packages</code>) with PDL and
+  E8M0 enablement, none of which is a flag either.</li>
+</ul>
+<p>The fixture is <code>tests/fixtures/vllm-forum-2026-09/qwen35-nvfp4-mtp.log</code> with a <code>PROVENANCE.md</code>
+that says how the forum's paragraph-per-line rendering was turned into a file, including the
+typographic quotes the page serves (<code>‘align’</code>, <code>won’t</code>) — <code>servediff</code> curls those back to ASCII
+before matching, because a copy from a browser or a chat client is what people actually paste.
+That file audits to zero shapes worth a look.</p>
+<p>One limit worth stating: this says the budget was reset, not why 2048 was chosen. The value
+comes from the spec config and the model's max context; the log reports the result, and only a
+second run with a different <code>--max-num-batched-tokens</code> tells you whether the reset is binding.</p>
+</body>
+</html>
