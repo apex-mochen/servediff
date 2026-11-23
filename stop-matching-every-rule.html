@@ -138,5 +138,12 @@ and skip before bucketing), but without the byte comparison it would have shippe
 as "performance work, no behaviour change".</p>
 <p><code>tools/bench_parse.py</code> regenerates the synthetic log and prints the three timings,
 so this number is checkable rather than remembered.</p>
+<h2>Where this stands now</h2>
+<p>The 87-log and 178-test numbers above are from that round. Since then, 16 files that held no
+startup facts were moved out of the corpus (0.4.96), so the corpus is 71 logs and the suite is
+209 tests. <code>repeats</code> is no longer the laggard either: <code>tools/bench_parse.py</code> on the same 96.7 MB
+synthetic log, measured 2026-11-24, gives <code>show</code> 11.74s, <code>audit</code> 18.51s, <code>repeats</code> 6.74s — the
+comparison that matters (<code>parse</code> and <code>repeats.groups</code> over every corpus log, byte for byte) is
+still part of the release routine, now over those 71 logs.</p>
 </body>
 </html>
