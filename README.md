@@ -861,6 +861,12 @@ prove, are in [writeups/audit-noise-real-logs.md](https://github.com/apex-mochen
   — why the four per-worker facts are read from the lowest rank (the other ranks stay in the
   evidence line) instead of being collapsed by line count, and why numeric rows print a
   magnitude (`-4.6%`) while text rows never invent one.
+- Diffing a log from one release against a log from another:
+  [writeups/vllm-log-diff-across-versions.md](https://github.com/apex-mochen/servediff/blob/main/writeups/vllm-log-diff-across-versions.md)
+  — 0.28.0 against 0.33.0 gives 75 rows of which 59 are one-sided (`only_baseline` 20,
+  `only_candidate` 39), and why those rows mean "that build printed a line this one did not"
+  rather than "a setting was turned off"; `--skip-absent` leaves the 16 rows both releases
+  printed, and the reason those still need the model and flags held fixed.
 - When the server dies, the crash prints the whole `VllmConfig` it was running with
   (`Dumping input data for V1 LLM engine (v0.20.1) with config: …`) — one long line that
   records the model, dtype, `max_seq_len`, TP/PP/DP, prefix caching and the compile backend of

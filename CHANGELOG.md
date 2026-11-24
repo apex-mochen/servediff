@@ -59,12 +59,13 @@ Comparing two releases printed one-sided rows with no hint that the releases wer
 
 The question: `diff` says out loud when the engines differ (`only shared facts line up`),
 because a vLLM fact and an SGLang fact cannot be compared. Nothing said it when the engines
-matched but the versions did not. A 0.28.0 log against a 0.33.0 log gives ten
-`only_baseline` rows before the first real change, and those rows mean "this release prints
-a line the other one never printed" rather than "someone turned a setting off". Nine of
-them read in the wrong direction, and the whole point of the tool is not to leave that
-reading open: a person who reads `only_baseline` as a setting turned off will go looking
-for a flag that was never there.
+matched but the versions did not. A 0.28.0 log against a 0.33.0 log gives 75 rows, of which
+59 are one-sided — 20 `only_baseline`, 39 `only_candidate` — and those rows mean "that build
+prints a line this one never printed" rather than "someone turned a setting off". Reading a
+one-sided row as a setting turned off sends a person looking for a flag that was never there,
+and the whole point of the tool is not to leave that reading open. (This entry first said
+"ten rows before the first real change"; the measured split is above, corrected in the
+writeup that accompanies this release.)
 
 Now `diff` starts its notes with:
 
