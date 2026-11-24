@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>&quot;The server is fired up and ready to roll!&quot; — four lines after the traceback that a diff read as a server which never started</title>
+<meta name="description" content="A startup log can record two attempts in one file. The process dies, the supervisor restarts it, the restart comes up. Read from the top, that log says failed first, and any tool that stops reading there will describe th">
+<link rel="canonical" href="https://apex-mochen.github.io/servediff/startup-ready-after-traceback.html">
+<style>
+:root { --fg:#1c1c1e; --muted:#6b6b70; --line:#e4e4e7; --code:#f6f6f7; }
+body { margin:0 auto; max-width:44rem; padding:2.5rem 1.25rem 6rem;
+  font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  color:var(--fg); }
+h1 { font-size:1.9rem; line-height:1.25; margin:0 0 1rem; letter-spacing:-0.01em; }
+h2 { font-size:1.25rem; margin:2.2rem 0 .6rem; }
+h3 { font-size:1.05rem; margin:1.6rem 0 .4rem; }
+p, li { color:var(--fg); }
+pre { background:var(--code); border:1px solid var(--line); border-radius:6px;
+  padding:.85rem 1rem; overflow-x:auto; font-size:.86rem; line-height:1.5; }
+code { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:.9em; }
+p code, li code { background:var(--code); padding:.1em .3em; border-radius:3px; }
+a { color:#0b62d0; }
+.note { color:var(--muted); font-size:.9rem; }
+nav { border-bottom:1px solid var(--line); padding-bottom:.75rem; margin-bottom:2rem;
+  font-size:.9rem; }
+nav a { margin-right:1rem; }
+ul.index li { margin:.5rem 0; }
+</style>
+</head>
+<body>
+<nav><a href="./index.html">servediff notes</a><a href="https://github.com/apex-mochen/servediff">source</a><a href="https://pypi.org/project/servediff/">pip install servediff</a></nav>
+<h1>"The server is fired up and ready to roll!" — four lines after the traceback that a diff read as a server which never started</h1>
+<p>A startup log can record two attempts in one file. The process dies, the supervisor restarts
+it, the restart comes up. Read from the top, that log says <code>failed</code> first, and any tool that
+stops reading there will describe the wrong run — including the tool in this repo, until
+0.4.106.</p>
+<p>Two real SGLang logs, both kept in <code>tests/fixtures/</code> of this repo, record exactly that:</p>
+<table>
+<thead>
+<tr>
+<th>log</th>
+<th>line 55 / 59</th>
+<th><code>startup</code> fact</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>sglang-2026-10/sglang-41654.log</code></td>
+<td><code>TypeError: unsupported operand type(s) for //: 'NoneType' and 'int'</code> (55) — <code>The server is fired up and ready to roll!</code> (59)</td>
+<td><code>["failed", "ready"]</code></td>
+</tr>
+<tr>
+<td><code>sglang-2026-10/sglang-43741.log</code></td>
+<td><code>The server is fired up and ready to roll!</code> (5) — <code>Scheduler hit an exception</code> (6)</td>
+<td><code>["ready", "failed (scheduler)"]</code></td>
+</tr>
+</tbody>
+</table>
+<p>Read the second row: the server started, served, and then died. Read the first: the server
+died, and then started. Neither is "a server that never came up", and both were reported as
+one or the other wrong thing.</p>
+<h2>What 0.4.105 printed</h2>
+<pre><code>$ servediff diff sglang-41654.log env-dump.json
+warning: baseline server failed to start: TypeError: unsupported operand type(s) for //: 'NoneType'...; facts after the failure are absent because startup stopped, not because they were off
+</code></pre>
+<p>The second half of that sentence is a claim about the whole table, and it was false. The
+server started four lines later, so the facts were not absent because startup stopped. On a
+real pair from the same repo (<code>sglang-41654.log</code> against <code>sglang-42684.log</code>, 21 differences =
+10 changed + 11 one-sided), the warning told the reader to read 11 rows as consequences of
+a startup that never happened.</p>
+<p>The other log got nothing at all:</p>
+<pre><code>$ servediff diff sglang-43741.log env-dump.json
+note: baseline: no all-reduce facts and no rank line: ...
+</code></pre>
+<p><code>after_ready.error</code> appeared in the table as a one-sided row, with no sentence saying an
+error can arrive after startup and that it says nothing about the configuration.</p>
+<h2>The rule that was wrong</h2>
+<p>The warning was keyed off a boolean over the values of one fact:</p>
+<pre><code class="language-python">if &quot;failed&quot; in (parsed[&quot;facts&quot;].get(&quot;startup&quot;) or Fact()).values:
+</code></pre>
+<p>That answers "did a failure appear in this log", not "did this server come up". The two
+diverge exactly when a retry succeeded, which is the case a startup log is most worth reading
+carefully. It was never a parsing problem: the parser had already recorded both values,
+each with its own evidence line — <code>[(55, "TypeError: ..."), (59, "The server is fired up and
+ready to roll!")]</code>. The order was in the data; the warning ignored it.</p>
+<h2>What 0.4.106 prints</h2>
+<p>The warning now follows the recorded line numbers, so each of the three outcomes gets the
+tense its log supports:</p>
+<pre><code>$ servediff diff sglang-41654.log env-dump.json
+warning: baseline failed to start and then came up on a retry: TypeError: unsupported
+operand type(s) for //: 'NoneType'...; the facts below come from both attempts, so a row
+that only one side has may belong to the attempt that died, not to the one that served
+
+$ servediff diff sglang-43741.log env-dump.json
+warning: baseline reported ready and then failed: AssertionError: Unsupported rhs dtype
+fp8e4nv; an error after startup says nothing about how it was configured — that row is
+compared as a fact, not read as a reason
+</code></pre>
+<p>A log that genuinely never came up keeps the original sentence, word for word. <code>--markdown</code>
+carries the same sentence in the same tense, so a report pasted into an issue does not say
+one thing while the terminal said another.</p>
+<p>The three cases are worth stating as a rule, because they are the three ways a startup
+log ends:</p>
+<table>
+<thead>
+<tr>
+<th><code>startup</code> values, in line order</th>
+<th>what the log is</th>
+<th>what a warning owes the reader</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>failed</code>, never <code>ready</code></td>
+<td>the run never came up</td>
+<td>later facts are absent because startup stopped — not because they were off</td>
+</tr>
+<tr>
+<td><code>failed</code> … <code>ready</code></td>
+<td>a retry succeeded</td>
+<td>the facts come from both attempts; a one-sided row may belong to the attempt that died</td>
+</tr>
+<tr>
+<td><code>ready</code> … <code>failed</code></td>
+<td>it started and then died</td>
+<td>an error after startup says nothing about how it was configured</td>
+</tr>
+</tbody>
+</table>
+<p>That third row is the one that was silent. A post-ready failure is not a configuration
+difference, and putting its text in a table of settings invites exactly the wrong reading —
+so it stays compared as a fact, with a sentence saying not to read it as a reason.</p>
+<h2>Reproduce it</h2>
+<pre><code class="language-console">$ servediff diff tests/fixtures/sglang-2026-10/sglang-41654.log tests/fixtures/sglang-0.5.20-env-dump.log
+$ servediff diff tests/fixtures/sglang-2026-10/sglang-43741.log tests/fixtures/sglang-0.5.20-env-dump.log
+</code></pre>
+<p>Both exit 1, because both pairs differ. The first prints the retry sentence and no longer
+prints "facts after the failure are absent"; the second prints the post-ready sentence where
+0.4.105 printed nothing. The regression tests read the same two files, and they fail if the
+warning is keyed off the string again.</p>
+</body>
+</html>
