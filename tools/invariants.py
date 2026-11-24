@@ -23,12 +23,22 @@ import tempfile
 OK = "ok"
 
 
-def cli(repo, *args, stdin_text=None):
+def cli(repo, *args, stdin_text=None, stdin_bytes=None):
     env = dict(os.environ)
     env["PYTHONPATH"] = os.path.join(repo, "src")
-    p = subprocess.run([sys.executable, "-m", "servediff.cli", *args],
-                       capture_output=True, text=True, env=env, input=stdin_text)
-    return p.returncode, p.stdout, p.stderr
+    data = stdin_bytes if stdin_bytes is not None else stdin_text
+    as_text = not isinstance(data, (bytes, bytearray))
+    # `-m servediff.cli` makes runpy warn that the module is already imported by the
+    # package; `-m servediff` is the same entry point without the warning in every stderr.
+    pd = subprocess.run([sys.executable, "-m", "servediff", *args],
+                       capture_output=True, text=as_text, env=env, input=data)
+    # Text mode turns `\r\n` into `\n` on the way in; the bytes path must be normalized the
+    # same way or Windows would report every stdin comparison as a 62-character difference
+    # (one `\r` per line) that is nothing but the harness reading its own output two ways.
+    if as_text:
+        return pd.returncode, pd.stdout.replace("\r\n", "\n"), pd.stderr.replace("\r\n", "\n")
+    return (pd.returncode, pd.stdout.decode("utf-8", "replace").replace("\r\n", "\n"),
+            pd.stderr.decode("utf-8", "replace").replace("\r\n", "\n"))
 
 
 def jload(out):
@@ -159,6 +169,73 @@ def check_series(repo, logs):
     return bad
 
 
+def check_stdin_matches_path(repo, logs):
+    """`show file` and `cat file | show -` must print one table, not two.
+
+    0.4.107: the gzip look at the first bytes lived in the file branch only, so a gzipped
+    log on stdin was decoded as text and reported as "no configuration lines recognised".
+    A transport is not a different reader, and neither is a container: both the plain bytes
+    and the gzip of the same bytes are piped here, because the fix that covered one of them
+    did not cover the other until 0.4.107.
+    """
+    import gzip
+    bad = []
+    for f in logs:
+        raw = open(f, "rb").read()
+        rc1, out1, _ = cli(repo, "show", f)
+        for label, data in (("stdin", raw), ("stdin gz", gzip.compress(raw))):
+            rc2, out2, err2 = cli(repo, "show", "-", stdin_bytes=data)
+            if rc1 != rc2 or out1 != out2:
+                bad.append((f, label, rc1, rc2, len(out1), len(out2), err2.strip()[:80]))
+    return bad
+
+
+def check_gz_matches_plain(repo, logs):
+    """A .gz log and the same log uncompressed must read the same.
+
+    0.4.107 was that they did not when the archive arrived through a pipe; this checks the
+    on-disk half as well, so a future container change cannot fix one path and break the other.
+    """
+    import gzip
+    bad = []
+    for f in logs:
+        rc_plain, out_plain, _ = cli(repo, "show", f)
+        with tempfile.TemporaryDirectory() as d:
+            packed = os.path.join(d, "serve.log.gz")
+            with open(packed, "wb") as fh:
+                fh.write(gzip.compress(open(f, "rb").read()))
+            rc_gz, out_gz, err_gz = cli(repo, "show", packed)
+        if rc_plain != rc_gz or out_plain != out_gz:
+            bad.append((f, rc_plain, rc_gz, err_gz.strip()[:80]))
+    return bad
+
+
+def check_gz_facts_match_plain(repo, logs):
+    """`--against facts.json` and `--against facts.json.gz` must give one answer.
+
+    0.4.108: the facts-file reader decoded the archive and reported `not JSON: 'utf-8' codec
+    can't decode byte 0x8b in position 1`, which is the gzip header described as bad JSON.
+    """
+    import gzip
+    bad = []
+    for f in logs:
+        rc, out, _ = cli(repo, "show", f, "--json")
+        if rc != 0:
+            continue
+        with tempfile.TemporaryDirectory() as d:
+            facts = os.path.join(d, "facts.json")
+            with open(facts, "w", encoding="utf-8") as fh:
+                fh.write(out)
+            packed = facts + ".gz"
+            with open(packed, "wb") as fh:
+                fh.write(gzip.compress(out.encode("utf-8")))
+            rc_p, out_p, _ = cli(repo, "diff", f, "--against", facts)
+            rc_g, out_g, err_g = cli(repo, "diff", f, "--against", packed)
+        if rc_p != rc_g or out_p != out_g:
+            bad.append((f, rc_p, rc_g, err_g.strip()[:80]))
+    return bad
+
+
 CHECKS = [
     ("self-diff is empty", check_self_diff, "log(s)"),
     ("diff is symmetric", check_symmetry, "log(s)"),
@@ -166,6 +243,9 @@ CHECKS = [
     ("repeats counts the file", check_lines, "log(s)"),
     ("diff json adds up", check_diff_json, "log(s)"),
     ("series is the union of diffs", check_series, "log(s)"),
+    ("stdin and path agree", check_stdin_matches_path, "log(s)"),
+    ("gz and plain agree", check_gz_matches_plain, "log(s)"),
+    ("gz facts and plain facts agree", check_gz_facts_match_plain, "log(s)"),
 ]
 
 

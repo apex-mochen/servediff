@@ -943,6 +943,21 @@ prove, are in [writeups/audit-noise-real-logs.md](https://github.com/apex-mochen
   everywhere else:
   [writeups/powershell-redirect-is-utf16.md](https://github.com/apex-mochen/servediff/blob/main/writeups/powershell-redirect-is-utf16.md)
 
+## Checking the tool itself
+
+- `python -m pytest -q` — the whole suite, over the rule table and every command's output.
+- `python tools/invariants.py --repo .` — nine questions asked of the same log corpus from
+  different angles (`--sample 10` for a quick loop; the whole 71-log corpus takes a few
+  minutes): self-diff empty, diff symmetric, text/json/markdown agree, repeats counts the
+  file, diff json adds up, series is the union of diffs, stdin and path agree, gz and plain
+  agree, gz facts and plain facts agree. The last three are the "two ways to say the same
+  thing" checks; two of them are the shape that shipped in 0.4.107 and 0.4.108, and they fail
+  on the code from before those fixes.
+- `python tools/check_wheel.py --repo . --out <dir>` — builds the wheel, installs it in a
+  throwaway venv, and reads every command through the installed entry point.
+- `python tools/verify_readme_exit_codes.py` — replays the 23 exit codes this file documents
+  against that installed wheel.
+
 ## License
 
 Apache-2.0.
