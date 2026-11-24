@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Diffing two vLLM startup logs from different versions: 59 of 75 rows mean &quot;that build printed a line this one did not&quot;</title>
+<meta name="description" content="The usual reason to diff two startup logs is an upgrade: the old run worked, the new run is slower, and the question is &quot;did the server actually run the same thing?&quot;. Put a 0.28.0 log and a 0.33.0 log side by side and yo">
+<link rel="canonical" href="https://apex-mochen.github.io/servediff/vllm-log-diff-across-versions.html">
+<style>
+:root { --fg:#1c1c1e; --muted:#6b6b70; --line:#e4e4e7; --code:#f6f6f7; }
+body { margin:0 auto; max-width:44rem; padding:2.5rem 1.25rem 6rem;
+  font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  color:var(--fg); }
+h1 { font-size:1.9rem; line-height:1.25; margin:0 0 1rem; letter-spacing:-0.01em; }
+h2 { font-size:1.25rem; margin:2.2rem 0 .6rem; }
+h3 { font-size:1.05rem; margin:1.6rem 0 .4rem; }
+p, li { color:var(--fg); }
+pre { background:var(--code); border:1px solid var(--line); border-radius:6px;
+  padding:.85rem 1rem; overflow-x:auto; font-size:.86rem; line-height:1.5; }
+code { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:.9em; }
+p code, li code { background:var(--code); padding:.1em .3em; border-radius:3px; }
+a { color:#0b62d0; }
+.note { color:var(--muted); font-size:.9rem; }
+nav { border-bottom:1px solid var(--line); padding-bottom:.75rem; margin-bottom:2rem;
+  font-size:.9rem; }
+nav a { margin-right:1rem; }
+ul.index li { margin:.5rem 0; }
+</style>
+</head>
+<body>
+<nav><a href="./index.html">servediff notes</a><a href="https://github.com/apex-mochen/servediff">source</a><a href="https://pypi.org/project/servediff/">pip install servediff</a></nav>
+<h1>Diffing two vLLM startup logs from different versions: 59 of 75 rows mean "that build printed a line this one did not"</h1>
+<p>The usual reason to diff two startup logs is an upgrade: the old run worked, the new run is
+slower, and the question is "did the server actually run the same thing?". Put a 0.28.0 log
+and a 0.33.0 log side by side and you get a table — but most of that table is not about your
+configuration at all. It is about which lines each release happened to print.</p>
+<p>Measured on two real logs kept in this repo (<code>vllm-forum-2026-09/qwen35-nvfp4-mtp.log</code>,
+0.28.0, and <code>vllm-0.33.0-real-rtx4060.log</code>, 0.33.0), with <code>servediff 0.4.104</code>:</p>
+<pre><code class="language-console">$ servediff diff qwen35-nvfp4-mtp.log vllm-0.33.0-real-rtx4060.log
+note: versions differ: 0.28.0 vs 0.33.0: a fact that appears on one side only may be a line
+this release started or stopped printing, not a setting you changed
+...
+fact                             baseline                       candidate                        status
+arg.model                        unsloth/Qwen3.8-27B-NVFP4       &lt;absent&gt;                         only_baseline
+args.source                      vllm non-default args          &lt;absent&gt;                         only_baseline
+backend.attention                FLASHINFER                     FLASH_ATTN                       changed
+backend.attention_mm             FLASH_ATTN                     &lt;absent&gt;                         only_baseline
+backend.candidates               ['FLASHINFER', 'TRITON_ATTN']  ['FLASH_ATTN', 'FLASHINFER', 'TRITON_...  changed
+backend.flash_attn_version       &lt;absent&gt;                       2                                only_candidate
+...
+75 difference(s); 7 fact(s) identical. Absent means the log did not print it, not that it was off.
+</code></pre>
+<p>Split those 75 rows by what they can mean:</p>
+<table>
+<thead>
+<tr>
+<th>status</th>
+<th>rows</th>
+<th>what it says across two releases</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>changed</code></td>
+<td>16</td>
+<td>both logs printed the fact and the values differ — the only rows that describe a setting</td>
+</tr>
+<tr>
+<td><code>only_baseline</code></td>
+<td>20</td>
+<td>the older release printed it, the newer one never wrote that line</td>
+</tr>
+<tr>
+<td><code>only_candidate</code></td>
+<td>39</td>
+<td>the newer release started printing something the older one never had</td>
+</tr>
+</tbody>
+</table>
+<p>59 of 75 rows are one-sided. Read as configuration, they say "twenty settings were turned
+off and thirty-nine appeared" — for two runs where nobody rewrote a launch script. Read as
+release drift, they say what happened: 0.33 prints <code>backend.flash_attn_version</code>, 0.28 does
+not; 0.28 printed <code>args.source</code>, 0.33 stopped. None of that is a flag anyone changed.</p>
+<p>The trap is the direction of the inference. <code>&lt;absent&gt;</code> in a <code>diff</code> between two runs of the
+<em>same</em> build really does mean "this run did not resolve it". Between two builds it can also
+mean "this build no longer prints it", and the log itself bears no evidence either way.</p>
+<h2>What the tool now says</h2>
+<p>Since <code>0.4.102</code> the first line of the report is the note shown above; <code>0.4.104</code> gave <code>series</code>
+the same treatment. It is not a guess about the cause — it names the two versions and the
+one reading that a one-sided row cannot support.</p>
+<h2>Comparing the configuration anyway</h2>
+<p>If the question is "which facts did both runs resolve, and do they match", drop the rows one
+side never printed:</p>
+<pre><code class="language-console">$ servediff diff qwen35-nvfp4-mtp.log vllm-0.33.0-real-rtx4060.log --skip-absent
+...
+weights.checkpoint_gib           21.81                0.92       changed  -95.8%
+weights.load_s                   [5.46, 13.04, 1.84]  3.13       changed
+
+16 difference(s); 7 fact(s) identical. 59 difference(s) skipped because one side never
+printed those lines (--skip-absent). Absent means the log did not print it, not that it was off.
+</code></pre>
+<p>Those 16 rows are facts both releases printed, so both numbers exist — that is what makes
+them comparable at all. They are not automatically attributions, though: these two runs are
+also different models (<code>Qwen3.8-27B-NVFP4</code> in the 0.28.0 log, and a 0.92 GiB checkpoint in
+the 0.33.0 one), so a 21.81 → 0.92 GiB movement is a different model, not a different
+setting. Narrowing the row set is the first step; keeping the model and the flags fixed is
+still the condition for reading the remaining rows as a config change.</p>
+<h2>Three versions at once</h2>
+<p><code>series</code> exists for the regression thread that has old, middle and new runs. The same
+one-sided reading applies to every column:</p>
+<pre><code class="language-console">$ servediff series vllm-0.29.1-rocm-collectenv.log vllm-0.30.0-gvisor-cuda-collectenv.log vllm-0.32.0-cuda-collectenv.log
+note: versions differ: 0.29.1.dev0+g98dff2a81.d20261002, 0.30.0, 0.32.0: a fact that only
+some logs carry may be a line a release started or stopped printing, not a configuration change
+
+fact                             vllm-0.29.1-rocm-collectenv...  vllm-0.30.0-gvisor-cuda-col...  vllm-0.32.0-cuda-collectenv...
+engine.git_sha                   98dff2a81                      &lt;absent&gt;                        &lt;absent&gt;
+engine.version                   0.29.1.dev0+g98dff2...20261002  0.30.0                          0.32.0
+...
+32 fact(s) differ across 3 logs; 2 identical. &lt;absent&gt; means the log did not print it, not that it was off.
+</code></pre>
+<p>Here the three logs are also different stacks (ROCm, CUDA under gVisor, CUDA), so the
+columns cannot answer "what changed in 0.31" either. The note does not claim they can; it
+only stops the one-sided rows from being read as settings.</p>
+<h2>What this does not tell you</h2>
+<ul>
+<li><strong>Whether a vanished fact was removed or merely turned off.</strong> <code>args.source</code> printed in
+  one build and not the next may be a log change or a config change. The startup log has no
+  field that distinguishes them; the release notes and the code do.</li>
+<li><strong>That equal versions mean equal behaviour.</strong> Two 0.33.0 runs can differ in every fact
+  that matters; the note is silent there, and <code>diff</code> is back to its ordinary reading.</li>
+<li><strong>That a dev build equals the tag it derives from.</strong> <code>0.33.0rc1.dev910+g4fab5a074</code> and
+  <code>0.33.0</code> compare as different versions, because they are different builds.</li>
+</ul>
+<p>The commands above are reproducible from the logs in
+<a href="https://github.com/apex-mochen/servediff/tree/main/tests/fixtures"><code>tests/fixtures/</code></a>; each
+page on this site names the version that produced it. Vocabulary for every key is in
+<a href="facts.html"><code>facts.html</code></a>.</p>
+</body>
+</html>
