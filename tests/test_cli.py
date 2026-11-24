@@ -2288,11 +2288,17 @@ def test_only_is_rejected_on_env_snapshots(tmp_path, capsys):
 
 
 def test_a_typo_names_the_command_not_the_module(capsys):
-    # A first-timer mistypes the subcommand, and the fix-it line said `usage: __main__.py
-    # ...` — a file they never created. `servediff` is what they typed and what the console
-    # script is called; both invocations must say the same thing.
+    # A first-timer mistypes the subcommand. A near miss now gets the command it probably
+    # meant (0.4.105); anything else still reaches argparse, and that usage line must say
+    # `servediff`, not the `__main__.py` file they never created.
+    assert servediff.main(["dif"]) == 2
+    err = capsys.readouterr().err
+    assert "unknown command 'dif'" in err
+    assert "did you mean 'diff'?" in err
+    assert "usage:" not in err
+
     with __import__("pytest").raises(SystemExit) as exc:
-        servediff.main(["dif"])
+        servediff.main(["qqq"])
     assert exc.value.code == 2
     err = capsys.readouterr().err
     assert err.startswith("usage: servediff "), err[:80]
@@ -2558,6 +2564,33 @@ def test_bare_servediff_shows_where_to_start(capsys):
     assert "servediff demo" in out
     assert "servediff show server.log" in out
     assert "apex-mochen.github.io/servediff" in out
+
+
+def test_a_log_without_a_command_is_pointed_at_the_commands(tmp_path, capsys):
+    """`servediff run.log` is the first line a newcomer types once they have a log.
+
+    It used to produce argparse's usage dump and nine choices, none of which says which
+    command reads a log. The answer names three commands with the file already in them.
+    """
+    log = tmp_path / "run.log"
+    log.write_text("GPU 0: NVIDIA H100\n")
+    assert servediff.main([str(log)]) == 2
+    err = capsys.readouterr().err
+    assert f"servediff: {log} looks like a log" in err
+    assert f"servediff show {log}" in err
+    assert f"servediff audit {log}" in err
+    assert "usage: servediff" not in err
+
+    # A misspelled command gets the one it probably meant, not the same wall.
+    assert servediff.main(["shwo", str(log)]) == 2
+    err = capsys.readouterr().err
+    assert "unknown command 'shwo'" in err
+    assert "did you mean 'show'?" in err
+
+    # Neither hint fires for a real command or for --version.
+    assert servediff.main(["show", str(log)]) == 0  # one fact, and no hint either
+    err = capsys.readouterr().err
+    assert "looks like a log" not in err
 
 
 def test_the_candidate_backend_list_is_read_from_the_selection_line():

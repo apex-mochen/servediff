@@ -27,6 +27,7 @@ input (for `explain`: a key no log produces).
 from __future__ import annotations
 
 import argparse
+import difflib
 import gzip
 import ast
 import errno
@@ -1949,6 +1950,27 @@ _FIRST_RUN = """servediff {version} - read what an inference server actually ran
 Docs and worked examples: https://apex-mochen.github.io/servediff/"""
 
 
+def _first_word_hint(word: str, commands: set[str]) -> str | None:
+    """One line for the two mistakes made before argparse gets to speak.
+
+    `servediff server.log` is what someone types when they have a log and no idea which
+    subcommand reads it; argparse answered with nine choices in a usage dump. A typo got
+    the same wall, named a command that does not exist, and said nothing about the one
+    that does. Both are answered here in the tool's own words, exit 2 either way.
+    """
+    close = difflib.get_close_matches(word, sorted(commands), n=1, cutoff=0.6)
+    if close:
+        return f"servediff: unknown command '{word}'; did you mean '{close[0]}'?"
+    looks_like_file = (word.endswith((".log", ".log.gz", ".txt", ".json", ".gz"))
+                       or Path(word).exists())
+    if looks_like_file:
+        return (f"servediff: {word} looks like a log, and a log needs a command:\n"
+                f"  servediff show {word}        what the log actually resolved to\n"
+                f"  servediff audit {word}       the lines no rule reads\n"
+                f"  servediff diff {word} other.log    what changed between two runs")
+    return None
+
+
 def _run(argv=None) -> int:
     _keep_console_printable()
     # Bare `servediff` used to answer an argparse error (`the following arguments are
@@ -2049,6 +2071,14 @@ def _run(argv=None) -> int:
                    help="wrap the report in a code fence, ready to paste into an issue")
     r.add_argument("--json", action="store_true",
                    help="emit one JSON object per log, so a pipeline does not parse the report text")
+    # Before argparse refuses the whole line: the first word is what a newcomer gets wrong,
+    # and both mistakes below have a better answer than nine choices in a usage dump.
+    if argv and not argv[0].startswith("-") and argv[0] not in sub.choices:
+        hint = _first_word_hint(argv[0], set(sub.choices))
+        if hint:
+            print(hint, file=sys.stderr)
+            return 2
+
     args = parser.parse_args(argv)
 
     if args.command == "audit":

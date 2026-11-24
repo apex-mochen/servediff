@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.4.105
+
+`servediff run.log` — the first line a newcomer types once they have a log — answered with
+argparse's usage dump and nine choices, none of which says which command reads a log.
+
+The question: bare `servediff` has pointed at the shortest path since the first release, but
+the moment a person has an actual log they type the log. That went to argparse, which
+refused the whole line, printed `invalid choice: 'run.log' (choose from show, explain, diff,
+series, env, capture, demo, audit, repeats)` and exited 2. A mistyped command got the same
+wall: `servediff dif` printed the usage dump, and the one word that would have fixed it —
+`diff` — was in a list of nine.
+
+Now the first word is answered before argparse refuses the line:
+
+```
+$ servediff run.log
+servediff: run.log looks like a log, and a log needs a command:
+  servediff show run.log        what the log actually resolved to
+  servediff audit run.log       the lines no rule reads
+  servediff diff run.log other.log    what changed between two runs
+
+$ servediff dif
+servediff: unknown command 'dif'; did you mean 'diff'?
+```
+
+Both exit 2, as before. A word that is neither close to a command nor a file still reaches
+argparse, so a real usage error keeps its usage text. 216 tests, one new and one retargeted
+(the old typo test asserted the usage dump; it now asserts the suggestion, and keeps the
+`__main__.py` guard on the argparse path).
+
 ## 0.4.104
 
 `series` compared three releases without saying they were three releases.
