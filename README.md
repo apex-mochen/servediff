@@ -836,7 +836,10 @@ prove, are in [writeups/audit-noise-real-logs.md](https://github.com/apex-mochen
   `servediff audit --json run1.log` is the same report for a pipeline: per log the
   `unread`, `facts` and `shapes` counts, the shapes worth a look with their counts, and a total
   `shapes_worth_a_look` plus `logs_read_nothing` and the paths behind that count, so the gate
-  reads a field instead of parsing a table. `--json`
+  reads a field instead of parsing a table. Two no-fact files are told apart there: a paste
+  full of unknown lines is `logs_read_nothing`, and a file with no bytes at all is also in
+  `logs_empty` / `logs_empty_paths`, because "the parser missed this" and "the command never
+  wrote anything" are repaired differently. `--json`
   changes the format, not the exit code, and it does not mix with `--markdown`.
   `servediff audit --write-baseline accepted.json run1.log` records the shapes this run saw,
   and `servediff audit --baseline accepted.json --max-shapes 0 run2.log` counts only shapes

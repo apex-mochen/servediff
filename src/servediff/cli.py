@@ -2066,6 +2066,7 @@ def _run(argv=None) -> int:
         # Counted on its own and into the gate, because "0 shapes worth a look" over a paste
         # that produced nothing is the report lying in the one case it exists to catch.
         empty_logs: list[str] = []
+        empty_files: list[str] = []
         for path in logs:
             try:
                 text = _read_log(path)
@@ -2075,6 +2076,8 @@ def _run(argv=None) -> int:
             facts_here = len(parse(text)["facts"])
             if facts_here == 0:
                 empty_logs.append(_label(path))
+                if not any(line.strip() for line in text.splitlines()):
+                    empty_files.append(_label(path))
             counts, samples = auditmod.unread_samples(text)
             look, _ = auditmod.split(counts, samples)
             seen.update({line: count for line, count in look.items()})
@@ -2128,6 +2131,8 @@ def _run(argv=None) -> int:
                 "logs_with_shapes_worth_a_look": sum(1 for item in summary if item[3]),
                 "logs_read_nothing": len(empty_logs),
                 "logs_read_nothing_paths": empty_logs,
+                "logs_empty": len(empty_files),
+                "logs_empty_paths": empty_files,
             }
             if known is not None:
                 # Only present when a baseline was given, so a pipeline reading the default
@@ -2141,10 +2146,12 @@ def _run(argv=None) -> int:
             # A corpus asks a different question from one log: which of these still
             # has a shape no rule reads. One line each, then only the rows that matter.
             out = []
+            empty_names = {Path(_lbl).name for _lbl in empty_files}
             for name, unread, shapes, look, facts in summary:
                 name = Path(name).name
                 if facts == 0:
-                    verdict = "0 facts: nothing recognised"
+                    verdict = ("0 line(s): empty file" if name in empty_names
+                               else "0 facts: nothing recognised")
                 elif look:
                     verdict = f"{len(look)} shape(s) worth a look"
                 else:
@@ -2154,7 +2161,11 @@ def _run(argv=None) -> int:
                 for line, count in look.most_common(args.top or None):
                     out.append(f"    {count:>4}  {line[:150]}")
             with_look = sum(1 for item in summary if item[3])
-            tail = (f"; {len(empty_logs)} read nothing at all" if empty_logs else "")
+            tail = ""
+            if empty_logs:
+                tail = f"; {len(empty_logs)} read nothing at all"
+                if empty_files:
+                    tail += f" ({len(empty_files)} of them have no line at all)"
             out.append(f"{len(logs)} log(s): {with_look} with shapes worth a look{tail}")
             print("\n".join(out))
             if args.max_shapes is not None:

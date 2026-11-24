@@ -501,11 +501,23 @@ def report(path: Path, text: str, limit: int = 0, everything: bool = False,
         facts = len(parse(text)["facts"])
     counts, samples = unread_samples(text)
     lines = [f"{path}: {sum(counts.values())} unread line(s), {len(counts)} shape(s)"]
+    # An empty file and an unread file are two different failures: nothing was ever written
+    # (a crashed command, `> log` on the wrong shell, a TTY that never flushed) versus a
+    # paste full of lines that no rule knows. Naming them the same blames the parser for a
+    # log that does not exist, which is the one case the reader can fix in a minute.
+    blank = sum(1 for line in text.splitlines() if line.strip())
     if facts == 0:
-        lines.append("  0 facts: not one configuration line in this file is recognised —"
-                     " an unread file is not a clean one")
+        if not blank:
+            lines.append("  0 line(s): this file is empty — the command wrote nothing, or"
+                         " its output went to another file")
+        else:
+            lines.append("  0 facts: not one configuration line in this file is recognised —"
+                         " an unread file is not a clean one")
     if not counts:
-        lines.append("  nothing unread: every non-empty line matched a rule")
+        if not blank:
+            lines.append("  nothing to read: there is no line in this file")
+        else:
+            lines.append("  nothing unread: every non-empty line matched a rule")
         return "\n".join(lines)
     look, noise = split(counts, samples)
     hidden = {}

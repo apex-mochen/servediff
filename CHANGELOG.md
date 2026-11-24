@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.4.101
+
+`audit` called an empty file "an unread file", which blames the parser for a log that does
+not exist.
+
+The question: a file that yields no fact is named as unread on purpose (0.4.96), but zero
+bytes and a paste full of unknown lines fail for opposite reasons. On an empty file `audit`
+printed `0 facts: not one configuration line in this file is recognised — an unread file is
+not a clean one` and then `nothing unread: every non-empty line matched a rule`, the second
+sentence being vacuously true over zero lines.
+
+An empty file is now named as empty, and the two cases stay separate in `--json`:
+
+```text
+never-wrote.log: 0 unread line(s), 0 shape(s)
+  0 line(s): this file is empty — the command wrote nothing, or its output went to another file
+  nothing to read: there is no line in this file
+```
+
+`logs_read_nothing` still counts every no-fact file, so `--max-shapes 0` still exits `1`;
+`logs_empty` / `logs_empty_paths` name the subset with no line at all, and a corpus row says
+`0 line(s): empty file` instead of `0 facts: nothing recognised`. The repair differs: a crashed
+redirect needs `2>&1` and a flush, an unread paste needs a rule.
+
 ## 0.4.100
 
 One file holding two runs made `repeats` report a span that measured the gap between them.

@@ -712,6 +712,43 @@ def test_a_file_that_reads_nothing_is_not_reported_clean(tmp_path, capsys):
     assert "0 facts: not one configuration line in this file is recognised" in out
 
 
+def test_an_empty_log_is_named_empty_not_unread(tmp_path, capsys):
+    """Zero bytes and a paste full of unknown lines are two different failures.
+
+    A redirect that never wrote (`cmd > log` on the wrong shell, a crash before the first
+    flush, `--log-file` pointing elsewhere) leaves an empty file, and calling that "an unread
+    file" blames the parser for a log that does not exist. The gate still counts it -- an
+    empty capture is not a clean one -- but the sentence names the cause, and --json says
+    which of the no-fact files had no line at all.
+    """
+    blank = tmp_path / "never-wrote.log"
+    blank.write_text("", encoding="utf-8")
+    assert servediff.main(["audit", "--max-shapes", "0", str(blank)]) == 1
+    out = capsys.readouterr().out
+    assert "0 line(s): this file is empty" in out
+    assert "not one configuration line" not in out
+    assert "nothing to read: there is no line in this file" in out
+
+    assert servediff.main(["audit", "--json", str(blank)]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["logs_read_nothing"] == 1
+    assert payload["logs_empty"] == 1
+    assert payload["logs_empty_paths"] == [str(blank)]
+
+
+def test_an_empty_file_inside_a_corpus_is_marked_in_its_row(tmp_path, capsys):
+    # The corpus layout is one line per log; a row that says "0 facts: nothing recognised"
+    # for a file with no bytes reads as "the parser missed this", which is the wrong repair.
+    blank = tmp_path / "a.log"
+    blank.write_text("", encoding="utf-8")
+    pasted = tmp_path / "b.log"
+    pasted.write_text("import torch\nwith torch.no_grad():\n    out = model(x)\n", encoding="utf-8")
+    assert servediff.main(["audit", str(tmp_path)]) == 0
+    out = capsys.readouterr().out
+    assert "a.log" in out and "0 line(s): empty file" in out
+    assert "2 read nothing at all (1 of them have no line at all)" in out
+
+
 def test_the_corpus_has_no_file_that_reads_nothing(capsys):
     # The startup-log corpus is startup logs. Pastes that are reproducer scripts live in
     # samples/not-startup-logs/ and are audited by the test above; a file that reads nothing
