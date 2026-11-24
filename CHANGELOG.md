@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.4.102
+
+Comparing two releases printed one-sided rows with no hint that the releases were different.
+
+The question: `diff` says out loud when the engines differ (`only shared facts line up`),
+because a vLLM fact and an SGLang fact cannot be compared. Nothing said it when the engines
+matched but the versions did not. A 0.28.0 log against a 0.33.0 log gives ten
+`only_baseline` rows before the first real change, and those rows mean "this release prints
+a line the other one never printed" rather than "someone turned a setting off". Nine of
+them read in the wrong direction, and the whole point of the tool is not to leave that
+reading open: a person who reads `only_baseline` as a setting turned off will go looking
+for a flag that was never there.
+
+Now `diff` starts its notes with:
+
+```
+note: versions differ: 0.28.0 vs 0.33.0: a fact that appears on one side only may be a line
+this release started or stopped printing, not a setting you changed
+```
+
+Same text in `--json` (`notes`) and `--markdown`. The note stays silent when both logs carry
+the same `engine.version`, and silent when either log never printed one — an unprinted
+version is not evidence of a different version. 212 tests, one new: 0.28.0 against 0.33.0
+shows the note, the same file against itself does not, and the JSON carries it.
+
 ## 0.4.101
 
 `audit` called an empty file "an unread file", which blames the parser for a log that does

@@ -1114,6 +1114,30 @@ def test_diff_exit_codes(tmp_path):
     assert servediff.main(["diff", str(a), str(b)]) == 1
 
 
+def test_diff_names_the_two_versions_when_they_differ(capsys):
+    """Two releases print different lines, so one-sided rows are mostly release drift.
+
+    Comparing a 0.28.0 log with a 0.33.0 log gives ten `only_baseline` rows before any real
+    difference; with no version in the output, those read as settings someone changed. The
+    note says which two versions these are and what a one-sided row can mean, and it stays
+    out of the way when both logs came from the same build.
+    """
+    a = FIX / "vllm-forum-2026-09" / "qwen35-nvfp4-mtp.log"      # 0.28.0
+    b = FIX / "vllm-0.33.0-real-rtx4060.log"                     # 0.33.0
+    assert servediff.main(["diff", str(a), str(b)]) == 1
+    out = capsys.readouterr().out
+    assert "note: versions differ: 0.28.0 vs 0.33.0:" in out
+    assert "not a setting you changed" in out
+
+    assert servediff.main(["diff", str(a), str(a)]) == 0
+    out = capsys.readouterr().out
+    assert "versions differ" not in out
+
+    assert servediff.main(["diff", str(a), str(b), "--json"]) == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert any(note.startswith("versions differ: 0.28.0 vs 0.33.0") for note in payload["notes"])
+
+
 def test_markdown_report_contains_table_evidence_and_failure_warning(tmp_path, capsys):
     a, b = tmp_path / "a.log", tmp_path / "b.log"
     a.write_text(FAILED_STARTUP)

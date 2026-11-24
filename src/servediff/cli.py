@@ -2659,6 +2659,15 @@ def _run(argv=None) -> int:
     differing = both_sides if args.skip_absent else all_differing
     identical = len(rows) - len(all_differing)
     notes = []
+    # Two logs from different releases differ in which facts exist at all: a new version
+    # prints lines the old one never had, so one-sided rows are mostly release drift, not
+    # settings someone changed. Saying the versions out loud keeps that reading available.
+    version_a = (a["facts"].get("engine.version") or Fact()).values
+    version_b = (b["facts"].get("engine.version") or Fact()).values
+    if version_a and version_b and set(version_a) != set(version_b):
+        notes.append(f"versions differ: {', '.join(version_a)} vs {', '.join(version_b)}:"
+                     " a fact that appears on one side only may be a line this release started"
+                     " or stopped printing, not a setting you changed")
     for side, parsed in (("baseline", a), ("candidate", b)):
         # A dropped flag is the one thing a recorded facts file can still report:
         # the frontend's own line was written down, so `--against` is not blind here.
