@@ -540,6 +540,41 @@ def test_failed_side_is_warned_about(tmp_path, capsys):
     assert "baseline server failed to start: RuntimeError: UVA is not available" in capsys.readouterr().out
 
 
+def test_a_log_that_failed_and_then_started_is_not_called_a_log_that_never_started(capsys):
+    """sglang#41654: the traceback is line 55, "ready to roll" is line 59.
+
+    `diff` used to read the first `failed` and announce that everything after startup was
+    absent because startup stopped — for a log whose next four lines were a server that
+    came up on the retry.
+    """
+    a, b = FIX / "sglang-2026-10/sglang-41654.log", FIX / "sglang-0.5.20-env-dump.log"
+    assert servediff.main(["diff", str(a), str(b)]) == 1
+    out = capsys.readouterr().out
+    assert "baseline failed to start and then came up on a retry" in out
+    assert "facts after the failure are absent" not in out
+
+
+def test_a_log_that_started_and_then_failed_explains_its_error_row(capsys):
+    """sglang#43741: ready on line 5, scheduler exception on line 6.
+
+    No startup warning appeared at all, so the `after_ready.error` row showed up as a
+    one-sided difference with nothing said about why.
+    """
+    a, b = FIX / "sglang-2026-10/sglang-43741.log", FIX / "sglang-0.5.20-env-dump.log"
+    assert servediff.main(["diff", str(a), str(b)]) == 1
+    out = capsys.readouterr().out
+    assert "baseline reported ready and then failed: AssertionError: Unsupported rhs dtype" in out
+    assert "says nothing about how it was configured" in out
+
+
+def test_markdown_reports_the_retry_in_the_tense_the_log_supports(capsys):
+    a, b = FIX / "sglang-2026-10/sglang-41654.log", FIX / "sglang-0.5.20-env-dump.log"
+    assert servediff.main(["diff", str(a), str(b), "--markdown"]) == 1
+    out = capsys.readouterr().out
+    assert "⚠️ baseline failed to start and then came up on a retry" in out
+    assert "facts after the failure are absent" not in out
+
+
 def test_show_names_a_servediff_file_instead_of_grading_it_as_a_log(tmp_path, capsys):
     """`servediff env > env.json` then `show env.json` used to grade a JSON document as a log.
 

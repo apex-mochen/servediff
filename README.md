@@ -359,6 +359,12 @@ weights.prefetch                 <absent>                                 disabl
 53 difference(s); 14 fact(s) identical. Absent means the log did not print it, not that it was off.
 ```
 
+The transcript above was captured before 0.4.106, which adds one warning to this same pair:
+the 0.30.0 side reported ready and then failed at shutdown (`startup` =
+`["ready", "failed (output handler)"]`), so `diff` now also prints `warning: candidate
+reported ready and then failed: ...` above the notes. The error text is quoted from that log;
+it is not a claim about how the server started.
+
 0.28.0 does not start on WSL2 with default settings; 0.30.0 does, because it falls
 back to device memory when pinned memory is unavailable. Upstream fixed this in
 [vllm#56908](https://github.com/vllm-project/vllm/pull/56908), first released in

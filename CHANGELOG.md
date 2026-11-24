@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.4.106
+
+`diff` described the wrong log. A startup that failed once and then came up on a retry was
+announced as a server that never started, with the reason "facts after the failure are absent
+because startup stopped" — one line after the log itself had said
+`The server is fired up and ready to roll!`.
+
+The question: the warning came from a boolean, `"failed" in startup.values`. That answers
+"did this log contain a failure", not "did this server ever come up", and the two diverge
+whenever a traceback is followed by a successful retry. Two bundled fixtures record exactly
+that, and the tool read both backwards:
+
+- `sglang-2026-10/sglang-41654.log`: traceback on line 55 (`TypeError: unsupported operand
+  type(s) for //`), ready on line 59. `diff` said the facts after startup were absent because
+  startup stopped. They are not: the server started four lines later, and its facts came from
+  both attempts.
+- `sglang-2026-10/sglang-43741.log`: ready on line 5, scheduler exception on line 6. Here the
+  warning never fired at all, so `after_ready.error` appeared in the table as a one-sided row
+  with nothing said about it.
+
+Now the warning matches the order the log actually printed:
+
+```
+$ servediff diff sglang-41654.log env-dump.json
+warning: baseline failed to start and then came up on a retry: TypeError: unsupported operand
+type(s) for //: 'NoneType'...; the facts below come from both attempts, so a row that only
+one side has may belong to the attempt that died, not to the one that served
+
+$ servediff diff sglang-43741.log env-dump.json
+warning: baseline reported ready and then failed: AssertionError: Unsupported rhs dtype
+fp8e4nv; an error after startup says nothing about how it was configured — that row is
+compared as a fact, not read as a reason
+```
+
+A log that genuinely never came up keeps the original wording, unchanged. The `--markdown`
+report carries the same sentence in the same tense. 219 tests, three new, and they fail on the
+previous code: the retry is not announced as a non-start, and a post-ready failure stops being
+silent. The check reads the recorded evidence line of each `startup` value rather than the
+value's spelling, so no new parsing rule was needed.
+
 ## 0.4.105
 
 `servediff run.log` — the first line a newcomer types once they have a log — answered with

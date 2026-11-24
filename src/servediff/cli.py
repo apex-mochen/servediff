@@ -1329,6 +1329,51 @@ def config_notes(parsed: dict) -> list[str]:
             f" ({', '.join(names)}): the run is not configured the way the command reads"]
 
 
+def _startup_state(parsed: dict) -> str:
+    """Which attempts this log records: never up, up after a retry, or up and then down.
+
+    The old test was `"failed" in values`, which treated a log that failed once and then
+    started as a log that never started: `diff` warned that its later facts were absent
+    because startup stopped, while the same log carried `The server is fired up and ready
+    to roll!` two lines after the traceback. A log that started and then died got nothing
+    at all, so its error sat in the table as an unexplained one-sided row.
+    """
+    fact = parsed["facts"].get("startup")
+    if fact is None:
+        return ""
+    ready_at = failed_at = None
+    for value, evidence in zip(fact.values, fact.evidence or []):
+        line = evidence[0] if evidence else None
+        if value == "ready":
+            ready_at = line
+        elif value.startswith("failed") and failed_at is None:
+            failed_at = line
+    if failed_at is None:
+        return ""
+    if ready_at is None or failed_at == ready_at:
+        return "failed"
+    return "failed-then-started" if failed_at < ready_at else "started-then-failed"
+
+
+def _startup_warnings(side: str, parsed: dict) -> list[str]:
+    """The one warning this side earns, in the tense that matches its log."""
+    state = _startup_state(parsed)
+    if not state:
+        return []
+    facts = parsed["facts"]
+    error = facts.get("after_ready.error") if state == "started-then-failed" else facts.get("startup.error")
+    shown = f": {_fmt(error.values[0])}" if error else ""
+    if state == "failed":
+        return [f"{side} server failed to start{shown}; facts after the failure are absent"
+                " because startup stopped, not because they were off"]
+    if state == "failed-then-started":
+        return [f"{side} failed to start and then came up on a retry{shown}; the facts below come"
+                " from both attempts, so a row that only one side has may belong to the attempt"
+                " that died, not to the one that served"]
+    return [f"{side} reported ready and then failed{shown}; an error after startup says nothing"
+            " about how it was configured — that row is compared as a fact, not read as a reason"]
+
+
 def stall_notes(parsed: dict) -> list[str]:
     """Multiply the two numbers a stalled startup prints, because nobody does it.
 
@@ -2810,13 +2855,7 @@ def _run(argv=None) -> int:
     elif args.markdown:
         warnings = []
         for side, parsed in (("baseline", a), ("candidate", b)):
-            if "failed" in (parsed["facts"].get("startup") or Fact()).values:
-                error = parsed["facts"].get("startup.error")
-                msg = f"{side} server failed to start"
-                if error:
-                    msg += f": {_fmt(error.values[0])}"
-                msg += "; facts after the failure are absent because startup stopped, not because they were off"
-                warnings.append(msg)
+            warnings.extend(_startup_warnings(side, parsed))
         shown_rows = rows if args.all else differing
         print(_render_markdown(
             path_a=label_a, path_b=label_b,
@@ -2828,11 +2867,8 @@ def _run(argv=None) -> int:
         if a["engine"] != b["engine"]:
             print(f"note: comparing {a['engine']} with {b['engine']}; only shared facts line up\n")
         for side, parsed in (("baseline", a), ("candidate", b)):
-            if "failed" in (parsed["facts"].get("startup") or Fact()).values:
-                error = parsed["facts"].get("startup.error")
-                print(f"warning: {side} server failed to start"
-                      f"{': ' + _fmt(error.values[0]) if error else ''}; facts after the failure"  # first = root cause
-                      " are absent because startup stopped, not because they were off\n")
+            for warning in _startup_warnings(side, parsed):
+                print(f"warning: {warning}\n")
         for note in notes:
             print(f"note: {note}")
         if notes:
