@@ -540,6 +540,70 @@ def test_failed_side_is_warned_about(tmp_path, capsys):
     assert "baseline server failed to start: RuntimeError: UVA is not available" in capsys.readouterr().out
 
 
+def test_show_names_a_servediff_file_instead_of_grading_it_as_a_log(tmp_path, capsys):
+    """`servediff env > env.json` then `show env.json` used to grade a JSON document as a log.
+
+    Both files are written by this tool, and neither holds log lines: counting them as
+    unread blamed the parser for input that never claimed to be a server log, and pointed
+    the reader at `audit` rather than at the command that does take the file.
+    """
+    snap = tmp_path / "env.json"
+    snap.write_text('{"schema": "servediff-env/v1", "python": "3.12.9", "executable": "py",'
+                    ' "packages": {}}')
+    assert servediff.main(["show", str(snap)]) == 2
+    err = capsys.readouterr().err
+    assert "this is a servediff env snapshot, not a server log" in err
+    assert "servediff diff a.json b.json" in err
+    assert "no vLLM or SGLang configuration lines recognised" not in err
+
+    facts = tmp_path / "facts.json"
+    facts.write_text(json.dumps({"engine.version": {"value": "0.33.0", "values": ["0.33.0"],
+                                                   "evidence": [[1, "version 0.33.0"]]}}))
+    assert servediff.main(["show", str(facts)]) == 2
+    err = capsys.readouterr().err
+    assert "this is a servediff facts file, not a server log" in err
+    assert "--against" in err
+
+
+def test_audit_refuses_a_servediff_file_and_names_what_it_is(tmp_path, capsys):
+    """A JSON snapshot has no log lines to grade, so `0 facts` over it was a lie with a cause.
+
+    `audit` reported 395 unread lines and 394 shapes for one `servediff env` document, then
+    said every unread line was noise — for a JSON body where no line is a log line. Now it
+    names the file and stops, and a corpus that mixes the two keeps grading the logs.
+    """
+    snap = tmp_path / "env.json"
+    snap.write_text('{"schema": "servediff-env/v1", "python": "3.12.9", "executable": "py",'
+                    ' "packages": {}}')
+    assert servediff.main(["audit", str(snap)]) == 2
+    err = capsys.readouterr().err
+    assert "is a servediff env snapshot, not a server log" in err
+    assert "not one configuration line" not in err
+    assert "every unread line is noise" not in err
+
+    # Two files, neither a log: zero logs graded is not a pass.
+    facts = tmp_path / "facts.json"
+    facts.write_text(json.dumps({"engine.version": {"value": "0.33.0", "values": ["0.33.0"],
+                                                   "evidence": [[1, "version 0.33.0"]]}}))
+    assert servediff.main(["audit", str(snap), str(facts)]) == 2
+    err = capsys.readouterr().err
+    assert "nothing to grade" in err
+    assert "env snapshot" in err and "recorded facts" in err
+
+    # Mixed: the log is still graded, the snapshot is named and left out of the count.
+    log = tmp_path / "run.log"
+    log.write_text("GPU 0: NVIDIA H100\n"
+                   'INFO:     127.0.0.1:52344 - "GET /health HTTP/1.1" 200 OK\n')
+    assert servediff.main(["audit", str(snap), str(log)]) == 0
+    err = capsys.readouterr().err
+    assert "1 file(s) skipped as servediff output, not logs: env.json (env snapshot)" in err
+    assert servediff.main(["audit", str(snap), str(log), "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["skipped_not_logs"] == 1
+    assert payload["skipped_not_logs_paths"] == [str(snap)]
+    assert len(payload["logs"]) == 1
+
+
 def test_audit_gate_fails_only_when_the_parser_is_behind(tmp_path, capsys):
     # The count comes from the audit module, not from parsing the printed report back:
     # the report truncates shapes, so a text-based count would be wrong on big logs.

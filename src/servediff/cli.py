@@ -1828,6 +1828,27 @@ def _repeat_hint(text: str) -> str:
             "whether anything printed inside it")
 
 
+def _servediff_json_kind(text: str) -> str | None:
+    """Name a JSON file servediff itself wrote, so `show` and `audit` do not grade it as a log.
+
+    An env snapshot is one document, not thousands of log lines: counting its lines as
+    unread blamed the parser for a file that never claimed to be a log, and `audit` then
+    said "every unread line is noise" about a JSON body. Naming the kind lets the reader be
+    pointed at the command that does take it.
+    """
+    if envsnap.is_snapshot(text):
+        return "env snapshot"
+    try:
+        obj = json.loads(text)
+    except ValueError:
+        return None
+    if isinstance(obj, dict) and obj and all(
+            isinstance(value, dict) and "values" in value and "evidence" in value
+            for value in obj.values()):
+        return "recorded facts"
+    return None
+
+
 def _no_facts_hint(text: str) -> str:
     """Why a paste produced nothing, said in terms of what the tool reads.
 
@@ -2067,12 +2088,24 @@ def _run(argv=None) -> int:
         # that produced nothing is the report lying in the one case it exists to catch.
         empty_logs: list[str] = []
         empty_files: list[str] = []
+        # servediff writes two JSON files that are not logs: `show --json` facts and
+        # `env` snapshots. Grading them as logs counted a document's lines as unread and
+        # then called every one of them noise, so name them and leave the gate alone.
+        skipped_not_logs: list[tuple[str, str]] = []
         for path in logs:
             try:
                 text = _read_log(path)
             except InputError as exc:
                 print(f"audit: {exc}", file=sys.stderr)
                 return 2
+            kind = _servediff_json_kind(text)
+            if kind:
+                if len(logs) == 1:
+                    print(f"audit: {_label(path)} is a servediff {kind}, not a server log:"
+                          " there are no log lines in it to grade", file=sys.stderr)
+                    return 2
+                skipped_not_logs.append((_label(path), kind))
+                continue
             facts_here = len(parse(text)["facts"])
             if facts_here == 0:
                 empty_logs.append(_label(path))
@@ -2091,6 +2124,17 @@ def _run(argv=None) -> int:
                                           limit=args.top, everything=args.everything,
                                           known=known, facts=facts_here))
             summary.append((_label(path), sum(counts.values()), len(counts), look, facts_here))
+        if skipped_not_logs and not summary:
+            # A directory of `servediff env` snapshots is not a corpus of runs. Passing the
+            # gate with zero logs would be the same lie as a gate on nothing.
+            kinds = ", ".join(sorted({kind for _, kind in skipped_not_logs}))
+            print(f"audit: nothing to grade: every file given is servediff output, not a log"
+                  f" ({len(skipped_not_logs)} file(s): {kinds})", file=sys.stderr)
+            return 2
+        if skipped_not_logs:
+            named = ", ".join(f"{Path(name).name} ({kind})" for name, kind in skipped_not_logs)
+            print(f"audit: {len(skipped_not_logs)} file(s) skipped as servediff output,"
+                  f" not logs: {named}", file=sys.stderr)
         if args.write_baseline is not None:
             try:
                 args.write_baseline.write_text(
@@ -2134,6 +2178,9 @@ def _run(argv=None) -> int:
                 "logs_empty": len(empty_files),
                 "logs_empty_paths": empty_files,
             }
+            if skipped_not_logs:
+                payload["skipped_not_logs"] = len(skipped_not_logs)
+                payload["skipped_not_logs_paths"] = [name for name, _ in skipped_not_logs]
             if known is not None:
                 # Only present when a baseline was given, so a pipeline reading the default
                 # document sees the same fields it saw before 0.4.40.
@@ -2166,7 +2213,9 @@ def _run(argv=None) -> int:
                 tail = f"; {len(empty_logs)} read nothing at all"
                 if empty_files:
                     tail += f" ({len(empty_files)} of them have no line at all)"
-            out.append(f"{len(logs)} log(s): {with_look} with shapes worth a look{tail}")
+            skipped = (f"; {len(skipped_not_logs)} servediff file(s) skipped as not logs"
+                       if skipped_not_logs else "")
+            out.append(f"{len(summary)} log(s): {with_look} with shapes worth a look{tail}{skipped}")
             print("\n".join(out))
             if args.max_shapes is not None:
                 extra = (f" + {len(empty_logs)} file(s) that read nothing"
@@ -2494,6 +2543,17 @@ def _run(argv=None) -> int:
             parsed = parse(text)
         except InputError as exc:
             print(f"show: {exc}", file=sys.stderr)
+            return 2
+        kind = _servediff_json_kind(text)
+        if kind == "env snapshot":
+            print(f"{_label(args.log)}: this is a servediff env snapshot, not a server log:"
+                  " compare two snapshots with `servediff diff a.json b.json`",
+                  file=sys.stderr)
+            return 2
+        if kind == "recorded facts":
+            print(f"{_label(args.log)}: this is a servediff facts file, not a server log:"
+                  " compare it with a log using `servediff diff <log> --against <this file>`",
+                  file=sys.stderr)
             return 2
         if not parsed["facts"]:
             print(f"{_label(args.log)}: no vLLM or SGLang configuration lines recognised",

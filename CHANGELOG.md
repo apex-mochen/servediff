@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.4.103
+
+`audit` graded the JSON files servediff itself writes as if they were server logs.
+
+The question: `servediff env > env.json` then `servediff audit env.json` reported 395 unread
+lines and 394 shapes — for one JSON document — and then said every unread line was noise.
+Both halves were wrong in the same way: a snapshot has no log lines, so nothing in it can be
+"unread", and nothing in it can be "noise" either. `show env.json` was gentler but still
+pointed at `audit`, the one command that could not help. The gate exists to name a file the
+parser cannot read; a file that was never a log is a different answer, and the 0.4.101
+distinction (empty vs unread) had already started saying so.
+
+Now both commands name the file instead of grading it:
+
+```
+show  env.json: this is a servediff env snapshot, not a server log: compare two snapshots
+               with `servediff diff a.json b.json`                    exit 2
+show  facts.json: this is a servediff facts file, not a server log: compare it with a log
+               using `servediff diff <log> --against <this file>`     exit 2
+audit env.json: is a servediff env snapshot, not a server log: there are no log lines in
+               it to grade                                            exit 2
+```
+
+In a mixed corpus the logs are still graded, the JSON files stay out of the count, and the
+summary says `1 servediff file(s) skipped as not logs`; `--json` carries `skipped_not_logs` /
+`skipped_not_logs_paths` only when something was skipped. A run where every file is
+servediff output exits 2 with `nothing to grade` — zero logs graded is not a pass. 214 tests,
+two new (each fails when this change is reverted).
+
 ## 0.4.102
 
 Comparing two releases printed one-sided rows with no hint that the releases were different.

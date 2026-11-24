@@ -839,7 +839,11 @@ prove, are in [writeups/audit-noise-real-logs.md](https://github.com/apex-mochen
   reads a field instead of parsing a table. Two no-fact files are told apart there: a paste
   full of unknown lines is `logs_read_nothing`, and a file with no bytes at all is also in
   `logs_empty` / `logs_empty_paths`, because "the parser missed this" and "the command never
-  wrote anything" are repaired differently. `--json`
+  wrote anything" are repaired differently. The two JSON files this tool writes are not logs
+  either: `show --json` facts and `env` snapshots are named as what they are instead of being
+  graded, an explicitly passed one exits `2` with the command that does take it, and in a
+  mixed corpus they stay out of the count and show up in `skipped_not_logs` /
+  `skipped_not_logs_paths`. `--json`
   changes the format, not the exit code, and it does not mix with `--markdown`.
   `servediff audit --write-baseline accepted.json run1.log` records the shapes this run saw,
   and `servediff audit --baseline accepted.json --max-shapes 0 run2.log` counts only shapes
