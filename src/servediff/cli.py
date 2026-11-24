@@ -1622,13 +1622,14 @@ def _render_text_series(labels: list[str], rows: list[dict], width: int = 30) ->
 
 
 def _render_markdown_series(*, labels: list[str], rows: list[dict], differing: int, identical: int,
-                            why: dict = None, why_omitted: int = 0) -> str:
+                            notes: list[str] = None, why: dict = None, why_omitted: int = 0) -> str:
     head = "| fact | " + " | ".join(_md_cell(label) for label in labels) + " |"
     rule = "|---|" + "---|" * len(labels)
     body = ["| `" + row["key"] + "` | "
             + " | ".join("`" + _md_cell(_fmt(value)) + "`" for value in row["values"]) + " |"
             for row in rows]
-    return "\n".join([head, rule, *body, "",
+    lead = [f"> {note}" for note in (notes or [])]
+    return "\n".join([*lead, *(lead and [""] or []), head, rule, *body, "",
                       f"{differing} fact(s) differ across {len(labels)} logs; {identical} identical. "
                       "`<absent>` means the log did not print it, not that it was off."])
 
@@ -2404,6 +2405,19 @@ def _run(argv=None) -> int:
                 print(f"{_label(path)}: no vLLM or SGLang configuration lines recognised", file=sys.stderr)
                 return 2
         labels = ["stdin" if str(name) == "-" else Path(name).name for name in args.logs]
+        # `diff` warns when the two logs came from different releases (0.4.102); a series
+        # needs the same warning, because one-sided rows across three versions look exactly
+        # like settings that changed between runs.
+        versions: list[str] = []
+        for parsed_one in parsed_list:
+            version_fact = parsed_one["facts"].get("engine.version")
+            for value in (version_fact.values if version_fact else []):
+                if value not in versions:
+                    versions.append(value)
+        note = (f"versions differ: {', '.join(versions)}: a fact that only some logs carry may be"
+                " a line a release started or stopped printing, not a configuration change"
+                if len(versions) > 1 else None)
+        notes = [note] if note else []
         rows = series(parsed_list, raw_args=args.raw_args)
         # `diff` and `--against` drop errors logged after "ready" (a shutdown traceback says
         # nothing about how the server started), and `series` was counting them as the one
@@ -2420,6 +2434,8 @@ def _run(argv=None) -> int:
         if args.json:
             payload = {"logs": labels, "differences": len(differing), "rows": shown,
                        "not_compared_after_ready": len(post_ready)}
+            if notes:
+                payload["notes"] = notes
             if why[0]:
                 payload["why"] = why[0]
                 payload["why_omitted"] = why[1]
@@ -2427,7 +2443,7 @@ def _run(argv=None) -> int:
         elif args.markdown:
             print(_render_markdown_series(labels=labels, rows=shown, differing=len(differing),
                                           identical=len(comparable) - len(differing),
-                                          why=why[0], why_omitted=why[1]))
+                                          notes=notes, why=why[0], why_omitted=why[1]))
             if post_ready:
                 print(f"\n{len(post_ready)} error(s) logged after the server reported ready"
                       f" {'are listed above but ' if args.all else 'were not '}not counted as a"
@@ -2437,6 +2453,8 @@ def _run(argv=None) -> int:
                       " not compared: the run had already started, so they say nothing about the"
                       " configuration (--all shows them).")
         else:
+            for series_note in notes:
+                print(f"note: {series_note}\n")
             print(_render_text_series(labels, shown))
             print(f"\n{len(differing)} fact(s) differ across {len(labels)} logs;"
                   f" {len(comparable) - len(differing)} identical. <absent> means the log did not print it,"

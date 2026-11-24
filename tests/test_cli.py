@@ -604,6 +604,33 @@ def test_audit_refuses_a_servediff_file_and_names_what_it_is(tmp_path, capsys):
     assert len(payload["logs"]) == 1
 
 
+def test_series_names_the_three_versions_when_they_differ(capsys):
+    """`diff` warns when two logs came from different releases; a series needs the same warning.
+
+    Three releases print three different sets of lines, so a row that only one column carries
+    looks like a setting that changed between runs. The note says which versions these are
+    before the table, so the one-sided rows can be read as release drift.
+    """
+    a = FIX / "vllm-0.29.1-rocm-collectenv.log"
+    b = FIX / "vllm-0.30.0-gvisor-cuda-collectenv.log"
+    c = FIX / "vllm-0.32.0-cuda-collectenv.log"
+    assert servediff.main(["series", str(a), str(b), str(c)]) == 1
+    out = capsys.readouterr().out
+    assert out.startswith("note: versions differ: 0.29.1")
+    assert "0.30.0" in out.splitlines()[0] and "0.32.0" in out.splitlines()[0]
+    assert "not a configuration change" in out.splitlines()[0]
+
+    assert servediff.main(["series", str(a), str(b), str(c), "--json"]) == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["notes"][0].startswith("versions differ: 0.29.1")
+    assert payload["differences"] > 0
+
+    # Same file three times: no version note, and nothing to diff.
+    assert servediff.main(["series", str(c), str(c), str(c)]) == 0
+    out = capsys.readouterr().out
+    assert "versions differ" not in out
+
+
 def test_audit_gate_fails_only_when_the_parser_is_behind(tmp_path, capsys):
     # The count comes from the audit module, not from parsing the printed report back:
     # the report truncates shapes, so a text-based count would be wrong on big logs.

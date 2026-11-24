@@ -695,7 +695,11 @@ servediff series v0.23.log v0.26.log v0.26-flag.log --markdown
 ```
 
 `--all` adds the rows that hold the same value across every log; exit codes match
-`diff` (`0` identical, `1` differences, `2` nothing recognised).
+`diff` (`0` identical, `1` differences, `2` nothing recognised). When the three logs come
+from different releases, `series` says so first — `note: versions differ: 0.29.1..., 0.30.0,
+0.32.0` — because a row only one column carries is usually a line that release started or
+stopped printing, not a setting changed between runs; same wording in `--json` (`notes`) and
+`--markdown`.
 
 The same rule `diff` uses for `after_ready.*` applies here: a traceback logged after the
 server reported `ready` is a shutdown problem, not a configuration difference, so it is not

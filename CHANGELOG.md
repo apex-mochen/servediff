@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.4.104
+
+`series` compared three releases without saying they were three releases.
+
+The question: 0.4.102 added `note: versions differ` to `diff`, because a one-sided row
+between two releases usually means "that build prints this line and the other does not". The
+same reading applies to `series`, which exists for exactly that input — three versions at
+once — and it printed the table with no version anywhere except one row inside it. A row
+carried by a single column then reads as a setting that changed between runs, which is the
+one thing `series` is used to decide.
+
+Now the note comes first, before the table:
+
+```
+note: versions differ: 0.29.1.dev0+g98dff2a81.d20261002, 0.30.0, 0.32.0: a fact that only
+some logs carry may be a line a release started or stopped printing, not a configuration
+change
+```
+
+Same sentence in `--json` (`notes`) and `--markdown` (a quote line above the table). Silent
+when every log carries one version, and silent when only one version was printed at all —
+three logs from one build are not a version comparison. 215 tests, one new (fails when this
+change is reverted).
+
 ## 0.4.103
 
 `audit` graded the JSON files servediff itself writes as if they were server logs.
