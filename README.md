@@ -683,7 +683,13 @@ ssh gpu-node 'cat /path/to/serve.log' | servediff diff v0.31.log -
 ```
 
 Only one side can be `-` (stdin is read once), and `--markdown` labels it `stdin`
-in the report header.
+in the report header. A gzip stream on stdin is decompressed like a `.gz` file, and a
+bzip2 / xz / zstd stream is named rather than decoded as text:
+
+```bash
+cat serve.log.gz | servediff show -
+$ note: stdin was gzip-compressed; decompressed 23094 byte(s)
+```
 
 ### Three versions at once
 

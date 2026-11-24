@@ -3302,6 +3302,53 @@ def test_a_gzipped_log_is_read_without_zcat(tmp_path):
     assert "4.91" in out.stdout
 
 
+def test_a_gzipped_log_piped_to_stdin_reads_like_the_file(tmp_path):
+    """`cat serve.log.gz | servediff show -` used to decode the archive as text.
+
+    It answered "no configuration lines recognised", 170 unread line(s) and 0 facts on a
+    log that reads fine from disk: the gzip look at the first bytes lived in the file
+    branch only, so the pipe was treated as whatever bytes a gzip happens to contain.
+    """
+    import gzip as gz
+    source = (FIX / "vllm-0.33.0-real-rtx4060.log").read_bytes()
+    packed = tmp_path / "serve.log.gz"
+    packed.write_bytes(gz.compress(source))
+    piped = subprocess.run([sys.executable, "-m", "servediff", "show", "-"],
+                           input=gz.compress(source), capture_output=True)
+    assert piped.returncode == 0
+    assert b"stdin was gzip-compressed; decompressed" in piped.stderr
+    assert b"backend.attention" in piped.stdout
+
+    from_path = subprocess.run([sys.executable, "-m", "servediff", "show", str(packed)],
+                               capture_output=True)
+    assert from_path.returncode == 0
+    assert piped.stdout == from_path.stdout
+
+
+def test_diff_with_a_gzipped_baseline_on_stdin_matches_the_path(tmp_path):
+    import gzip as gz
+    other = FIX / "vllm-0.33.0rc1-rtx-pro-6000.log"
+    source = (FIX / "vllm-0.33.0-real-rtx4060.log").read_bytes()
+    piped = subprocess.run([sys.executable, "-m", "servediff", "diff", "-", str(other)],
+                           input=gz.compress(source), capture_output=True)
+    from_path = subprocess.run([sys.executable, "-m", "servediff", "diff",
+                                str(FIX / "vllm-0.33.0-real-rtx4060.log"), str(other)],
+                               capture_output=True)
+    assert piped.returncode == from_path.returncode == 1
+    assert b"gzip-compressed; decompressed" in piped.stderr
+    assert piped.stdout == from_path.stdout
+
+
+def test_a_bzip2_stream_on_stdin_is_named_not_decoded_as_text(tmp_path):
+    import bz2
+    source = (FIX / "vllm-0.33.0-real-rtx4060.log").read_bytes()
+    piped = subprocess.run([sys.executable, "-m", "servediff", "show", "-"],
+                           input=bz2.compress(source), capture_output=True)
+    assert piped.returncode == 2
+    assert b"stdin: bzip2-compressed, which is not read here" in piped.stderr
+    assert b"no configuration lines recognised" not in piped.stdout
+
+
 def test_show_on_a_directory_points_at_audit():
     # `Is a directory` is a strerror, not an answer: reading a directory as one corpus is
     # what `audit` does, and the message should say so.

@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.4.107
+
+`cat serve.log.gz | servediff show -` read the archive as text. The tool has decompressed a
+`.gz` since the file branch learned to look at the first two bytes, but that look lived only
+there — stdin went straight to the decoder, so the same bytes that read fine from disk became
+170 unread line(s), 168 shapes and 0 facts:
+
+```
+$ cat serve.log.gz | servediff show -
+stdin: no vLLM or SGLang configuration lines recognised
+$ cat serve.log.gz | servediff audit -
+stdin: 170 unread line(s), 168 shape(s)
+  0 facts: not one configuration line in this file is recognised — an unread file is not a
+  clean one
+```
+
+That is the wrong answer twice over: the log is fine, and the audit text says an unread file
+is not a clean one, which invites a reader to doubt a good run. A rotated log is gzipped in
+the pipe exactly as it is on disk, and `cat` is what people type when a tool wants stdin.
+
+The first-bytes check now runs for both readers:
+
+```
+$ cat serve.log.gz | servediff show -
+note: stdin was gzip-compressed; decompressed 23094 byte(s)
+backend.attention                FLASH_ATTN                                                   line 27
+```
+
+The stdout is byte-identical to `servediff show serve.log.gz`, which is what the test asserts;
+`diff - other.log` with a gzipped baseline matches `diff serve.log other.log` for the same
+reason. A bzip2 / xz / zstd stream on stdin is named as before ("stdin: bzip2-compressed,
+which is not read here; `bunzip2` it first — gzip is read directly") instead of being decoded,
+exit 2. What already worked on stdin keeps working: a UTF-16 BOM is still reported as
+`note: stdin was read as utf-16`.
+
+222 tests, three new, and all three fail on the previous code. The gzip branch was moved
+into one helper that takes the label it prints, so the file and the pipe cannot drift apart
+again.
+
 ## 0.4.106
 
 `diff` described the wrong log. A startup that failed once and then came up on a retry was

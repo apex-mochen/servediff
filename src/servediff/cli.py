@@ -1735,6 +1735,36 @@ def _decode_log(data: bytes) -> tuple[str, str | None]:
     return data.decode("utf-8", errors="replace"), None
 
 
+def _unwrap_container(data: bytes, label) -> bytes:
+    """Decompress a gzip stream, or name the container this tool does not read.
+
+    Rotated logs are gzipped on disk and also in the pipe when someone cats them, so both
+    readers need the same look at the first bytes. Only the file branch had it: `cat
+    serve.log.gz | servediff show -` decoded the archive as text and answered "no
+    configuration lines recognised", with 170 unread line(s) and 0 facts on a log that
+    reads fine.
+    """
+    if data[:2] == b"\x1f\x8b":
+        # A log nobody can read is worse than no feature: decompress here rather than
+        # asking for zcat first.
+        try:
+            out = gzip.decompress(data)
+        except OSError as exc:
+            raise InputError(f"{label}: gzip header but the stream is broken ({exc})") from exc
+        print(f"note: {label} was gzip-compressed; decompressed {len(out)} byte(s)",
+              file=sys.stderr)
+        return out
+    if data[:3] == b"BZh" or data[:6] == b"\xfd7zXZ\x00" or data[:4] == b"\x28\xb5\x2f\xfd":
+        # Same silent failure, one step further out: name the container instead of
+        # reporting that the decompressed bytes contain no configuration.
+        kind = {b"BZh": "bzip2", b"\xfd7zXZ\x00": "xz"}.get(
+            data[:6] if data[:6] == b"\xfd7zXZ\x00" else data[:3], "zstd")
+        raise InputError(f"{label}: {kind}-compressed, which is not read here; "
+                         f"`{'bunzip2' if kind == 'bzip2' else 'unxz' if kind == 'xz' else 'zstd -d'}'"
+                         " it first — gzip is read directly")
+    return data
+
+
 def _read_log(path) -> str:
     """Read a log path, or stdin when the path is `-`.
 
@@ -1742,7 +1772,7 @@ def _read_log(path) -> str:
     `ssh node 'cat serve.log' | servediff show -` rather than scp first.
     """
     if str(path) == "-":
-        text, encoding = _decode_log(sys.stdin.buffer.read())
+        text, encoding = _decode_log(_unwrap_container(sys.stdin.buffer.read(), "stdin"))
         if encoding:
             print(f"note: stdin was read as {encoding}", file=sys.stderr)
         return text
@@ -1752,24 +1782,7 @@ def _read_log(path) -> str:
         raise InputError(f"{path}: is a directory; `servediff audit {path}` reads a directory "
                          "as one corpus, and `servediff show <one of the logs>` reads one file")
     try:
-        data = path.read_bytes()
-        if data[:2] == b"\x1f\x8b":
-            # Rotated logs are usually still gzipped on disk, and a log nobody can read is
-            # worse than no feature: decompress here rather than asking for zcat first.
-            try:
-                data = gzip.decompress(data)
-            except OSError as exc:
-                raise InputError(f"{path}: gzip header but the stream is broken ({exc})") from exc
-            print(f"note: {path} was gzip-compressed; decompressed {len(data)} byte(s)",
-                  file=sys.stderr)
-        elif data[:3] == b"BZh" or data[:6] == b"\xfd7zXZ\x00" or data[:4] == b"\x28\xb5\x2f\xfd":
-            # Same silent failure, one step further out: name the container instead of
-            # reporting that the decompressed bytes contain no configuration.
-            kind = {b"BZh": "bzip2", b"\xfd7zXZ\x00": "xz"}.get(
-                data[:6] if data[:6] == b"\xfd7zXZ\x00" else data[:3], "zstd")
-            raise InputError(f"{path}: {kind}-compressed, which is not read here; "
-                             f"`{'bunzip2' if kind == 'bzip2' else 'unxz' if kind == 'xz' else 'zstd -d'}'"
-                             " it first — gzip is read directly")
+        data = _unwrap_container(path.read_bytes(), path)
         text, encoding = _decode_log(data)
         if encoding:
             print(f"note: {path} was read as {encoding}, not UTF-8", file=sys.stderr)
