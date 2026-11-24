@@ -2213,6 +2213,56 @@ def test_a_facts_file_round_trips_a_multi_valued_fact(tmp_path, capsys):
     assert servediff.main(["diff", str(log), "--against", str(facts)]) == 0
 
 
+def test_a_gzipped_facts_file_reads_like_the_plain_one(tmp_path, capsys):
+    """A facts file lives next to the logs it came from, and those get archived gzipped.
+
+    `--against facts.json.gz` used to answer `not JSON: 'utf-8' codec can't decode byte
+    0x8b in position 1` — the codec named instead of the container, on a file that is a
+    perfectly good facts file.
+    """
+    import gzip as gz
+    good = tmp_path / "good.log"
+    good.write_text(FALLBACK_STARTUP, encoding="utf-8")
+    assert servediff.main(["show", str(good), "--json"]) == 0
+    facts = tmp_path / "facts.json"
+    facts.write_text(capsys.readouterr().out, encoding="utf-8")
+    packed = tmp_path / "facts.json.gz"
+    packed.write_bytes(gz.compress(facts.read_bytes()))
+
+    assert servediff.main(["diff", str(good), "--against", str(packed)]) == 0
+    piped = capsys.readouterr()
+    assert "gzip-compressed; decompressed" in piped.err
+    assert servediff.main(["diff", str(good), "--against", str(facts)]) == 0
+    plain = capsys.readouterr()
+    assert piped.out == plain.out
+
+
+def test_a_bzip2_facts_file_is_named_not_called_bad_json(tmp_path, capsys):
+    import bz2
+    good = tmp_path / "good.log"
+    good.write_text(FALLBACK_STARTUP, encoding="utf-8")
+    assert servediff.main(["show", str(good), "--json"]) == 0
+    facts = tmp_path / "facts.json"
+    facts.write_text(capsys.readouterr().out, encoding="utf-8")
+    packed = tmp_path / "facts.json.bz2"
+    packed.write_bytes(bz2.compress(facts.read_bytes()))
+    assert servediff.main(["diff", str(good), "--against", str(packed)]) == 2
+    err = capsys.readouterr().err
+    assert "bzip2-compressed, which is not read here" in err
+    assert "not JSON" not in err
+
+
+def test_a_log_passed_to_against_is_still_reported_as_not_json(tmp_path, capsys):
+    # The guard for the old message: unwrapping a container must not turn a plain log
+    # given as --against into something the tool tries harder to parse.
+    good = tmp_path / "good.log"
+    good.write_text(FALLBACK_STARTUP, encoding="utf-8")
+    other = tmp_path / "other.log"
+    other.write_text(FAILED_STARTUP, encoding="utf-8")
+    assert servediff.main(["diff", str(good), "--against", str(other)]) == 2
+    assert "not JSON" in capsys.readouterr().err
+
+
 def test_a_file_that_is_not_a_facts_file_is_an_input_error(tmp_path, capsys):
     # Exit 2, not a traceback and not a difference: a broken baseline makes the gate
     # wrong, and "wrong" is not the same finding as "the server changed".

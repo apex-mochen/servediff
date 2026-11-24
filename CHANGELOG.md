@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.4.108
+
+`--against facts.json.gz` answered with a Unicode error. The facts file that records an
+accepted run is kept beside the logs it came from, and logs get archived gzipped, so the facts
+file travels in the same archive:
+
+```
+$ servediff diff today.log --against facts.json.gz
+diff: facts.json.gz: not JSON: 'utf-8' codec can't decode byte 0x8b in position 1: invalid start byte
+```
+
+Nothing in that sentence names the actual problem. `0x8b` is the second byte of every gzip
+header, and the message reports it as evidence that the file is not JSON — while the file is a
+perfectly good facts file, compressed.
+
+0.4.107 taught both log readers to unwrap a container; this is the third reader, and it now
+uses the same helper:
+
+```
+$ servediff diff today.log --against facts.json.gz
+note: facts.json.gz was gzip-compressed; decompressed 21216 byte(s)
+```
+
+The stdout is byte-identical to `--against facts.json`, which is what the test asserts (0
+differences on a good run, and the same rows with the same exit codes on a changed one). A
+bzip2 facts file is named — `diff: facts.json.bz2: bzip2-compressed, which is not read here;
+`bunzip2` it first — gzip is read directly`, exit 2 — instead of being called bad JSON. A log
+handed to `--against` still gets the old `not JSON: Expecting value: line 1 column 1` message,
+because a log is not a container and must not be parsed harder.
+
+225 tests, three new: the gzip round trip, the bzip2 name, and the guard that a plain log keeps
+the old message. The two behaviour tests fail on the previous code; the guard passes on both,
+on purpose.
+
 ## 0.4.107
 
 `cat serve.log.gz | servediff show -` read the archive as text. The tool has decompressed a

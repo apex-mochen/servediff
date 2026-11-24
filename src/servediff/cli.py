@@ -1199,12 +1199,23 @@ def diff(a: dict, b: dict, raw_args: bool = False) -> list[dict]:
 
 
 def _facts_from_json(path: Path) -> dict[str, Fact] | None:
-    """Read a facts file written by `servediff show --json`, or say why it cannot."""
+    """Read a facts file written by `servediff show --json`, or say why it cannot.
+
+    A facts file is kept next to the logs it came from, and those get archived gzipped, so
+    the container is unwrapped here the same way it is for a log. Without that, `--against
+    facts.json.gz` answered `not JSON: 'utf-8' codec can't decode byte 0x8b in position 1` —
+    a codec named instead of the gzip.
+    """
     try:
-        loaded = json.loads(path.read_text(encoding="utf-8"))
+        data = _unwrap_container(path.read_bytes(), path)
     except OSError as exc:
         print(f"diff: {path}: {exc}", file=sys.stderr)
         return None
+    except InputError as exc:
+        print(f"diff: {exc}", file=sys.stderr)
+        return None
+    try:
+        loaded = json.loads(data.decode("utf-8"))
     except ValueError as exc:
         print(f"diff: {path}: not JSON: {exc}", file=sys.stderr)
         return None

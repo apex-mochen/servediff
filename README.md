@@ -250,7 +250,9 @@ servediff show accepted.log --json > facts.json
 
 `--skip-absent` matters here: a log that stopped early is missing facts, and a fact nobody
 recorded cannot be compared. The note in the output says how many facts the baseline holds,
-so a narrowed comparison never reads as a clean one.
+so a narrowed comparison never reads as a clean one. A facts file that was archived gzipped
+is read like a `.gz` log (`facts.json.gz`), and a bzip2 / xz / zstd one is named rather than
+reported as bad JSON.
 
 A gate that fails on every row is a gate someone switches off: package pins move every week,
 while the startup decisions are what a version bump actually changes. `--only` narrows the
