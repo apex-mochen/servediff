@@ -884,6 +884,12 @@ prove, are in [writeups/audit-noise-real-logs.md](https://github.com/apex-mochen
   reads a 22-line forum paste into 21 facts: 95 cores bound (192-286), one reserved, MEMBIND on
   node 0, Triton reporting 0 drivers so the run drops to the v1 model runner, and why a cpuset
   clamp — not a vLLM flag — is the reading that survives.
+- When a log's `startup` fact holds two values, the log recorded two attempts:
+  `["failed", "ready"]` is a failure and then a retry that came up, `["ready", "failed"]` is a
+  server that started and then died. `diff` says which one it read instead of announcing that
+  later facts are absent because startup stopped —
+  [writeups/startup-ready-after-traceback.md](https://github.com/apex-mochen/servediff/blob/main/writeups/startup-ready-after-traceback.md)
+  works through both logs, line 55 against line 59 and line 5 against line 6.
 - The same notes as a plain web page: <https://apex-mochen.github.io/servediff/> —
   generated from `writeups/*.md` by `tools/build_site.py`, each page titled with the exact
   error string it is about.
