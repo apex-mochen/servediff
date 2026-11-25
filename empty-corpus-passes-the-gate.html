@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A gate that measured zero logs and reported green</title>
+<meta name="description" content="servediff audit &lt;dir&gt; --max-shapes 0 is the shape a CI gate takes: any line the parser cannot read is a shape worth a look, and zero is the only acceptable number. Point it at a directory that holds no logs at all and, u">
+<link rel="canonical" href="https://apex-mochen.github.io/servediff/empty-corpus-passes-the-gate.html">
+<style>
+:root { --fg:#1c1c1e; --muted:#6b6b70; --line:#e4e4e7; --code:#f6f6f7; }
+body { margin:0 auto; max-width:44rem; padding:2.5rem 1.25rem 6rem;
+  font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  color:var(--fg); }
+h1 { font-size:1.9rem; line-height:1.25; margin:0 0 1rem; letter-spacing:-0.01em; }
+h2 { font-size:1.25rem; margin:2.2rem 0 .6rem; }
+h3 { font-size:1.05rem; margin:1.6rem 0 .4rem; }
+p, li { color:var(--fg); }
+pre { background:var(--code); border:1px solid var(--line); border-radius:6px;
+  padding:.85rem 1rem; overflow-x:auto; font-size:.86rem; line-height:1.5; }
+code { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:.9em; }
+p code, li code { background:var(--code); padding:.1em .3em; border-radius:3px; }
+a { color:#0b62d0; }
+.note { color:var(--muted); font-size:.9rem; }
+nav { border-bottom:1px solid var(--line); padding-bottom:.75rem; margin-bottom:2rem;
+  font-size:.9rem; }
+nav a { margin-right:1rem; }
+ul.index li { margin:.5rem 0; }
+</style>
+</head>
+<body>
+<nav><a href="./index.html">servediff notes</a><a href="https://github.com/apex-mochen/servediff">source</a><a href="https://pypi.org/project/servediff/">pip install servediff</a></nav>
+<h1>A gate that measured zero logs and reported green</h1>
+<p><code>servediff audit &lt;dir&gt; --max-shapes 0</code> is the shape a CI gate takes: any line the parser cannot
+read is a shape worth a look, and zero is the only acceptable number. Point it at a directory
+that holds no logs at all and, until 0.4.111, this is the whole exchange:</p>
+<pre><code>$ servediff audit /var/log/vllm-old --max-shapes 0
+audit: 0 shape(s) worth a look, threshold 0
+$ echo $?
+0
+</code></pre>
+<p>No file was read. The number is real — it is the count of shapes over an empty set — and it is
+the one answer a gate must never produce, because the same output comes from a typo in the
+path, from a volume that failed to mount, and from a server that never wrote a log.</p>
+<p><code>repeats &lt;dir&gt;</code> did the same thing, and the directory mode of
+<code>diff &lt;dir&gt; --against facts.json</code> said <code>no *.log inside</code> about a directory whose logs were
+named <code>serve.log.1</code>.</p>
+<h2>Why "0 shapes" is the worst possible output</h2>
+<p>The tool already treats a paste that yields no fact as unread, not as clean:</p>
+<blockquote>
+<p>a file that yields no fact is not a clean file: it is a file this tool cannot read</p>
+</blockquote>
+<p>That rule exists because an empty answer and a clean answer look the same. A directory with no
+logs is the same failure at the level above the file: the corpus is empty, so every claim made
+about it is vacuously true.</p>
+<h2>The fix, and the first thing it broke</h2>
+<p>All three commands name the directory and exit 2:</p>
+<pre><code>$ servediff audit /var/log/vllm-old
+audit: /var/log/vllm-old: no log inside (looked for *.log, *.log.N and .gz/.bz2/.xz/.zstd of those)
+$ echo $?
+2
+</code></pre>
+<p>The first thing this broke was this repo's own CI. The regression gate loops over the fixture
+corpora, and one of them — <code>tests/fixtures/sglang-2026-11</code> — holds only a <code>PROVENANCE.md</code> for
+pastes that were found and kept elsewhere. It had been passing for months by measuring nothing.
+Four jobs went red on the release commit, all at the same step.</p>
+<p>The fix is not to weaken the check, and it is not to delete the note. It is to make the gate
+list only directories that hold a log, and to make that a test rather than a comment: the test
+parses the <code>for d in</code> list out of <code>.github/workflows/ci.yml</code> and asserts every listed directory
+expands to at least one log. A directory added to the gate without a fixture now fails locally,
+before it can fail in CI for a reason nobody understands.</p>
+<h2>What this changes for a gate</h2>
+<pre><code>servediff audit /var/log/vllm --max-shapes 0     # green means: logs were read, and none were unread
+servediff diff /var/log/vllm --against facts.json  # green means: every log in the corpus matches
+</code></pre>
+<p>Green now means two things instead of one. If the path is wrong you get a sentence with the
+path and the exit code a broken input deserves, which is what <code>2</code> was already for everywhere
+else in this tool.</p>
+</body>
+</html>
