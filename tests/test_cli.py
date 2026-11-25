@@ -2508,7 +2508,24 @@ def test_a_directory_without_logs_is_an_input_error(tmp_path, capsys):
     facts_path = tmp_path / "facts.json"
     facts_path.write_text(capsys.readouterr().out, encoding="utf-8")
     assert servediff.main(["diff", str(empty), "--against", str(facts_path)]) == 2
-    assert "no *.log inside" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    # The message has to say what it looked for: a directory holding serve.log.1 is not empty
+    # and a directory holding serve.log.1.bz2 is not empty either — it is unreadable.
+    assert "no log inside" in err
+    assert "*.log.N" in err
+
+
+def test_audit_of_a_directory_with_no_logs_is_an_input_error(tmp_path, capsys):
+    # `audit <dir>` printed nothing and exited 0 here, so a gate pointed at the wrong path
+    # measured zero logs and reported green — the corpus equivalent of an empty paste.
+    empty = tmp_path / "logs"
+    empty.mkdir()
+    (empty / "README.txt").write_text("not a log\n", encoding="utf-8")
+    assert servediff.main(["audit", str(empty)]) == 2
+    err = capsys.readouterr().err
+    assert "no log inside" in err
+    assert servediff.main(["audit", str(empty), "--max-shapes", "0"]) == 2
+    assert servediff.main(["repeats", str(empty)]) == 2
 
 
 def test_a_blank_artifact_in_the_directory_fails_the_gate(tmp_path, capsys):

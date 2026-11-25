@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.4.111
+
+`servediff audit <dir>` over a directory with no logs printed nothing and exited 0. So did
+`repeats <dir>`, and so did a gate:
+
+```
+$ servediff audit /var/log/vllm-old --max-shapes 0
+audit: 0 shape(s) worth a look, threshold 0
+$ echo $?
+0
+```
+
+Zero logs measured, green result. A path with a typo in it, a directory that only holds
+`README.txt`, or a corpus mounted on a box where the server never wrote anything — all pass
+the gate that was supposed to watch them. This is the top-level version of the failure 0.4.109
+and 0.4.110 fixed per file: scope is part of the answer, and an empty scope is the one answer
+this tool must never give quietly.
+
+All three commands now name the directory and exit 2:
+
+```
+$ servediff audit /var/log/vllm-old
+audit: /var/log/vllm-old: no log inside (looked for *.log, *.log.N and .gz/.bz2/.xz/.zstd of those)
+$ echo $?
+2
+```
+
+The same sentence is what `diff <dir> --against facts.json` and `repeats <dir>` print, with
+their own prefix, because a corpus of zero files is an input error everywhere and not only
+where somebody remembered to check. A directory that does hold logs is unchanged; a corpus of
+one file is a corpus of one file.
+
+229 tests, one new: audit, the gate, and repeats on a directory holding only a `README.txt`.
+README's audit row now lists "a directory with no log inside" among the exit-2 cases, and the
+directory bullet says what counts as a log.
+
 ## 0.4.110
 
 A rotation archived in a container `servediff` does not read was still dropped from the

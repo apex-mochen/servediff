@@ -1753,6 +1753,25 @@ def _expand_logs(paths):
     return out
 
 
+_NO_LOG_NAME = "no log inside (looked for *.log, *.log.N and .gz/.bz2/.xz/.zstd of those)"
+
+
+def _expand_logs_checked(paths):
+    """Same expansion, but a directory that yields nothing is an input error, not a corpus.
+
+    `audit <dir>` over a directory with no logs printed nothing and exited 0, so a gate
+    pointed at a typo or at the wrong path measured nothing and reported green. A corpus of
+    zero files is not a clean corpus.
+    """
+    logs = []
+    for path in paths:
+        expanded = _expand_logs([path])
+        if str(path) != "-" and path.is_dir() and not expanded:
+            raise InputError(f"{path}: {_NO_LOG_NAME}")
+        logs.extend(expanded)
+    return logs
+
+
 def _decode_log(data: bytes) -> tuple[str, str | None]:
     """(text, the encoding this had to be read as) for a log.
 
@@ -1855,9 +1874,10 @@ def _gate_corpus(args) -> int:
     facts = _facts_from_json(args.against)
     if facts is None:
         return 2
-    logs = _expand_logs([args.baseline])
-    if not logs:
-        print(f"diff: {args.baseline}: no *.log inside", file=sys.stderr)
+    try:
+        logs = _expand_logs_checked([args.baseline])
+    except InputError as exc:
+        print(f"diff: {exc}", file=sys.stderr)
         return 2
     results = []
     for path in logs:
@@ -2200,7 +2220,11 @@ def _run(argv=None) -> int:
                       " (expected an object with a `shapes` mapping)", file=sys.stderr)
                 return 2
 
-        logs = _expand_logs(args.logs)
+        try:
+            logs = _expand_logs_checked(args.logs)
+        except InputError as exc:
+            print(f"audit: {exc}", file=sys.stderr)
+            return 2
         blocks = []
         summary = []
         # Counted separately from the printed report so a threshold decision never depends
@@ -2605,7 +2629,12 @@ def _run(argv=None) -> int:
 
         blocks = []
         payload = []
-        for path in _expand_logs(args.logs):
+        try:
+            expanded = _expand_logs_checked(args.logs)
+        except InputError as exc:
+            print(f"repeats: {exc}", file=sys.stderr)
+            return 2
+        for path in expanded:
             try:
                 text = _read_log(path)
             except InputError as exc:
