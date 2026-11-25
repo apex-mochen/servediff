@@ -955,13 +955,13 @@ prove, are in [writeups/audit-noise-real-logs.md](https://github.com/apex-mochen
 ## Checking the tool itself
 
 - `python -m pytest -q` — the whole suite, over the rule table and every command's output.
-- `python tools/invariants.py --repo .` — ten questions asked of the same log corpus from
+- `python tools/invariants.py --repo .` — eleven questions asked of the same log corpus from
   different angles (`--sample 10` for a quick loop; the whole 71-log corpus takes a few
   minutes): self-diff empty, diff symmetric, text/json/markdown agree, repeats counts the
   file, diff json adds up, series is the union of diffs, stdin and path agree, gz and plain
-  agree, gz facts and plain facts agree, rotations are logs. The "two ways to say the same
-  thing" checks are the shape that shipped in 0.4.107 and 0.4.108, the last one is 0.4.109's;
-  each fails on the code from before its fix.
+  agree, gz facts and plain facts agree, rotations are logs, diff on gz agrees with plain.
+  The "two ways to say the same thing" checks are the shape that shipped in 0.4.107 and
+  0.4.108, rotations is 0.4.109's, and each fails on the code from before its fix.
 - `python tools/check_wheel.py --repo . --out <dir>` — builds the wheel, installs it in a
   throwaway venv, and reads every command through the installed entry point.
 - `python tools/verify_readme_exit_codes.py` — replays the 23 exit codes this file documents

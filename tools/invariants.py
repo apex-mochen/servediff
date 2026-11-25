@@ -273,6 +273,47 @@ def check_rotations_are_logs(repo, logs):
     return bad
 
 
+def run_cli(repo, *args, tries=3):
+    """cli(), retried when the exit code is one this tool cannot produce.
+
+    On Windows a child python is sometimes killed before it prints anything (a security
+    scanner, not servediff): the run comes back with a code like 67503194 and empty stdout.
+    That is a harness failure and must not be reported as a product one, so an implausible
+    code is retried; a real answer (0, 1, 2) is never retried.
+    """
+    rc, out, err = cli(repo, *args)
+    for _ in range(tries - 1):
+        if rc in (0, 1, 2):
+            return rc, out, err
+        print("      note: cli exited %r with %d byte(s) of stdout; retrying" % (rc, len(out)),
+              file=sys.stderr)
+        rc, out, err = cli(repo, *args)
+    return rc, out, err
+
+
+def check_diff_gz_matches_plain(repo, logs):
+    """Two archived logs must diff like the two logs they were made from.
+
+    0.4.107 taught the readers to unwrap a container, and `show` was the path that got
+    checked. diff and series read the same two files through the same reader, so the
+    question is asked here as well: the archive is a transport, not a different log.
+    """
+    import gzip
+    bad = []
+    for a, b in zip(logs, logs[1:]):
+        rc_p, out_p, _ = run_cli(repo, "diff", a, b)
+        with tempfile.TemporaryDirectory() as d:
+            pa = os.path.join(d, os.path.basename(a) + ".gz")
+            pb = os.path.join(d, os.path.basename(b) + ".gz")
+            for src, dst in ((a, pa), (b, pb)):
+                with open(dst, "wb") as fh:
+                    fh.write(gzip.compress(open(src, "rb").read()))
+            rc_g, out_g, err_g = run_cli(repo, "diff", pa, pb)
+        if rc_p != rc_g or out_p != out_g:
+            bad.append((a, b, rc_p, rc_g, len(out_p), len(out_g), err_g.strip()[:80]))
+    return bad
+
+
 CHECKS = [
     ("self-diff is empty", check_self_diff, "log(s)"),
     ("diff is symmetric", check_symmetry, "log(s)"),
@@ -284,6 +325,7 @@ CHECKS = [
     ("gz and plain agree", check_gz_matches_plain, "log(s)"),
     ("gz facts and plain facts agree", check_gz_facts_match_plain, "log(s)"),
     ("rotations are logs", check_rotations_are_logs, "log(s)"),
+    ("diff on gz agrees with plain", check_diff_gz_matches_plain, "pair(s)"),
 ]
 
 
