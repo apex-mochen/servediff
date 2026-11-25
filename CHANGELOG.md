@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.4.110
+
+A rotation archived in a container `servediff` does not read was still dropped from the
+count. 0.4.109 taught the directory expansion numbered rotations, but only `.gz` ones, so a
+corpus rotated with logrotate's `compresscmd = bzip2` (or `xz`, or `zstd`) read as if the
+older days did not exist:
+
+```
+$ servediff audit rotated/
+serve.log                              32 unread    32 shape(s)  nothing worth a look
+1 log(s): 0 with shapes worth a look        # serve.log.1.bz2 is not in this number
+```
+
+0.4.110 matches those names too and lets the reader say what it is, which is what a single
+file already did:
+
+```
+$ servediff audit rotated/
+audit: rotated/serve.log.1.bz2: bzip2-compressed, which is not read here; `bunzip2' it first — gzip is read directly
+$ echo $?
+2
+```
+
+A copy somebody kept by hand (`serve.log.5.bak`) is not a rotation, is still not matched, and
+does not turn a green gate red.
+
+228 tests, one new: the named container plus the `.bak` that must stay out.
+
 ## 0.4.109
 
 `servediff audit <dir>` read one file out of four when the corpus was rotated. The directory

@@ -1707,7 +1707,7 @@ class InputError(Exception):
     """An input path could not be read. Callers map it to exit 2, never to 1."""
 
 
-_LOG_NAME = re.compile(r"\.log(?:\.\d+)?(?:\.gz)?$")
+_LOG_NAME = re.compile(r"\.log(?:\.\d+)?(?:\.(gz|bz2|xz|zst|zstd))?$")
 
 
 def _log_sort_key(path):
@@ -1722,7 +1722,10 @@ def _log_sort_key(path):
     parts = rest.lstrip(".").split(".") if rest else []
     if parts and parts[0].isdigit():
         rotation = int(parts[0])
-    return (str(path.parent), stem, rotation, name.endswith(".gz"), name)
+    # Plain first, then the container it was archived in, so serve.log, .1, .1.gz read in
+    # the order the server wrote them rather than by ASCII.
+    suffix = parts[-1] if parts and not parts[-1].isdigit() else ""
+    return (str(path.parent), stem, rotation, suffix != "", suffix, name)
 
 
 def _expand_logs(paths):
@@ -1736,7 +1739,9 @@ def _expand_logs(paths):
     Numbered rotations are logs too. logrotate's default keeps `serve.log` alongside
     `serve.log.1`, `serve.log.2` … and gzips the older ones, so matching only `*.log`,
     `*.log.gz` audited one file out of four on a corpus that is rotated by exactly that
-    scheme, and said nothing about the three it dropped.
+    scheme, and said nothing about the three it dropped. A container this tool cannot read
+    (bzip2, xz, zstd) is matched as well, so the reader names it and exits 2 instead of
+    leaving it out of the count.
     """
     out = []
     for path in paths:

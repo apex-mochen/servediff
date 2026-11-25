@@ -898,6 +898,11 @@ prove, are in [writeups/audit-noise-real-logs.md](https://github.com/apex-mochen
   later facts are absent because startup stopped —
   [writeups/startup-ready-after-traceback.md](https://github.com/apex-mochen/servediff/blob/main/writeups/startup-ready-after-traceback.md)
   works through both logs, line 55 against line 59 and line 5 against line 6.
+- When a directory holds `serve.log`, `serve.log.1`, `serve.log.2` and `serve.log.3.gz`,
+  `audit` reads four logs, not the one suffix it used to match —
+  [writeups/one-file-out-of-four.md](https://github.com/apex-mochen/servediff/blob/main/writeups/one-file-out-of-four.md)
+  shows the count that said `1 log(s)` over a four-file corpus, and the invariant that now
+  builds that layout out of every fixture.
 - The same notes as a plain web page: <https://apex-mochen.github.io/servediff/> —
   generated from `writeups/*.md` by `tools/build_site.py`, each page titled with the exact
   error string it is about.

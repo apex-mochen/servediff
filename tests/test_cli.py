@@ -785,6 +785,22 @@ def test_a_directory_reads_rotations_in_number_order(tmp_path, capsys):
     assert order == ["serve.log", "serve.log.1", "serve.log.2", "serve.log.10"]
 
 
+def test_a_rotation_in_a_container_this_tool_cannot_read_is_named(tmp_path, capsys):
+    # Dropping it out of the count is the failure this release is about; naming it and
+    # exiting 2 is what a single file already did.
+    import bz2
+    body = "GPU 0: NVIDIA H100\nnon_default_args: --tensor-parallel-size=8\n"
+    (tmp_path / "serve.log").write_text(body, encoding="utf-8")
+    with bz2.open(tmp_path / "serve.log.1.bz2", "wt", encoding="utf-8") as handle:
+        handle.write(body)
+    # A copy somebody kept by hand is not a rotation and must not turn a gate red.
+    (tmp_path / "serve.log.5.bak").write_text("not a servediff log\n", encoding="utf-8")
+    assert servediff.main(["audit", str(tmp_path)]) == 2
+    err = capsys.readouterr().err
+    assert "serve.log.1.bz2: bzip2-compressed" in err
+    assert "`bunzip2' it first" in err
+
+
 def test_a_baseline_turns_the_gate_into_a_regression_gate(tmp_path, capsys):
     # A gate on the absolute count fails forever after the first line the parser cannot read,
     # which is how a gate gets switched off. A baseline makes it a question about what is new.
