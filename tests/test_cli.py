@@ -756,6 +756,35 @@ def test_audit_json_still_honours_the_gate(tmp_path):
     assert servediff.main(["audit", str(log), "--json", "--max-shapes", "0"]) == 1
 
 
+def test_audit_reads_numbered_rotations_in_a_directory(tmp_path, capsys):
+    # logrotate's default keeps `serve.log` beside `serve.log.1`, `serve.log.2` … and gzips
+    # the older ones. Matching only `*.log` / `*.log.gz` audited one file of four and reported
+    # the count over the file it happened to pick — the silent scope failure audit exists for.
+    body = "GPU 0: NVIDIA H100\nnon_default_args: --tensor-parallel-size=8\n"
+    for name in ("serve.log", "serve.log.1", "serve.log.2"):
+        (tmp_path / name).write_text(body, encoding="utf-8")
+    import gzip
+    with gzip.open(tmp_path / "serve.log.3.gz", "wt", encoding="utf-8") as handle:
+        handle.write(body)
+    assert servediff.main(["audit", str(tmp_path), "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert [Path(entry["path"]).name for entry in payload["logs"]] == [
+        "serve.log", "serve.log.1", "serve.log.2", "serve.log.3.gz"]
+    assert all(entry["facts"] > 0 for entry in payload["logs"])
+
+
+def test_a_directory_reads_rotations_in_number_order(tmp_path, capsys):
+    # Lexicographic order puts serve.log.10 between .1 and .2, so a corpus compares days in
+    # an order nobody chose.
+    body = "GPU 0: NVIDIA H100\n"
+    for name in ("serve.log", "serve.log.1", "serve.log.2", "serve.log.10"):
+        (tmp_path / name).write_text(body, encoding="utf-8")
+    assert servediff.main(["audit", str(tmp_path)]) in (0, 1)
+    out = capsys.readouterr().out
+    order = [line.split()[0] for line in out.splitlines() if line.startswith("serve.log")]
+    assert order == ["serve.log", "serve.log.1", "serve.log.2", "serve.log.10"]
+
+
 def test_a_baseline_turns_the_gate_into_a_regression_gate(tmp_path, capsys):
     # A gate on the absolute count fails forever after the first line the parser cannot read,
     # which is how a gate gets switched off. A baseline makes it a question about what is new.

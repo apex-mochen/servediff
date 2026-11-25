@@ -236,6 +236,43 @@ def check_gz_facts_match_plain(repo, logs):
     return bad
 
 
+def check_rotations_are_logs(repo, logs):
+    """A log named `serve.log.1` is the same log, not a file to drop.
+
+    0.4.109: a directory only matched `*.log` and `*.log.gz`, so a corpus rotated by
+    logrotate's default (`serve.log`, `serve.log.1`, `serve.log.2`, `serve.log.3.gz`) was
+    audited one file out of four and the count was reported over the file it picked. Scope
+    is an answer too: four copies of one log must read as four logs with one set of facts.
+    """
+    import gzip
+    bad = []
+    for f in logs:
+        raw = open(f, "rb").read()
+        rc_one, out_one, _ = cli(repo, "audit", f, "--json")
+        if rc_one != 0:
+            continue
+        one = jload(out_one)["logs"][0]
+        with tempfile.TemporaryDirectory() as d:
+            for name in ("serve.log", "serve.log.1", "serve.log.2"):
+                with open(os.path.join(d, name), "wb") as fh:
+                    fh.write(raw)
+            with open(os.path.join(d, "serve.log.3.gz"), "wb") as fh:
+                fh.write(gzip.compress(raw))
+            rc_dir, out_dir, err_dir = cli(repo, "audit", d, "--json")
+        if rc_dir != 0:
+            bad.append((f, "exit", rc_dir, err_dir.strip()[:80]))
+            continue
+        entries = jload(out_dir)["logs"]
+        if len(entries) != 4:
+            bad.append((f, "counted", len(entries), "serve.log .1 .2 .3.gz"))
+            continue
+        for entry in entries:
+            if (entry["facts"], entry["shapes"]) != (one["facts"], one["shapes"]):
+                bad.append((f, os.path.basename(entry["path"]),
+                            entry["facts"], entry["shapes"], one["facts"], one["shapes"]))
+    return bad
+
+
 CHECKS = [
     ("self-diff is empty", check_self_diff, "log(s)"),
     ("diff is symmetric", check_symmetry, "log(s)"),
@@ -246,6 +283,7 @@ CHECKS = [
     ("stdin and path agree", check_stdin_matches_path, "log(s)"),
     ("gz and plain agree", check_gz_matches_plain, "log(s)"),
     ("gz facts and plain facts agree", check_gz_facts_match_plain, "log(s)"),
+    ("rotations are logs", check_rotations_are_logs, "log(s)"),
 ]
 
 

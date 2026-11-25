@@ -1,5 +1,53 @@
 # Changelog
 
+## 0.4.109
+
+`servediff audit <dir>` read one file out of four when the corpus was rotated. The directory
+expansion matched `*.log` and `*.log.gz` only, and logrotate's default keeps exactly:
+
+```
+serve.log
+serve.log.1
+serve.log.2
+serve.log.3.gz
+```
+
+On a four-file corpus built from one real SGLang log:
+
+```
+$ servediff audit rotated/
+serve.log                              32 unread    32 shape(s)  nothing worth a look
+1 log(s): 0 with shapes worth a look
+```
+
+Three logs are missing from the list and from the count, and nothing says so. A count over a
+file that was picked is worse than an error: the number looks like a measurement of the corpus.
+This is the same silent scope failure that one-level globbing caused with dated
+subdirectories, one level down.
+
+0.4.109 expands directories by name pattern instead of suffix list — `serve.log` and every
+numbered rotation of it, compressed or not — so:
+
+```
+$ servediff audit rotated/
+serve.log                              32 unread    32 shape(s)  nothing worth a look
+serve.log.1                            32 unread    32 shape(s)  nothing worth a look
+serve.log.2                            32 unread    32 shape(s)  nothing worth a look
+note: rotated\serve.log.3.gz was gzip-compressed; decompressed 1906 byte(s)
+serve.log.3.gz                         32 unread    32 shape(s)  nothing worth a look
+4 log(s): 0 with shapes worth a look
+```
+
+`--json` lists the same four, each with the facts and shapes of the single file, which is what
+the test asserts. Listings also sort by rotation number now: a string sort put `serve.log.10`
+between `.1` and `.2`, so a corpus read served days in an order nobody chose.
+
+227 tests, two new: the four-file count and the rotation order. Both fail on the previous code.
+`tools/invariants.py` gained a tenth check, `rotations are logs`, which builds the four-name
+layout from each fixture and compares every entry against the single-file audit — pointed at
+`a85db0f` it reports `('…', 'counted', 1, 'serve.log .1 .2 .3.gz')` for every log, and at
+`0.4.109` it is ok on all 71 fixtures.
+
 ## 0.4.108
 
 `--against facts.json.gz` answered with a Unicode error. The facts file that records an

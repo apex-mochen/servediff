@@ -1707,21 +1707,42 @@ class InputError(Exception):
     """An input path could not be read. Callers map it to exit 2, never to 1."""
 
 
+_LOG_NAME = re.compile(r"\.log(?:\.\d+)?(?:\.gz)?$")
+
+
+def _log_sort_key(path):
+    """Directory listings read in rotation order: serve.log, serve.log.1, serve.log.2.
+
+    A plain string sort puts `serve.log.10` between `.1` and `.2`, which turns a corpus
+    into a diff of unrelated days when logs are compared in the order they were listed.
+    """
+    name = path.name
+    stem, _, rest = name.partition(".log")
+    rotation = 0
+    parts = rest.lstrip(".").split(".") if rest else []
+    if parts and parts[0].isdigit():
+        rotation = int(parts[0])
+    return (str(path.parent), stem, rotation, name.endswith(".gz"), name)
+
+
 def _expand_logs(paths):
-    """Directories become every *.log inside them, so one command audits a corpus.
+    """Directories become every log inside them, so one command audits a corpus.
 
     Recursive on purpose: a corpus is kept in dated subdirectories (`vllm-forum-2026-07/`),
     and a one-level glob silently audits 21 of 86 logs while the summary still reports a
     count — the exact silent-scope failure this tool exists to catch. Sorting is by full path
     so a nested corpus reads in one stable order.
+
+    Numbered rotations are logs too. logrotate's default keeps `serve.log` alongside
+    `serve.log.1`, `serve.log.2` … and gzips the older ones, so matching only `*.log`,
+    `*.log.gz` audited one file out of four on a corpus that is rotated by exactly that
+    scheme, and said nothing about the three it dropped.
     """
     out = []
     for path in paths:
         if str(path) != "-" and path.is_dir():
-            # A rotated corpus is usually already compressed, and a directory audit that
-            # skipped every .gz would report a count over the wrong set of files.
-            found = list(path.rglob("*.log")) + list(path.rglob("*.log.gz"))
-            out.extend(sorted(found, key=str))
+            found = [p for p in path.rglob("*") if p.is_file() and _LOG_NAME.search(p.name)]
+            out.extend(sorted(found, key=_log_sort_key))
         else:
             out.append(path)
     return out
