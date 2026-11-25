@@ -48,12 +48,15 @@ jobs:
           # 21 hand-written excerpts, 11 October pastes, 7 and 28 November pastes.
           # Each directory is already at zero shapes worth a look, so --max-shapes 0
           # turns this into a regression gate on real server output: a rule edit that
-          # stops reading a real line fails CI here instead of shipping.
+          # stops reading a real line fails CI here instead of shipping. Every directory
+          # listed here must hold at least one log: since 0.4.111 a directory with no log
+          # inside is an input error (exit 2), because a gate that measured nothing is not
+          # a pass. tests/fixtures/sglang-2026-11 is deliberately absent for that reason --
+          # it holds PROVENANCE.md for the pastes that were found and kept in 2026-10.
           for d in tests/fixtures tests/fixtures/held-out-2026-10 \
                    tests/fixtures/held-out-2026-11 tests/fixtures/held-out-2026-11b \
                    tests/fixtures/full-cpu-2026-11 tests/fixtures/sglang-2026-10 \
-                   tests/fixtures/vllm-forum-2026-06 tests/fixtures/vllm-forum-2026-05 \
-                   tests/fixtures/sglang-2026-11; do
+                   tests/fixtures/vllm-forum-2026-06 tests/fixtures/vllm-forum-2026-05; do
             servediff audit "$d" --max-shapes 0
           done
       - name: Check the exit codes the README promises

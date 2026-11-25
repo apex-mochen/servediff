@@ -2528,6 +2528,20 @@ def test_audit_of_a_directory_with_no_logs_is_an_input_error(tmp_path, capsys):
     assert servediff.main(["repeats", str(empty)]) == 2
 
 
+def test_ci_audits_only_directories_that_hold_logs():
+    # Since 0.4.111 a directory with no log inside exits 2, so the regression gate in CI
+    # must not list a directory that has none — that would turn the gate red for the wrong
+    # reason and invite somebody to weaken the check instead of fixing the list.
+    repo = Path(__file__).resolve().parent.parent
+    workflow = (repo / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    block = workflow.split("Audit every shipped log", 1)[1].split("Check the exit codes", 1)[0]
+    loop = block.split("for d in", 1)[1].split("done", 1)[0]
+    dirs = re.findall(r"tests/fixtures[\w/.-]*", loop)
+    assert dirs
+    for name in sorted(set(dirs)):
+        assert servediff._expand_logs([repo / name]), name
+
+
 def test_a_blank_artifact_in_the_directory_fails_the_gate(tmp_path, capsys):
     # A truncated matrix artifact is a broken gate input, not a run that happened to match.
     d, facts_path = _corpus(tmp_path, capsys)
