@@ -907,6 +907,10 @@ prove, are in [writeups/audit-noise-real-logs.md](https://github.com/apex-mochen
   [writeups/one-file-out-of-four.md](https://github.com/apex-mochen/servediff/blob/main/writeups/one-file-out-of-four.md)
   shows the count that said `1 log(s)` over a four-file corpus, and the invariant that now
   builds that layout out of every fixture.
+- A gate over a directory that holds no logs is not a pass: `audit`, `repeats` and
+  `diff <dir> --against facts.json` name the directory and exit 2 since 0.4.111 —
+  [writeups/empty-corpus-passes-the-gate.md](https://github.com/apex-mochen/servediff/blob/main/writeups/empty-corpus-passes-the-gate.md)
+  shows the green result that measured nothing, and the CI step it broke first.
 - The same notes as a plain web page: <https://apex-mochen.github.io/servediff/> —
   generated from `writeups/*.md` by `tools/build_site.py`, each page titled with the exact
   error string it is about.
